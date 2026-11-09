@@ -1,6 +1,8 @@
-# /home/deploy/.ssh/authorized_keys (dueño deploy, permisos 600). Una sola línea por llave.
+# /home/deploy/.ssh/authorized_keys (dueño deploy, permisos 600). Una línea por llave, una llave por entorno de GitHub.
 #
-# La llave del CI solo puede correr pintech-deploy: lo que el CI mande (por ejemplo `staging sha256:…`) llega como
-# argumentos y pintech-deploy los valida. `restrict` apaga terminal, reenvíos de puertos, de agente y de X11.
-# Reemplazar la llave pública de ejemplo por la generada para el entorno de GitHub.
-restrict,command="sudo -n /usr/local/bin/pintech-deploy $SSH_ORIGINAL_COMMAND" ssh-ed25519 AAAA...reemplazar... pintech-deploy-ci
+# Cada llave solo puede correr pintech-deploy en SU entorno: lo que el CI mande (el digest) llega como argumento y
+# pintech-deploy lo valida. Así, la llave de staging no puede desplegar en producción saltándose la aprobación de GitHub.
+# `restrict` apaga terminal, reenvíos de puertos, de agente y de X11. Reemplazar las llaves públicas de ejemplo por las
+# generadas para cada entorno (guía: README.md de esta carpeta).
+restrict,command="sudo -n /usr/local/bin/pintech-deploy staging $SSH_ORIGINAL_COMMAND" ssh-ed25519 AAAA...reemplazar... pintech-deploy-staging
+restrict,command="sudo -n /usr/local/bin/pintech-deploy prod $SSH_ORIGINAL_COMMAND" ssh-ed25519 AAAA...reemplazar... pintech-deploy-production
