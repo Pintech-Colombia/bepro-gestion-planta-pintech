@@ -89,6 +89,9 @@ case "$status" in
         fail 'Falló la conexión SSH' 'No se pudo conectar o se cortó la conexión. Si se cortó a mitad de camino, el despliegue sigue en el servidor: revisar deploys.log.'
         ;;
     *)
+        # Sin ninguna línea propia, pintech-deploy no llegó a arrancar (sudo lo negó, no está instalado o rechazó los
+        # argumentos): la salida es de sudo o del uso, sin datos, y es lo único que explica el fallo.
+        grep -qE "$OWN_LINE" "$work/output" || cat "$work/output"
         error="$(last_with ERROR)"
         fail 'Falló el despliegue' "${error:-pintech-deploy terminó con código $status}. Salida completa en el servidor: last-deploy.log."
         ;;
