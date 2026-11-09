@@ -3,15 +3,14 @@ name: tests
 # La suite corre dos veces, en paralelo: SQLite (como en local) y PostgreSQL 16 (el motor de producción).
 # PostgreSQL es el único que ejercita los advisory locks de los consecutivos, las restricciones CHECK de
 # inventario y los índices parciales, que en SQLite no existen o se comportan distinto.
+#
+# En los PR corre por sí solo. Después de fusionar lo llama `cd`: el commit fusionado solo se despliega si pasa.
 on:
-  push:
-    branches:
-      - develop
-      - main
   pull_request:
     branches:
       - develop
       - main
+  workflow_call:
 
 permissions:
   contents: read
