@@ -22,6 +22,7 @@ use App\Models\RemnantConsumption;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\Production\RemnantDrawdown;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -768,7 +769,7 @@ it('shows each line with its product, lot, state and whether it can be removed',
             ->where('order.remnant_consumptions.0.quantity_gallons', 4)
             // Estimado: 4 gal × $5,5.
             ->where('order.remnant_consumptions.0.consumed_cost', 22)
-            ->where('order.remnant_consumptions.0.is_applied', false)
+            ->where('order.remnant_consumptions.0.state', 'planned')
             ->where('order.remnant_consumptions.0.notes', 'Tanque 3')
             ->where('order.remnant_consumptions.0.can.remove', true)
             // La pendiente ya ofrece los saldos, con lo libre.
@@ -784,10 +785,56 @@ it('a completed order shows its lines read-only and offers no remnants', functio
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('can.planRemnant', false)
-            ->where('order.remnant_consumptions.0.is_applied', true)
+            ->where('order.remnant_consumptions.0.state', 'applied')
             ->where('order.remnant_consumptions.0.consumed_cost', 22)
             ->where('order.remnant_consumptions.0.can.remove', false)
             ->where('order.available_remnants', []));
+});
+
+it('a cancelled order keeps its planned lines as not used, without cost', function () {
+    planRemnant($this, $this->targetOrder, $this->remnant, 20)->assertSessionHasNoErrors();
+    $this->post(route('production-orders.cancel', $this->targetOrder), ['reason' => 'Ya no se va a producir'])
+        ->assertSessionHasNoErrors();
+
+    $this->get(route('production-orders.show', $this->targetOrder))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.remnant_consumptions.0.state', 'unused')
+            ->where('order.remnant_consumptions.0.consumed_cost', null)
+            ->where('order.remnant_consumptions.0.quantity_kg', 20)
+            ->where('order.remnant_consumptions.0.can.remove', false));
+
+    expect(RemnantConsumption::query()->count())->toBe(1)
+        ->and($this->remnant->fresh()->available_quantity_kg)->toBe('50.0000');
+});
+
+it('gives no estimated cost to a planned line whose remnant was used up by another order', function () {
+    planRemnant($this, $this->targetOrder, $this->remnant, 20)->assertSessionHasNoErrors();
+    $line = $this->remnant->consumptions()->firstOrFail();
+
+    // Caso raro forzado: otra orden descontó el saldo completo.
+    $other = otherOpenOrder($this);
+    RemnantConsumption::create([
+        'remnant_id' => $this->remnant->id, 'target_order_id' => $other->id, 'quantity_kg' => '50',
+        'quantity_gallons' => '10', 'consumed_cost' => '55', 'consumed_by' => $this->user->id,
+        'consumed_at' => now(), 'applied_at' => now(),
+    ]);
+    $this->remnant->update(['available_quantity_kg' => 0, 'available_quantity_gallons' => 0, 'status' => RemnantStatus::Consumed]);
+
+    expect(app(RemnantDrawdown::class)->lineCost($line->fresh()))->toBeNull();
+
+    $this->get(route('production-orders.show', $this->targetOrder))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.remnant_consumptions.0.state', 'planned')
+            ->where('order.remnant_consumptions.0.consumed_cost', null));
+});
+
+it('gives no estimated cost to a planned line when the remnant has fewer kilos left than the line', function () {
+    planRemnant($this, $this->targetOrder, $this->remnant, 20)->assertSessionHasNoErrors();
+    $this->remnant->update(['available_quantity_kg' => '10', 'available_quantity_gallons' => '2', 'status' => RemnantStatus::PartiallyConsumed]);
+
+    expect(app(RemnantDrawdown::class)->lineCost($this->remnant->consumptions()->firstOrFail()))->toBeNull();
 });
 
 it('precarga en la ficha los mismos saldos y en el mismo orden que el endpoint', function () {

@@ -65,12 +65,17 @@ class RemnantDrawdown
 
     /**
      * El costo de una línea: el real si ya se aplicó, o el estimado si está planeada (con el saldo como está ahora).
-     * Nulo si el saldo no tiene costo. Lo usan la vista previa de costos y el detalle de la orden.
+     * Nulo si el saldo no tiene costo, o si la línea está planeada y el saldo ya no está disponible o no le alcanza: nunca
+     * un estimado contra un saldo que no cubre la línea. Lo usan la vista previa de costos y el detalle de la orden.
      */
     public function lineCost(RemnantConsumption $line): ?string
     {
         if ($line->isApplied()) {
             return $line->consumed_cost !== null ? (string) $line->consumed_cost : null;
+        }
+
+        if (! $this->covers($line->remnant, (string) $line->quantity_kg)) {
+            return null;
         }
 
         return $this->estimate($line->remnant, (string) $line->quantity_kg)['consumed_cost'];
@@ -85,9 +90,7 @@ class RemnantDrawdown
         $plannedKg = (string) $line->quantity_kg;
         $availableKg = (string) $lockedRemnant->available_quantity_kg;
 
-        $usable = in_array($lockedRemnant->status, [RemnantStatus::Available, RemnantStatus::PartiallyConsumed], true)
-            && $this->calculator->cmp($plannedKg, $availableKg, 4) <= 0;
-        $drawdown = $usable ? $this->estimate($lockedRemnant, $plannedKg) : null;
+        $drawdown = $this->covers($lockedRemnant, $plannedKg) ? $this->estimate($lockedRemnant, $plannedKg) : null;
 
         if ($drawdown === null || ! $this->calculator->isPositive($drawdown['quantity_gallons'])) {
             throw ValidationException::withMessages([
@@ -111,5 +114,14 @@ class RemnantDrawdown
             'consumed_cost' => $drawdown['consumed_cost'],
             'applied_at' => now(),
         ]);
+    }
+
+    /**
+     * Si el saldo sigue disponible y sus kilos alcanzan para la línea.
+     */
+    private function covers(ProductionRemnant $remnant, string $quantityKg): bool
+    {
+        return in_array($remnant->status, [RemnantStatus::Available, RemnantStatus::PartiallyConsumed], true)
+            && $this->calculator->cmp($quantityKg, (string) $remnant->available_quantity_kg, 4) <= 0;
     }
 }

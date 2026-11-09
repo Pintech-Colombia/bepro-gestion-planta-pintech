@@ -29,6 +29,13 @@ import type {
     ProductionOrderRemnantConsumption,
 } from '@/types/production-orders';
 
+const STATE_LABELS: Record<ProductionOrderRemnantConsumption['state'], string> =
+    {
+        applied: 'Descontado',
+        planned: 'Planeado',
+        unused: 'No usado',
+    };
+
 type ConsumeRemnantsCardProps = {
     orderId: number;
     order: ProductionOrder;
@@ -62,7 +69,7 @@ export function ConsumeRemnantsCard({
     const confirm = useConfirm();
     const lines = order.remnant_consumptions ?? [];
     const availableRemnants = order.available_remnants ?? [];
-    const hasPlannedLines = lines.some((line) => !line.is_applied);
+    const hasPlannedLines = lines.some((line) => line.state === 'planned');
 
     const [submitting, setSubmitting] = useState(false);
     const [selectedRemnantId, setSelectedRemnantId] = useState<
@@ -176,16 +183,17 @@ export function ConsumeRemnantsCard({
         {
             key: 'gallons',
             header: 'Galones',
-            // Planeada, los galones son un estimado: los reales salen al completar.
-            cell: (line) => (
-                <>
-                    {!line.is_applied && '≈ '}
-                    <FormattedNumber
-                        value={line.quantity_gallons}
-                        kind="quantity"
-                    />
-                </>
-            ),
+            // Planeada, los galones son un estimado: los reales salen al completar. No usada, no hubo galones.
+            cell: (line) =>
+                line.state === 'unused' ? null : (
+                    <>
+                        {line.state === 'planned' && '≈ '}
+                        <FormattedNumber
+                            value={line.quantity_gallons}
+                            kind="quantity"
+                        />
+                    </>
+                ),
             align: 'right',
         },
         ...(showCosts
@@ -196,7 +204,7 @@ export function ConsumeRemnantsCard({
                       cell: (line: ProductionOrderRemnantConsumption) =>
                           line.consumed_cost == null ? null : (
                               <>
-                                  {!line.is_applied && '≈ '}
+                                  {line.state === 'planned' && '≈ '}
                                   <FormattedNumber
                                       value={line.consumed_cost}
                                       kind="cost"
@@ -210,7 +218,7 @@ export function ConsumeRemnantsCard({
         {
             key: 'state',
             header: 'Estado',
-            cell: (line) => (line.is_applied ? 'Descontado' : 'Planeado'),
+            cell: (line) => STATE_LABELS[line.state],
         },
         {
             key: 'notes',

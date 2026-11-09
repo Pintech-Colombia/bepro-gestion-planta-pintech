@@ -62,6 +62,7 @@ class BuildProductionOrderShowDataAction
         }
 
         $lineFactors = $this->lineUnits->conversionFactors($productionOrder);
+        $orderIsOpen = in_array($productionOrder->status, ProductionOrderStatus::open(), true);
 
         $finishedCostByVariant = $includeCosts
             ? $productionOrder->finishedInventoryMovements->keyBy('product_variant_id')
@@ -275,10 +276,16 @@ class BuildProductionOrderShowDataAction
             ] : null,
             // Saldos de PT a usar: líneas planeadas hasta que la orden se completa. Los galones y el costo de una línea
             // planeada son un estimado con la regla con que se aplicará; los reales se guardan al completar.
-            'remnant_consumptions' => $productionOrder->remnantConsumptions->map(function (RemnantConsumption $consumption) use ($includeCosts, $canPlanRemnant) {
+            'remnant_consumptions' => $productionOrder->remnantConsumptions->map(function (RemnantConsumption $consumption) use ($includeCosts, $canPlanRemnant, $orderIsOpen) {
                 $isApplied = $consumption->isApplied();
-                // El real si ya se aplicó; el estimado si está planeada.
-                $cost = $includeCosts ? $this->remnantDrawdown->lineCost($consumption) : null;
+                // Sin aplicar en una orden que ya no está abierta (cancelada): se conserva como historial, pero no se usó.
+                $state = match (true) {
+                    $isApplied => 'applied',
+                    $orderIsOpen => 'planned',
+                    default => 'unused',
+                };
+                // El real si ya se aplicó; el estimado si está planeada; ninguno si no se usó.
+                $cost = $includeCosts && $state !== 'unused' ? $this->remnantDrawdown->lineCost($consumption) : null;
 
                 return [
                     'id' => $consumption->id,
@@ -292,7 +299,8 @@ class BuildProductionOrderShowDataAction
                     ...($includeCosts ? [
                         'consumed_cost' => $cost !== null ? (float) $cost : null,
                     ] : []),
-                    'is_applied' => $isApplied,
+                    // applied: descontado del saldo · planned: planeado en una orden abierta · unused: la orden ya no está abierta.
+                    'state' => $state,
                     'notes' => $consumption->notes,
                     'consumed_at' => $consumption->consumed_at->toISOString(),
                     'consumed_by' => $consumption->consumedBy ? [

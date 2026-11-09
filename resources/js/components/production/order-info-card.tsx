@@ -151,7 +151,10 @@ export function OrderInfoCard({
                             Number(consumedRemnantCost) > 0 && (
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">
-                                        Costo saldos consumidos:
+                                        {/* Con la orden abierta, las líneas de saldo aún no se descuentan: es un estimado. */}
+                                        {order.status === 'completed'
+                                            ? 'Costo saldos consumidos:'
+                                            : 'Costo saldos (estimado):'}
                                     </span>
                                     <span className="font-medium">
                                         <FormattedNumber

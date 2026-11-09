@@ -108,8 +108,11 @@ export type ProductionOrderRemnantConsumption = {
     quantity_kg: FormNumberValue;
     /** Solo con costs.view: el real si ya se aplicó; el estimado si está planeada. */
     consumed_cost?: FormNumberValue | null;
-    /** Ya se descontó del saldo (al completar la orden). */
-    is_applied: boolean;
+    /**
+     * applied: descontado del saldo al completar · planned: planeado en una orden abierta (galones y costo estimados) ·
+     * unused: la orden ya no está abierta (cancelada) y la línea queda como historial, sin costo.
+     */
+    state: 'applied' | 'planned' | 'unused';
     notes?: string | null;
     consumed_at: string;
     consumed_by?: { id: number; name: string } | null;
