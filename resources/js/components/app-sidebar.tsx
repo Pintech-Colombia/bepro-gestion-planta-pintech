@@ -34,6 +34,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { formatBadgeCount } from '@/lib/formatters';
 import { filterNavItemsByPermissions } from '@/lib/navigation';
 import { dashboard } from '@/routes';
@@ -262,6 +263,7 @@ function buildSidebarGroups(userPermissions: Permission[]): NavGroup[] {
 
 export function AppSidebar() {
     const { auth, unresolvedAlertsCount } = usePage().props;
+    const closeMobileMenu = useMobileNavigation();
     const userPermissions = auth.user?.permissions ?? [];
 
     // Sin useMemo: React Compiler (babel-plugin-react-compiler) ya memoriza el componente.
@@ -287,7 +289,11 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
+                            <Link
+                                href={dashboard()}
+                                prefetch
+                                onClick={closeMobileMenu}
+                            >
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>

@@ -150,6 +150,9 @@ export function PlantDateInput({
                 align="start"
                 collisionPadding={8}
                 className="max-h-(--radix-popover-content-available-height) w-auto overflow-y-auto p-0"
+                // El foco va al día (`autoFocus` del calendario), no al primer elemento: ese es el selector del mes, y
+                // Safari abre su lista nativa apenas recibe el foco, encima del calendario.
+                onOpenAutoFocus={(event) => event.preventDefault()}
             >
                 <Calendar
                     mode="single"

@@ -9,10 +9,12 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import type { NavGroup } from '@/types';
 
 export function NavMain({ groups = [] }: { groups: NavGroup[] }) {
     const { isCurrentUrl } = useCurrentUrl();
+    const closeMobileMenu = useMobileNavigation();
 
     return (
         <>
@@ -39,7 +41,11 @@ export function NavMain({ groups = [] }: { groups: NavGroup[] }) {
                                             isActive={itemIsActive}
                                             tooltip={{ children: item.title }}
                                         >
-                                            <Link href={item.href} prefetch>
+                                            <Link
+                                                href={item.href}
+                                                prefetch
+                                                onClick={closeMobileMenu}
+                                            >
                                                 {item.icon && <item.icon />}
                                                 <span>{item.title}</span>
                                             </Link>
