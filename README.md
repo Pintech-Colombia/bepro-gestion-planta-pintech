@@ -272,7 +272,8 @@ Las variables de entorno mandan sobre `phpunit.xml`, que fija SQLite. Usa una ba
 
 ## Integración continua
 
-Dos workflows, en cada push y PR a `develop` y `main`:
+Dos workflows, en cada PR a `develop` y `main`. Después de fusionar, los vuelve a correr `cd` sobre el commit fusionado,
+y ese commit solo se despliega si pasan (ver «Despliegue»):
 
 - **quality**: Pint, Prettier, ESLint y TypeScript **en modo comprobación** (fallan, no corrigen), más `composer audit`
   y `npm audit --omit=dev`, que **bloquean** si hay vulnerabilidades conocidas (la auditoría de las herramientas de
@@ -293,8 +294,13 @@ que genera documentos (`dompdf`, `maatwebsite/excel`) exige además revisar a ma
 
 Staging y producción corren en el mismo VPS, aislados, con la **misma imagen de servidor**
 (`.docker/production/app/Dockerfile`: Nginx y PHP-FPM en un contenedor, sobre serversideup/php) y el mismo
-`compose.prod.yaml`, cada uno como proyecto de Compose aparte. El CI compila la imagen una vez en cada push a `develop`
-(workflow `image`) y la sube a GHCR; el servidor la baja por digest. Nunca se compila en el servidor.
+`compose.prod.yaml`, cada uno como proyecto de Compose aparte. Nunca se compila en el servidor: el workflow `cd` prueba
+el commit, compila la imagen una vez, la sube a GHCR, la escanea con Trivy y la despliega por digest y SSH.
+
+- **Merge a `develop`:** llega solo a staging. Trivy avisa, pero no frena.
+- **Merge a `main`:** promueve la misma imagen que corrió en staging (se busca por el árbol de archivos). Trivy frena, y
+  producción espera tu aprobación en GitHub. Si el árbol no tiene imagen (un hotfix), se compila y pasa por staging antes
+  de pedir la aprobación.
 
 Cada despliegue lo hace `pintech-deploy <entorno> <digest>`: migra con la imagen nueva antes de reemplazar los
 contenedores, ejecuta `RolePermissionSeeder` y `permission:cache-reset`, y vuelve sola a la imagen anterior si la nueva
