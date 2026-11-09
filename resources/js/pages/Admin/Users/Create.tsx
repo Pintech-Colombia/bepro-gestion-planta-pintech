@@ -20,9 +20,11 @@ import type { RoleOption } from '@/types';
 
 interface Props {
     roles: RoleOption[];
+    /** Lo que exige la regla del servidor en este entorno (`DeploymentEnvironment::passwordRequirements`). */
+    passwordRequirements: string;
 }
 
-const UsersCreate = ({ roles }: Props) => {
+const UsersCreate = ({ roles, passwordRequirements }: Props) => {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
@@ -114,6 +116,7 @@ const UsersCreate = ({ roles }: Props) => {
                                     id="password"
                                     label="Contraseña"
                                     required
+                                    help={passwordRequirements}
                                     error={errors.password}
                                 >
                                     <PasswordInput
@@ -122,7 +125,6 @@ const UsersCreate = ({ roles }: Props) => {
                                         onChange={(e) =>
                                             setData('password', e.target.value)
                                         }
-                                        placeholder="Mínimo 8 caracteres"
                                         disabled={processing}
                                     />
                                 </FormField>

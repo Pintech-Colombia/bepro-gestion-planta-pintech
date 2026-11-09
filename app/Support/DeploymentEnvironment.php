@@ -57,6 +57,17 @@ final class DeploymentEnvironment
     }
 
     /**
+     * Lo que se le dice a quien escribe una contraseña nueva. Va junto a la regla de `applyProtections()` para que los
+     * dos cambien a la vez: fuera de `local` y `testing` la regla es la exigente; dentro, la de Laravel (8 caracteres).
+     */
+    public static function passwordRequirements(): string
+    {
+        return self::isProtected()
+            ? 'Mínimo 12 caracteres, con mayúsculas, minúsculas, números y símbolos. No se aceptan contraseñas que hayan aparecido en filtraciones conocidas.'
+            : 'Mínimo 8 caracteres.';
+    }
+
+    /**
      * Se llama una vez al arrancar la aplicación (AppServiceProvider).
      */
     public static function applyProtections(): void
