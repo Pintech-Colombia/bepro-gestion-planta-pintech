@@ -84,6 +84,10 @@ save_current_image() {
 exec 9>"$DIR/.deploy.lock"
 flock -n 9 || die "ya hay un despliegue en curso en $ENVIRONMENT"
 
+# La salida completa queda también aquí: GitHub solo muestra las líneas de log(), porque sus registros son públicos.
+# Si se corta la conexión con quien lo llamó, tee sigue escribiendo y el despliegue termina en vez de quedar a medias.
+exec > >(tee -i --output-error=warn-nopipe "$DIR/last-deploy.log") 2>&1
+
 PREVIOUS_IMAGE="$(grep -E '^APP_IMAGE=' "$DIR/.env" | tail -n 1 | cut -d= -f2- || true)"
 readonly PREVIOUS_IMAGE
 log "imagen anterior: ${PREVIOUS_IMAGE:-ninguna (primer despliegue)}"
@@ -112,7 +116,7 @@ fi
 log "auditoría de los roles personalizados (avisa, no frena)"
 AUDIT_WARNING=""
 if ! compose_with "$NEW_IMAGE" run --rm --no-deps -T -e AUTORUN_ENABLED=false web php artisan roles:audit; then
-    AUDIT_WARNING="roles:audit encontró roles personalizados que incumplen las reglas (tabla de arriba): corregirlos desde la pantalla de roles"
+    AUDIT_WARNING="roles:audit encontró roles personalizados que incumplen las reglas (detalle en last-deploy.log): corregirlos desde la pantalla de roles"
     log "ADVERTENCIA: $AUDIT_WARNING. El despliegue sigue."
 fi
 
