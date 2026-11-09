@@ -14,6 +14,7 @@ use App\Http\Requests\Users\UpdateUserRequest;
 use App\Models\User;
 use App\Services\AssignableRoleService;
 use App\Services\SignatureOptimizerService;
+use App\Support\DeploymentEnvironment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -85,6 +86,7 @@ class UserController extends Controller
     {
         return Inertia::render('Admin/Users/Create', [
             'roles' => $this->assignableRoles(),
+            'passwordRequirements' => DeploymentEnvironment::passwordRequirements(),
         ]);
     }
 

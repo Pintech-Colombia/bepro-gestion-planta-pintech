@@ -8,9 +8,15 @@ import { update } from '@/routes/password';
 type Props = {
     token: string;
     email: string;
+    /** Lo que exige la regla del servidor en este entorno (`DeploymentEnvironment::passwordRequirements`). */
+    passwordRequirements: string;
 };
 
-export default function ResetPassword({ token, email }: Props) {
+export default function ResetPassword({
+    token,
+    email,
+    passwordRequirements,
+}: Props) {
     return (
         <>
             <Head title="Restablecer contraseña — Pintech" />
@@ -41,6 +47,7 @@ export default function ResetPassword({ token, email }: Props) {
                         <FormField
                             id="password"
                             label="Nueva contraseña"
+                            help={passwordRequirements}
                             error={errors.password}
                         >
                             <PasswordInput

@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Enums\SystemRole;
+use App\Models\User;
 use App\Support\DeploymentEnvironment;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Database\Console\Migrations\FreshCommand;
 use Illuminate\Database\Console\WipeCommand;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
+use Inertia\Testing\AssertableInertia;
 
 /** Lee si un comando quedó bloqueado, sin correrlo: correrlo de verdad borraría la base de la prueba si fallara. */
 function commandIsProhibited(string $command): bool
@@ -91,6 +95,38 @@ it('exige contraseñas fuertes fuera de local y testing', function () {
     bootIn('staging');
     expect($passes($weak['password']))->toBeFalse()
         ->and($passes('Clave-Segura-2026!'))->toBeTrue();
+});
+
+it('el aviso de contraseña describe la regla del entorno', function () {
+    bootIn('testing');
+    expect(DeploymentEnvironment::passwordRequirements())->toBe('Mínimo 8 caracteres.');
+
+    bootIn('staging');
+    expect(DeploymentEnvironment::passwordRequirements())
+        ->toStartWith('Mínimo 12 caracteres')
+        ->toContain('mayúsculas', 'minúsculas', 'números', 'símbolos', 'filtraciones');
+
+    bootIn('production');
+    expect(DeploymentEnvironment::passwordRequirements())->toStartWith('Mínimo 12 caracteres');
+});
+
+it('las pantallas de contraseña nueva reciben el aviso del entorno', function () {
+    $this->seed(RolePermissionSeeder::class);
+    $admin = User::factory()->create();
+    $admin->assignRole(SystemRole::SuperAdmin->value);
+
+    $this->actingAs($admin)
+        ->get(route('users.create'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Admin/Users/Create')
+            ->where('passwordRequirements', DeploymentEnvironment::passwordRequirements()));
+
+    auth()->logout();
+
+    $this->get(route('password.reset', ['token' => 'token-de-prueba', 'email' => 'a@example.com']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('auth/reset-password')
+            ->where('passwordRequirements', DeploymentEnvironment::passwordRequirements()));
 });
 
 it('los datos de demostración se siembran en local, testing y staging, nunca en producción', function (string $environment, bool $allowed) {
