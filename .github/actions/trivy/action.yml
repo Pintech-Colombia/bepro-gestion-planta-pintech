@@ -1,0 +1,51 @@
+name: Trivy
+description: >
+  Escanea con Trivy una imagen ya presente en el Docker del runner o, sin `image`, los lockfiles del checkout. Falla si
+  encuentra avisos críticos o altos que ya tienen arreglo. Es la única definición de la versión y los criterios de
+  Trivy: la usan `security` (PR y corrida diaria) y `cd` (el digest que se despliega).
+
+inputs:
+  image:
+    description: Imagen a escanear. Si se deja vacío, escanea composer.lock y package-lock.json del checkout.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # La base de datos de avisos se baja una vez por día. Vive fuera del checkout: dentro, `COPY .` la metería en la
+    # imagen.
+    - name: Fecha de hoy
+      id: today
+      shell: bash
+      run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache de la base de datos de Trivy
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/trivy
+        key: trivy-db-${{ steps.today.outputs.date }}
+        restore-keys: trivy-db-
+
+    - name: Escanear
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        # Trivy fijado por versión y digest, como cualquier otra dependencia: su cadena de suministro ya fue comprometida
+        # una vez (GHSA-69fq-xp46-6x23, marzo de 2026). Se usa la imagen oficial y no la acción de terceros.
+        TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+        # Bloquea solo lo crítico y lo alto que ya tiene versión corregida: lo que no tiene arreglo no se puede resolver
+        # subiendo una versión y se revisa a mano en la ventana mensual.
+        TRIVY_ARGS: --quiet --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed
+      run: |
+        cache=(-v "$HOME/.cache/trivy:/root/.cache/trivy")
+        if [[ -n "$IMAGE" ]]; then
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "${cache[@]}" \
+            "$TRIVY_IMAGE" image $TRIVY_ARGS --scanners vuln,secret "$IMAGE"
+        else
+          # Segunda fuente de avisos para Composer y npm, distinta de la de `composer audit` y `npm audit`. Sin
+          # dependencias de desarrollo: las herramientas de compilación no llegan a producción y ya las informa
+          # `npm audit` en `quality`.
+          docker run --rm -v "$PWD:/src:ro" "${cache[@]}" \
+            "$TRIVY_IMAGE" fs $TRIVY_ARGS --scanners vuln --skip-dirs /src/vendor --skip-dirs /src/node_modules /src
+        fi

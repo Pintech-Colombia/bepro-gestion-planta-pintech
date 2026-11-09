@@ -1,0 +1,166 @@
+name: cd
+
+# Despliegue continuo. Corre con cada merge:
+#
+#   develop   pruebas → imagen → Trivy (avisa, no frena) → staging
+#   main      pruebas → imagen del mismo árbol → Trivy (frena) → tu aprobación → producción
+#   hotfix    (merge a main cuyo árbol no tiene imagen): pruebas → compila → Trivy (frena) → staging → tu aprobación
+#             → producción
+#
+# Se despliega siempre por digest y por SSH, con el usuario `deploy` del VPS: su llave solo puede correr pintech-deploy
+# en un entorno. Secretos de cada entorno de GitHub: DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS y DEPLOY_HOST. Los entornos
+# limitan desde qué ramas se despliega: `staging`, develop y main (por el hotfix); `production`, solo main.
+# Guía: .docker/server/README.md.
+#
+# Sin `concurrency` para todo el workflow: cada commit fusionado conserva sus pruebas y su imagen, y main puede promover
+# cualquiera de ellos. Lo que va de a uno es desplegar.
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: ./.github/workflows/lint.yml
+
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  image:
+    needs: [quality, tests]
+    uses: ./.github/workflows/image.yml
+    permissions:
+      contents: read
+      packages: write
+
+  scan:
+    name: trivy (digest a desplegar)
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_REF: ghcr.io/pintech-colombia/pintech-os@${{ needs.image.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Iniciar sesión en GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Bajar la imagen por digest
+        run: docker pull --quiet "$IMAGE_REF"
+
+      # En develop avisa y no frena: un aviso nuevo sin relación con el cambio no detiene el trabajo y se atiende en sus
+      # plazos. En main frena: no llega a pedir la aprobación.
+      - name: Escanear
+        id: trivy
+        continue-on-error: ${{ github.ref != 'refs/heads/main' }}
+        uses: ./.github/actions/trivy
+        with:
+          image: ${{ env.IMAGE_REF }}
+
+      - name: Avisar si Trivy no pasó
+        if: steps.trivy.outcome == 'failure'
+        run: |
+          echo "::warning title=Trivy no pasó::Avisos críticos o altos con arreglo, o el escaneo falló. En develop no frena el despliegue; en main sí. Ver el paso «Escanear»."
+
+      - name: Resumen
+        if: always()
+        env:
+          OUTCOME: ${{ steps.trivy.outcome }}
+        run: |
+          revision="$(docker image inspect "$IMAGE_REF" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || echo '?')"
+          {
+            echo "### Trivy"
+            echo
+            echo "- Imagen: \`$IMAGE_REF\`"
+            echo "- Compilada desde el commit: \`$revision\`"
+            echo "- Resultado: **$OUTCOME**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cerrar sesión en GHCR
+        if: always()
+        run: docker logout ghcr.io
+
+  staging:
+    name: desplegar en staging
+    needs: [image, scan]
+    if: github.ref == 'refs/heads/develop' || needs.image.outputs.built == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://staging.beprocoatingserp.com
+    # Un despliegue a la vez por entorno. Si hay varios esperando, GitHub deja solo el más nuevo.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Dos merges seguidos corren en paralelo y el más viejo puede terminar sus pruebas de último: sin esto, dejaría en
+      # staging una versión anterior. Volver a lanzar el job a mano (intento 2 o más) sí despliega: es volver atrás.
+      - name: ¿Sigue siendo el último commit de develop?
+        id: latest
+        if: github.ref == 'refs/heads/develop' && github.run_attempt == 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tip="$(gh api "repos/$GITHUB_REPOSITORY/branches/develop" --jq .commit.sha)"
+          if [[ "$tip" != "$GITHUB_SHA" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Staging no cambia::develop ya va en $tip: lo despliega su propia corrida."
+          fi
+
+      - name: Desplegar
+        if: steps.latest.outputs.skip != 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: .github/scripts/deploy-over-ssh.sh "$DIGEST"
+
+  production:
+    name: desplegar en producción
+    needs: [image, scan, staging]
+    # `staging` se salta cuando la imagen ya pasó por ahí desde develop; si corrió (hotfix), tiene que haber salido bien.
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' && needs.scan.result == 'success'
+      && (needs.staging.result == 'success' || needs.staging.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # El entorno exige tu aprobación: el job espera tu clic en GitHub antes de empezar.
+    environment:
+      name: production
+      url: https://app.beprocoatingserp.com
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Desplegar
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: .github/scripts/deploy-over-ssh.sh "$DIGEST"

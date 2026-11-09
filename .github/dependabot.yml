@@ -157,7 +157,9 @@ updates:
           - '*'
 
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/trivy
     target-branch: develop
     schedule:
       interval: monthly

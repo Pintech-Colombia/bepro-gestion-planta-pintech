@@ -57,10 +57,13 @@ docker compose -f compose.dev.yaml exec -e DB_CONNECTION=sqlite -e DB_DATABASE=:
 docker compose -f compose.dev.yaml down
 
 # Server (staging and production, same VPS): one image, `.docker/production/app/Dockerfile` (serversideup/php
-# fpm-nginx: Nginx + PHP-FPM in one container), and `compose.prod.yaml`, one Compose project per environment. CI builds
-# it once per push to develop (`image` workflow -> GHCR); the server pulls it by digest through
-# `.docker/server/pintech-deploy`, which migrates before swapping containers and rolls back on a failed health check.
-# Never `build:` or `docker build` on the server. Operations, backups and restore: `.docker/server/README.md`.
+# fpm-nginx: Nginx + PHP-FPM in one container), and `compose.prod.yaml`, one Compose project per environment. The `cd`
+# workflow runs on every merge: develop -> tests, image (built once, GHCR), Trivy that warns, staging; main -> tests,
+# the image of the same git tree (a hotfix without one is built and goes through staging first), Trivy that blocks,
+# manual approval, production. It deploys by digest over SSH through `.docker/server/pintech-deploy`, which migrates
+# before swapping containers and rolls back on a failed health check.
+# Never `build:` or `docker build` on the server. Operations, the `deploy` user, backups and restore:
+# `.docker/server/README.md`.
 # Development keeps its own images (`compose.dev.yaml`, `--target development` of .docker/common/php-fpm).
 
 # `vendor/` and `node_modules/` are named volumes (compose.dev.yaml), NOT the host folders: installing on the host

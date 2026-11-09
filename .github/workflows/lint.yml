@@ -1,15 +1,14 @@
 name: quality
 
 # Comprueba formato, estilo, tipos y las pruebas del front. Nunca corrige: si algo no cumple, el job falla.
+#
+# En los PR corre por sí solo. Después de fusionar lo llama `cd`: el commit fusionado solo se despliega si pasa.
 on:
-  push:
-    branches:
-      - develop
-      - main
   pull_request:
     branches:
       - develop
       - main
+  workflow_call:
 
 permissions:
   contents: read
