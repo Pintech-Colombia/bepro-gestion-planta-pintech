@@ -214,6 +214,37 @@
             </tr>
         @endif
 
+        <!-- SECCIÓN 3.2: SALDOS DE PT A USAR (líneas planeadas: se descuentan al completar la orden) -->
+        @if(!empty($order['remnant_consumptions']) && count($order['remnant_consumptions']) > 0)
+            <tr>
+                <th colspan="15"
+                    style="background-color: #555555; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
+                    SALDOS DE PT A USAR
+                </th>
+            </tr>
+            <tr style="font-weight: bold; background-color: #f0f0f0; text-align: center;">
+                <th colspan="3" style="border: 1px solid #000000;">SALDO</th>
+                <th colspan="3" style="border: 1px solid #000000;">CANT. KG</th>
+                <th colspan="6" style="border: 1px solid #000000;">PRODUCTO</th>
+                <th colspan="3" style="border: 1px solid #000000;">OBSERVACIONES</th>
+            </tr>
+            @foreach($order['remnant_consumptions'] as $remnantLine)
+                <tr>
+                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
+                        SALDO · {{ $remnantLine['source_order_number'] }} (Lote {{ $remnantLine['source_lot_number'] }})
+                    </td>
+                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
+                        {{ number_format($remnantLine['quantity_kg'], 4) }}
+                    </td>
+                    <td colspan="6" style="border: 1px solid #000000;">{{ $remnantLine['source_product_name'] }}</td>
+                    <td colspan="3" style="border: 1px solid #000000;">{{ $remnantLine['notes'] ?? '' }}</td>
+                </tr>
+            @endforeach
+            <tr>
+                <td colspan="15" style="height: 10px;"></td>
+            </tr>
+        @endif
+
         <tr>
             <td colspan="15" style="height: 10px;"></td>
         </tr>

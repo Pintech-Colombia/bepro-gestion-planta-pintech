@@ -10,6 +10,7 @@ use App\Services\Inventory\FifoStockAllocatorService;
 use App\Services\Pricing\ProductionCostCalculatorService;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderLineUnits;
+use App\Services\Production\RemnantDrawdown;
 
 class PreviewProductionOrderCostsAction
 {
@@ -19,6 +20,7 @@ class PreviewProductionOrderCostsAction
         private readonly DecimalCalculator $calculator,
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
+        private readonly RemnantDrawdown $remnantDrawdown,
     ) {}
 
     /**
@@ -37,7 +39,7 @@ class PreviewProductionOrderCostsAction
      */
     public function execute(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
     {
-        $order->loadMissing(['details', 'packagingPlans.productVariant', 'product', 'remnantConsumptions']);
+        $order->loadMissing(['details', 'packagingPlans.productVariant', 'product', 'remnantConsumptions.remnant']);
 
         $ingredients = $this->lineUnits->ingredientsInMaterialUnit($order, $ingredients);
 
@@ -115,13 +117,12 @@ class PreviewProductionOrderCostsAction
             }
         }
 
+        // Una línea planeada todavía no tiene costo: se estima con la misma regla con que se aplicará al completar.
         foreach ($order->remnantConsumptions as $consumption) {
-            if ($consumption->consumed_cost !== null) {
-                $totalBulkCost = $this->calculator->add(
-                    $totalBulkCost,
-                    (string) $consumption->consumed_cost,
-                    4
-                );
+            $remnantCost = $this->remnantDrawdown->lineCost($consumption);
+
+            if ($remnantCost !== null) {
+                $totalBulkCost = $this->calculator->add($totalBulkCost, (string) $remnantCost, 4);
             }
         }
 

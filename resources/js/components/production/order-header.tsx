@@ -27,12 +27,6 @@ export function OrderHeader({
     canUpdateColor = false,
     canCancel = false,
 }: OrderHeaderProps) {
-    // Kilos de saldo ya consumidos por la orden: no vuelven al inventario si se cancela.
-    const consumedRemnantKg = (order.remnant_consumptions ?? []).reduce(
-        (total, consumption) => total + Number(consumption.quantity_kg),
-        0,
-    );
-
     return (
         <PageHeader
             title={`Orden ${order.order_number} (Lote ${order.lot_number})`}
@@ -69,7 +63,6 @@ export function OrderHeader({
                         <CancelOrderDialog
                             orderId={order.id}
                             orderNumber={order.order_number}
-                            consumedRemnantKg={consumedRemnantKg}
                         />
                     )}
                     <Button variant="outline" asChild>

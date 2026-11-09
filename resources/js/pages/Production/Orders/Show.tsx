@@ -440,7 +440,12 @@ export default function ProductionOrderShow({
                             orderId={order.id}
                             order={order}
                             showCosts={can.previewCosts}
-                            canConsume={can.consumeRemnant}
+                            canPlan={can.planRemnant}
+                            // Al completar: un saldo planeado que ya no alcanza. La llave no es un campo del formulario.
+                            completionError={
+                                (errors as Record<string, string | undefined>)
+                                    .remnant_consumption_ids
+                            }
                         />
 
                         <ControlCard

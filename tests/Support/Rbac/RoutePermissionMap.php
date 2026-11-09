@@ -134,6 +134,7 @@ final class RoutePermissionMap
             'production-orders.packaging-plans.labels' => Permission::ProductionOrdersPrintLabels,
             'production-orders.available-remnants' => Permission::ProductionOrdersOperate,
             'production-orders.consume-remnant' => Permission::ProductionOrdersOperate,
+            'production-orders.remnant-consumptions.destroy' => Permission::ProductionOrdersOperate,
             'production-orders.submit-for-review' => Permission::ProductionOrdersSubmitForReview,
             'production-orders.reject-review' => Permission::ProductionOrdersRejectReview,
             'production-orders.complete' => Permission::ProductionOrdersComplete,

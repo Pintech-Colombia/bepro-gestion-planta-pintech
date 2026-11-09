@@ -1,35 +1,75 @@
 import { router } from '@inertiajs/react';
-import { FlaskConical } from 'lucide-react';
 import { useState } from 'react';
+import type { KeyboardEvent } from 'react';
 
-import { store as consumeRemnant } from '@/actions/App/Http/Controllers/Production/RemnantConsumptionController';
+import {
+    destroy as removeRemnantConsumption,
+    store as planRemnantConsumption,
+} from '@/actions/App/Http/Controllers/Production/RemnantConsumptionController';
 import { DecimalInput } from '@/components/decimal-input';
+import { DetailTable } from '@/components/detail-table';
+import type { DetailTableColumn } from '@/components/detail-table';
+import { FormError, FormField } from '@/components/form-field';
 import { FormattedNumber } from '@/components/formatted-number';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { formatQuantity } from '@/lib/formatters';
+import { useConfirm } from '@/hooks/use-confirm';
+import { formatKind } from '@/lib/formatters';
 import { toDecimalPayload } from '@/lib/numeric-input';
-import type { ProductionOrder } from '@/types/production-orders';
+import type {
+    ProductionOrder,
+    ProductionOrderRemnantConsumption,
+} from '@/types/production-orders';
+
+const STATE_LABELS: Record<ProductionOrderRemnantConsumption['state'], string> =
+    {
+        applied: 'Descontado',
+        planned: 'Planeado',
+        unused: 'No usado',
+    };
 
 type ConsumeRemnantsCardProps = {
     orderId: number;
     order: ProductionOrder;
-    canConsume: boolean;
-    /** El costo consumido solo se muestra con costs.view. */
+    /** Agregar y quitar saldos (`can.planRemnant`). */
+    canPlan: boolean;
+    /** El costo solo se muestra con costs.view. */
     showCosts: boolean;
+    /** Error al completar: un saldo planeado ya no alcanza. */
+    completionError?: string;
 };
 
+/** Enter en un campo de la tarjeta no envía el formulario de la orden, que la contiene. */
+const preventSubmitOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+    }
+};
+
+/**
+ * Saldos de PT a usar en la orden: líneas planeadas que se agregan con la orden pendiente, en curso o en revisión, salen
+ * en el PDF y se descuentan del saldo al completar la orden. Mientras están planeadas, los galones y el costo son un
+ * estimado y la línea se puede quitar.
+ */
 export function ConsumeRemnantsCard({
     orderId,
     order,
-    canConsume,
+    canPlan,
     showCosts,
+    completionError,
 }: ConsumeRemnantsCardProps) {
-    const consumedRemnants = order.remnant_consumptions ?? [];
+    const confirm = useConfirm();
+    const lines = order.remnant_consumptions ?? [];
     const availableRemnants = order.available_remnants ?? [];
+    const hasPlannedLines = lines.some((line) => line.state === 'planned');
 
     const [submitting, setSubmitting] = useState(false);
     const [selectedRemnantId, setSelectedRemnantId] = useState<
@@ -38,35 +78,32 @@ export function ConsumeRemnantsCard({
     const [quantityKg, setQuantityKg] = useState('');
     const [notes, setNotes] = useState('');
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [removeError, setRemoveError] = useState<string | undefined>();
 
     const comboboxOptions = availableRemnants.map((remnant) => ({
         id: remnant.id,
-        // Qué es el saldo antes que de dónde viene: se mezcla en este lote (B57).
-        label: `${remnant.product_name} · Lote ${remnant.source_lot_number} (${remnant.source_order_number}) — ${formatQuantity(remnant.available_quantity_kg, { trimTrailingZeros: true })} kg disponibles`,
+        // Qué es el saldo antes que de dónde viene: se mezcla en este lote. El buscador mira toda la etiqueta.
+        label: `${remnant.product_name} · Lote ${remnant.source_lot_number} (${remnant.source_order_number}) — ${formatKind(remnant.available_quantity_kg, 'quantity')} kg libres`,
     }));
 
     const handleAdd = () => {
         if (!selectedRemnantId || !quantityKg) {
-            const errors: Record<string, string> = {};
-
-            if (!selectedRemnantId) {
-                errors.remnant_id = 'Seleccione un saldo.';
-            }
-
-            if (!quantityKg) {
-                errors.quantity_kg = 'Ingrese la cantidad.';
-            }
-
-            setFormErrors(errors);
+            setFormErrors({
+                ...(!selectedRemnantId
+                    ? { remnant_id: 'Selecciona un saldo.' }
+                    : {}),
+                ...(!quantityKg ? { quantity_kg: 'Escribe los kilos.' } : {}),
+            });
 
             return;
         }
 
         setSubmitting(true);
         setFormErrors({});
+        setRemoveError(undefined);
 
         router.post(
-            consumeRemnant({ production_order: orderId }).url,
+            planRemnantConsumption({ production_order: orderId }).url,
             {
                 remnant_id: selectedRemnantId,
                 quantity_kg: toDecimalPayload(quantityKg),
@@ -79,233 +116,250 @@ export function ConsumeRemnantsCard({
                     setQuantityKg('');
                     setNotes('');
                 },
-                onError: (errors) => {
-                    setFormErrors(errors as Record<string, string>);
-                },
+                onError: (errors) => setFormErrors(errors),
                 onFinish: () => setSubmitting(false),
             },
         );
     };
 
-    if (!canConsume && consumedRemnants.length === 0 && !order.remnant) {
+    const handleRemove = async (line: ProductionOrderRemnantConsumption) => {
+        const confirmed = await confirm({
+            title: '¿Quitar este saldo de la orden?',
+            description: `${line.source_product_name} (${line.source_order_number}). El saldo no se había descontado: sus kilos quedan libres otra vez.`,
+            confirmLabel: 'Quitar',
+            destructive: true,
+        });
+
+        if (!confirmed) {
+            return;
+        }
+
+        setRemoveError(undefined);
+        router.delete(
+            removeRemnantConsumption({
+                production_order: orderId,
+                consumption: line.id,
+            }).url,
+            {
+                preserveScroll: true,
+                onError: (errors) =>
+                    setRemoveError(
+                        errors.remnant_consumption ?? errors.production_order,
+                    ),
+            },
+        );
+    };
+
+    if (!canPlan && lines.length === 0 && !order.remnant) {
         return null;
     }
 
+    const columns: DetailTableColumn<ProductionOrderRemnantConsumption>[] = [
+        {
+            key: 'remnant',
+            header: 'Saldo',
+            cell: (line) => (
+                <>
+                    <div className="font-medium">
+                        {line.source_product_name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                        Lote {line.source_lot_number} ·{' '}
+                        <span className="font-mono">
+                            {line.source_order_number}
+                        </span>
+                    </div>
+                </>
+            ),
+        },
+        {
+            key: 'kilos',
+            header: 'Kilos',
+            cell: (line) => (
+                <FormattedNumber value={line.quantity_kg} kind="quantity" />
+            ),
+            align: 'right',
+        },
+        {
+            key: 'gallons',
+            header: 'Galones',
+            // Planeada, los galones son un estimado: los reales salen al completar. No usada, no hubo galones.
+            cell: (line) =>
+                line.state === 'unused' ? null : (
+                    <>
+                        {line.state === 'planned' && '≈ '}
+                        <FormattedNumber
+                            value={line.quantity_gallons}
+                            kind="quantity"
+                        />
+                    </>
+                ),
+            align: 'right',
+        },
+        ...(showCosts
+            ? [
+                  {
+                      key: 'cost',
+                      header: 'Costo',
+                      cell: (line: ProductionOrderRemnantConsumption) =>
+                          line.consumed_cost == null ? null : (
+                              <>
+                                  {line.state === 'planned' && '≈ '}
+                                  <FormattedNumber
+                                      value={line.consumed_cost}
+                                      kind="cost"
+                                  />
+                              </>
+                          ),
+                      align: 'right' as const,
+                  },
+              ]
+            : []),
+        {
+            key: 'state',
+            header: 'Estado',
+            cell: (line) => STATE_LABELS[line.state],
+        },
+        {
+            key: 'notes',
+            header: 'Observaciones',
+            cell: (line) => line.notes ?? null,
+        },
+        ...(lines.some((line) => line.can.remove)
+            ? [
+                  {
+                      key: 'actions',
+                      header: 'Acciones',
+                      cell: (line: ProductionOrderRemnantConsumption) =>
+                          line.can.remove ? (
+                              <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive-text"
+                                  onClick={() => handleRemove(line)}
+                              >
+                                  Quitar
+                              </Button>
+                          ) : null,
+                      align: 'right' as const,
+                  },
+              ]
+            : []),
+    ];
+
     return (
-        <Card className="border-emerald-200 dark:border-emerald-900/50">
-            <CardHeader className="bg-emerald-50/50 pb-4 dark:bg-emerald-950/20">
-                <CardTitle className="flex items-center gap-2 text-success-text">
-                    <FlaskConical className="h-4 w-4" />
-                    Saldos de Producto Terminado
-                </CardTitle>
+        <Card>
+            <CardHeader>
+                <CardTitle>Saldos de PT a usar</CardTitle>
+                {(canPlan || hasPlannedLines) && (
+                    <CardDescription>
+                        El saldo se descuenta al completar la orden.
+                    </CardDescription>
+                )}
             </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-                {order.remnant && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                        <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                            Esta orden generó un saldo de{' '}
-                            <FormattedNumber
-                                value={order.remnant.original_quantity_kg}
-                                maxDecimals={4}
-                                trimTrailingZeros
-                            />{' '}
-                            kg (≈{' '}
-                            <FormattedNumber
-                                value={order.remnant.original_quantity_gallons}
-                                maxDecimals={2}
-                                trimTrailingZeros
-                            />{' '}
-                            gal)
-                        </p>
-                        <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">
-                            Estado: {order.remnant.status_label} &middot;
-                            Disponible:{' '}
-                            <FormattedNumber
-                                value={order.remnant.available_quantity_kg}
-                                maxDecimals={4}
-                                trimTrailingZeros
-                            />{' '}
-                            kg
-                        </p>
-                    </div>
+            <CardContent className="space-y-4">
+                {lines.length > 0 && (
+                    <DetailTable
+                        rows={lines}
+                        rowKey={(line) => line.id}
+                        caption="Saldos de PT a usar en esta orden"
+                        columns={columns}
+                        empty="Esta orden no usa saldos."
+                    />
                 )}
 
-                {consumedRemnants.length > 0 && (
+                <FormError
+                    id="remnant_consumption_ids"
+                    message={completionError}
+                />
+                <FormError message={removeError} />
+
+                {canPlan && (
                     <div className="space-y-3">
-                        <Label className="flex items-center gap-1.5">
-                            Saldos Consumidos en esta Orden
-                        </Label>
-                        <div className="overflow-hidden rounded-md border">
-                            <div className="relative overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="border-b bg-emerald-50 dark:bg-emerald-950/20">
-                                        <tr>
-                                            <th className="p-3 text-left">
-                                                Origen
-                                            </th>
-                                            <th className="p-3 text-right">
-                                                Kilogramos
-                                            </th>
-                                            <th className="p-3 text-right">
-                                                Galones
-                                            </th>
-                                            {showCosts && (
-                                                <th className="p-3 text-right">
-                                                    Costo
-                                                </th>
-                                            )}
-                                            <th className="p-3 text-left">
-                                                Operario
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {consumedRemnants.map((consumption) => (
-                                            <tr
-                                                key={consumption.id}
-                                                className="border-b last:border-0"
-                                            >
-                                                <td className="p-3">
-                                                    <div className="font-medium">
-                                                        {consumption.source_order_number ??
-                                                            'Desconocido'}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {
-                                                            consumption.source_product_name
-                                                        }
-                                                    </div>
-                                                </td>
-                                                <td className="p-3 text-right">
-                                                    <FormattedNumber
-                                                        value={
-                                                            consumption.quantity_kg
-                                                        }
-                                                        maxDecimals={4}
-                                                        trimTrailingZeros
-                                                    />{' '}
-                                                    kg
-                                                </td>
-                                                <td className="p-3 text-right text-muted-foreground">
-                                                    <FormattedNumber
-                                                        value={
-                                                            consumption.quantity_gallons
-                                                        }
-                                                        maxDecimals={2}
-                                                        trimTrailingZeros
-                                                    />{' '}
-                                                    gal
-                                                </td>
-                                                {showCosts && (
-                                                    <td className="p-3 text-right">
-                                                        {consumption.consumed_cost !=
-                                                            null && (
-                                                            <FormattedNumber
-                                                                value={
-                                                                    consumption.consumed_cost
-                                                                }
-                                                                currency
-                                                                maxDecimals={2}
-                                                            />
-                                                        )}
-                                                    </td>
-                                                )}
-                                                <td className="p-3">
-                                                    {consumption.consumed_by
-                                                        ?.name ?? '---'}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {canConsume && (
-                    <div className="space-y-3 rounded-md border border-dashed border-emerald-300 bg-emerald-50/50 p-3 dark:border-emerald-800 dark:bg-emerald-950/10">
-                        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                            Consumir un saldo en esta orden
-                        </p>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            <div className="space-y-1 sm:col-span-2">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <FormField
+                                id="remnant_id"
+                                label="Saldo"
+                                error={formErrors.remnant_id}
+                                className="sm:col-span-2"
+                            >
                                 <Combobox
                                     options={comboboxOptions}
                                     value={selectedRemnantId}
-                                    onChange={(value) =>
-                                        setSelectedRemnantId(value)
-                                    }
-                                    placeholder="Seleccionar saldo..."
-                                    emptyText="No hay saldos disponibles"
+                                    onChange={setSelectedRemnantId}
+                                    placeholder="Buscar por producto, color, lote u OP..."
+                                    emptyText="No hay saldos libres en esta bodega."
                                 />
-                                {formErrors.remnant_id && (
-                                    <p className="text-xs text-destructive">
-                                        {formErrors.remnant_id}
-                                    </p>
-                                )}
-                            </div>
-                            <div className="space-y-1">
+                            </FormField>
+                            <FormField
+                                id="quantity_kg"
+                                label="Kilos"
+                                error={formErrors.quantity_kg}
+                            >
                                 <DecimalInput
-                                    placeholder="Kilos"
-                                    className="h-9"
+                                    placeholder="0,00"
                                     value={quantityKg}
                                     onValueChange={setQuantityKg}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                        }
-                                    }}
+                                    onKeyDown={preventSubmitOnEnter}
                                 />
-                                {formErrors.quantity_kg && (
-                                    <p className="text-xs text-destructive">
-                                        {formErrors.quantity_kg}
-                                    </p>
-                                )}
-                            </div>
+                            </FormField>
                         </div>
-                        <div className="space-y-1">
+                        <FormField
+                            id="remnant_consumption_notes"
+                            label="Observaciones"
+                            error={formErrors.notes}
+                        >
                             <Input
-                                placeholder="Observaciones (opcional)"
-                                className="h-9"
                                 value={notes}
+                                maxLength={1000}
                                 onChange={(event) =>
                                     setNotes(event.target.value)
                                 }
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                    }
-                                }}
+                                onKeyDown={preventSubmitOnEnter}
                             />
-                        </div>
-                        {formErrors.production_order && (
-                            <p className="text-xs text-destructive">
-                                {formErrors.production_order}
-                            </p>
-                        )}
+                        </FormField>
+                        <FormError message={formErrors.production_order} />
                         <Button
                             type="button"
                             variant="outline"
-                            size="sm"
-                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
                             onClick={handleAdd}
                             disabled={
                                 submitting || availableRemnants.length === 0
                             }
                         >
-                            {submitting ? 'Consumiendo...' : 'Consumir Saldo'}
+                            {submitting ? 'Agregando...' : 'Agregar saldo'}
                         </Button>
                     </div>
                 )}
 
-                {consumedRemnants.length === 0 &&
-                    !canConsume &&
-                    !order.remnant && (
-                        <p className="text-xs text-muted-foreground">
-                            No hay saldos registrados para esta orden.
+                {order.remnant && (
+                    <div className="space-y-1 border-t border-border pt-4">
+                        <h3 className="text-base font-semibold">
+                            Saldo que dejó esta orden
+                        </h3>
+                        <p className="text-sm">
+                            <FormattedNumber
+                                value={order.remnant.original_quantity_kg}
+                                kind="quantity"
+                            />{' '}
+                            kg (≈{' '}
+                            <FormattedNumber
+                                value={order.remnant.original_quantity_gallons}
+                                kind="quantity"
+                            />{' '}
+                            gal)
                         </p>
-                    )}
+                        <p className="text-xs text-muted-foreground">
+                            {order.remnant.status_label} · Disponible:{' '}
+                            <FormattedNumber
+                                value={order.remnant.available_quantity_kg}
+                                kind="quantity"
+                            />{' '}
+                            kg
+                        </p>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

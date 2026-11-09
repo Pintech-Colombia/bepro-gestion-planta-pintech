@@ -45,11 +45,16 @@ it('permite operar en proceso a quien tiene operate y a nadie en estados cerrado
         ->and(orderAbility(SystemRole::Commercial, 'updateOperationalData', orderInStatus(ProductionOrderStatus::InProgress)))->toBeFalse();
 });
 
-it('consume saldos solo en una orden en proceso, ni siquiera quien revisa (D-OPX1)', function () {
-    expect(orderAbility(SystemRole::Operator, 'consumeRemnant', orderInStatus(ProductionOrderStatus::InProgress)))->toBeTrue()
-        ->and(orderAbility(SystemRole::Admin, 'consumeRemnant', orderInStatus(ProductionOrderStatus::PendingReview)))->toBeFalse()
-        ->and(orderAbility(SystemRole::Admin, 'consumeRemnant', orderInStatus(ProductionOrderStatus::Completed)))->toBeFalse()
-        ->and(orderAbility(SystemRole::Commercial, 'consumeRemnant', orderInStatus(ProductionOrderStatus::InProgress)))->toBeFalse();
+it('planea saldos con la orden pendiente o en curso; en revisión, solo quien puede revisarla', function () {
+    expect(orderAbility(SystemRole::Operator, 'planRemnant', orderInStatus(ProductionOrderStatus::Pending)))->toBeTrue()
+        ->and(orderAbility(SystemRole::Operator, 'planRemnant', orderInStatus(ProductionOrderStatus::InProgress)))->toBeTrue()
+        ->and(orderAbility(SystemRole::Production, 'planRemnant', orderInStatus(ProductionOrderStatus::Pending)))->toBeTrue()
+        ->and(orderAbility(SystemRole::Operator, 'planRemnant', orderInStatus(ProductionOrderStatus::PendingReview)))->toBeFalse()
+        ->and(orderAbility(SystemRole::Admin, 'planRemnant', orderInStatus(ProductionOrderStatus::PendingReview)))->toBeTrue()
+        ->and(orderAbility(SystemRole::Admin, 'planRemnant', orderInStatus(ProductionOrderStatus::Completed)))->toBeFalse()
+        ->and(orderAbility(SystemRole::Admin, 'planRemnant', orderInStatus(ProductionOrderStatus::Cancelled)))->toBeFalse()
+        ->and(orderAbility(SystemRole::Commercial, 'planRemnant', orderInStatus(ProductionOrderStatus::Pending)))->toBeFalse()
+        ->and(orderAbility(SystemRole::Commercial, 'planRemnant', orderInStatus(ProductionOrderStatus::InProgress)))->toBeFalse();
 });
 
 it('completa desde en proceso o en revisión solo con el permiso', function () {

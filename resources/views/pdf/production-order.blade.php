@@ -359,6 +359,29 @@
         </table>
     @endif
 
+    {{-- ⑤.2 SALDOS DE PT A USAR (líneas planeadas: se descuentan al completar la orden) --}}
+    @if(!empty($order['remnant_consumptions']) && count($order['remnant_consumptions']) > 0)
+        <table style="margin-top: 8px;">
+            <tr>
+                <td colspan="4" class="section-header" style="background-color: #555555;">SALDOS DE PT A USAR</td>
+            </tr>
+            <tr>
+                <th class="label text-center" style="width: 20%;">SALDO</th>
+                <th class="label text-center" style="width: 20%;">KILOS</th>
+                <th class="label text-center" style="width: 40%;">PRODUCTO</th>
+                <th class="label text-center" style="width: 20%;">OBSERVACIONES</th>
+            </tr>
+            @foreach($order['remnant_consumptions'] as $remnantLine)
+                <tr>
+                    <td class="text-center">SALDO · {{ $remnantLine['source_order_number'] }}<br><span class="small-text">Lote {{ $remnantLine['source_lot_number'] }}</span></td>
+                    <td class="text-center">{{ NumberFormat::quantity($remnantLine['quantity_kg']) }}</td>
+                    <td>{{ $remnantLine['source_product_name'] }}</td>
+                    <td>{{ $remnantLine['notes'] ?? '' }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
     {{-- ⑥ NOMBRE RESPONSABLE --}}
     <table style="margin-top: 8px;">
         <tr>

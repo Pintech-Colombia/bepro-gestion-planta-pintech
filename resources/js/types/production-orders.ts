@@ -93,26 +93,39 @@ export type ProductionOrderRemnant = {
     status_label: string;
 };
 
+/**
+ * Un saldo de PT que usa la orden: una línea planeada hasta que la orden se completa, cuando se descuenta del saldo.
+ * Mientras está planeada, los galones y el costo son un estimado.
+ */
 export type ProductionOrderRemnantConsumption = {
     id: number;
     remnant_id: number;
     source_order_number?: string;
-    /** Producto con el color de la orden de origen: qué se mezcló en esta orden (B57). */
+    source_lot_number?: number;
+    /** Producto con el color de la orden de origen: qué se mezcla en esta orden. */
     source_product_name: string;
     quantity_gallons: FormNumberValue;
     quantity_kg: FormNumberValue;
+    /** Solo con costs.view: el real si ya se aplicó; el estimado si está planeada. */
     consumed_cost?: FormNumberValue | null;
+    /**
+     * applied: descontado del saldo al completar · planned: planeado en una orden abierta (galones y costo estimados) ·
+     * unused: la orden ya no está abierta (cancelada) y la línea queda como historial, sin costo.
+     */
+    state: 'applied' | 'planned' | 'unused';
     notes?: string | null;
     consumed_at: string;
     consumed_by?: { id: number; name: string } | null;
+    can: { remove: boolean };
 };
 
 export type ProductionOrderAvailableRemnant = {
     id: number;
     source_order_number: string;
     source_lot_number: number;
-    /** Producto con el color de la orden de origen: un saldo puede venir de cualquier producto de la bodega (B57). */
+    /** Producto con el color de la orden de origen: un saldo puede venir de cualquier producto de la bodega. */
     product_name: string;
+    /** Los kilos libres: lo disponible menos lo ya planeado en órdenes abiertas. */
     available_quantity_kg: string;
 };
 
@@ -185,7 +198,8 @@ export type ProductionOrderCan = {
     complete: boolean;
     rejectReview: boolean;
     previewCosts: boolean;
-    consumeRemnant: boolean;
+    /** Agregar y quitar saldos de PT: pendiente o en curso con `operate`; en revisión, solo quien puede revisarla. */
+    planRemnant: boolean;
     updateColor: boolean;
     printLabels: boolean;
     /** Botón «Cancelar orden» (D-OPX2): permiso y estado pendiente o en curso. */

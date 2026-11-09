@@ -50,13 +50,15 @@ class CancelProductionOrderAction
     }
 
     /**
-     * Los saldos que esta orden ya había consumido no vuelven al inventario (comportamiento provisional hasta que los
-     * saldos se apliquen al completar, B66): se dejan escritos en la nota para que no se pierdan de vista.
+     * Los saldos de esta orden que ya se habían descontado del inventario no vuelven: se dejan escritos en la nota para
+     * que no se pierdan de vista. Con los saldos planeados, una orden abierta no tiene ninguno (se descuentan al
+     * completar); solo quedan los registrados antes de ese cambio. Las líneas planeadas se conservan como historial y
+     * dejan de reservar el saldo porque la orden ya no está abierta.
      */
     private function consumedRemnantsNote(ProductionOrder $order): ?string
     {
         // En el orden en que se consumieron: sin `orderBy`, PostgreSQL las devuelve en el orden en que las encuentra.
-        $consumptions = $order->remnantConsumptions()->with('remnant.sourceOrder:id,order_number')->orderBy('id')->get();
+        $consumptions = $order->remnantConsumptions()->applied()->with('remnant.sourceOrder:id,order_number')->orderBy('id')->get();
 
         if ($consumptions->isEmpty()) {
             return null;
