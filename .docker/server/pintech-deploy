@@ -135,10 +135,16 @@ if ! compose_with "$NEW_IMAGE" up -d --wait --wait-timeout "$HEALTH_TIMEOUT" "${
     die "despliegue revertido, pero la imagen anterior tampoco quedó sana: revisar a mano"
 fi
 
-# El resto del proyecto (el túnel) se levanta si no corría; lo que ya está al día no se toca.
-compose_with "$NEW_IMAGE" up -d --remove-orphans
-
+# web, queue y scheduler ya corren con la imagen nueva: se anota antes del último paso. Si se anotara después y ese paso
+# fallara, el `.env` seguiría con la anterior y un `up` posterior (o volver atrás) usaría la imagen equivocada.
 save_current_image
+
+# El resto del proyecto (el túnel) se levanta si no corría; lo que ya está al día no se toca.
+if ! compose_with "$NEW_IMAGE" up -d --remove-orphans; then
+    record "fallo-resto"
+    die "la app quedó con la imagen nueva, pero no se pudo levantar el resto del proyecto (el túnel): revisar last-deploy.log"
+fi
+
 if [[ -n "$AUDIT_WARNING" ]]; then
     record "ok-con-avisos"
     log "desplegado $NEW_IMAGE"
