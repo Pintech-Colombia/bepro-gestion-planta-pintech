@@ -690,7 +690,6 @@ describe('contrato de DESIGN.md', () => {
         // Excepciones con su motivo (`components/ui/` ya queda fuera en `screenFiles`). Al resolver una, se quita.
         const handMadeAlertExceptions = [
             // Orden de producción: sus avisos se quitan al rediseñarla.
-            'resources/js/components/production/',
             'resources/js/pages/Production/Orders/',
         ];
         // La misma clase es lo que hay entre dos comillas. El lookbehind ignora las variantes (`hover:bg-*`, `dark:*`).

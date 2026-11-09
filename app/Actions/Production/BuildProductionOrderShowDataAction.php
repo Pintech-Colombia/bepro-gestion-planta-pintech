@@ -13,6 +13,7 @@ use App\Models\RemnantConsumption;
 use App\Services\AvailableRemnantsService;
 use App\Services\DecimalCalculator;
 use App\Services\Production\ProductionOrderLineUnits;
+use App\Services\Production\RemnantDrawdown;
 
 class BuildProductionOrderShowDataAction
 {
@@ -20,20 +21,24 @@ class BuildProductionOrderShowDataAction
         private readonly DecimalCalculator $calculator,
         private readonly AvailableRemnantsService $availableRemnants,
         private readonly ProductionOrderLineUnits $lineUnits,
+        private readonly RemnantDrawdown $remnantDrawdown,
     ) {}
 
     /**
      * Carga relaciones y transforma la orden en un array para la pantalla Inertia.
      *
+     * @param  bool  $canPlanRemnant  si quien la ve puede agregar y quitar saldos: trae la lista de los libres
      * @return array<string, mixed>
      */
-    public function execute(ProductionOrder $productionOrder, bool $includeCosts = true): array
+    public function execute(ProductionOrder $productionOrder, bool $includeCosts = true, bool $canPlanRemnant = false): array
     {
         $productionOrder->load([
             'product',
             'qrCode',
             'remnant',
-            'remnantConsumptions.remnant.sourceOrder:id,order_number,color',
+            // En el orden en que se agregaron: sin `orderBy`, PostgreSQL las devuelve en el orden en que las encuentra.
+            'remnantConsumptions' => fn ($query) => $query->orderBy('id'),
+            'remnantConsumptions.remnant.sourceOrder:id,order_number,lot_number,color',
             'remnantConsumptions.remnant.product:id,name',
             'remnantConsumptions.consumedBy',
             'formula.details.rawMaterial',
@@ -268,25 +273,38 @@ class BuildProductionOrderShowDataAction
                 'status' => $productionOrder->remnant->status->value,
                 'status_label' => $productionOrder->remnant->status->label(),
             ] : null,
-            'remnant_consumptions' => $productionOrder->remnantConsumptions->map(fn (RemnantConsumption $consumption) => [
-                'id' => $consumption->id,
-                'remnant_id' => $consumption->remnant_id,
-                'source_order_number' => $consumption->remnant?->sourceOrder?->order_number,
-                // Qué se mezcló en esta orden: el producto con el color de la orden de origen (B57).
-                'source_product_name' => ProductionOrder::nameWithColor($consumption->remnant->product->name, $consumption->remnant->sourceOrder->color),
-                'quantity_gallons' => (float) $consumption->quantity_gallons,
-                'quantity_kg' => (float) $consumption->quantity_kg,
-                ...($includeCosts ? [
-                    'consumed_cost' => $consumption->consumed_cost !== null ? (float) $consumption->consumed_cost : null,
-                ] : []),
-                'notes' => $consumption->notes,
-                'consumed_at' => $consumption->consumed_at->toISOString(),
-                'consumed_by' => $consumption->consumedBy ? [
-                    'id' => $consumption->consumedBy->id,
-                    'name' => $consumption->consumedBy->name,
-                ] : null,
-            ])->values(),
-            'available_remnants' => $productionOrder->status === ProductionOrderStatus::InProgress
+            // Saldos de PT a usar: líneas planeadas hasta que la orden se completa. Los galones y el costo de una línea
+            // planeada son un estimado con la regla con que se aplicará; los reales se guardan al completar.
+            'remnant_consumptions' => $productionOrder->remnantConsumptions->map(function (RemnantConsumption $consumption) use ($includeCosts, $canPlanRemnant) {
+                $isApplied = $consumption->isApplied();
+                // El real si ya se aplicó; el estimado si está planeada.
+                $cost = $includeCosts ? $this->remnantDrawdown->lineCost($consumption) : null;
+
+                return [
+                    'id' => $consumption->id,
+                    'remnant_id' => $consumption->remnant_id,
+                    'source_order_number' => $consumption->remnant?->sourceOrder?->order_number,
+                    'source_lot_number' => $consumption->remnant?->sourceOrder?->lot_number,
+                    // Qué se mezcla en esta orden: el producto con el color de la orden de origen.
+                    'source_product_name' => ProductionOrder::nameWithColor($consumption->remnant->product->name, $consumption->remnant->sourceOrder->color),
+                    'quantity_gallons' => (float) $consumption->quantity_gallons,
+                    'quantity_kg' => (float) $consumption->quantity_kg,
+                    ...($includeCosts ? [
+                        'consumed_cost' => $cost !== null ? (float) $cost : null,
+                    ] : []),
+                    'is_applied' => $isApplied,
+                    'notes' => $consumption->notes,
+                    'consumed_at' => $consumption->consumed_at->toISOString(),
+                    'consumed_by' => $consumption->consumedBy ? [
+                        'id' => $consumption->consumedBy->id,
+                        'name' => $consumption->consumedBy->name,
+                    ] : null,
+                    'can' => [
+                        'remove' => $canPlanRemnant && ! $isApplied,
+                    ],
+                ];
+            })->values(),
+            'available_remnants' => $canPlanRemnant
                 ? $this->availableRemnants->forOrder($productionOrder)
                 : [],
         ];

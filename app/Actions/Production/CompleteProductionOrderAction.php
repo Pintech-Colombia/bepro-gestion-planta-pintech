@@ -24,6 +24,7 @@ use App\Services\Pricing\ProductionCostCalculatorService;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
+use App\Services\Production\RemnantDrawdown;
 use App\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,7 @@ class CompleteProductionOrderAction
         private readonly ProductionOrderLock $orderLock,
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
+        private readonly RemnantDrawdown $remnantDrawdown,
     ) {}
 
     /**
@@ -134,6 +136,8 @@ class CompleteProductionOrderAction
                     movementDate: $completionDate,
                 ), 4);
             }
+
+            $this->applyPlannedRemnants($lockedOrder);
 
             foreach ($lockedOrder->remnantConsumptions as $consumption) {
                 if ($consumption->consumed_cost !== null) {
@@ -294,6 +298,31 @@ class CompleteProductionOrderAction
         GenerateQualityInspectionCertificateJob::dispatch($completedOrder, $userId)->afterCommit();
 
         return $completedOrder;
+    }
+
+    /**
+     * Descuenta de cada saldo las líneas planeadas de la orden, con los galones y el costo reales, y las marca como
+     * aplicadas. Los saldos se bloquean por id ascendente, después de la OP (el mismo orden que al planear): así ninguna
+     * transacción espera en el orden contrario. Si un saldo ya no alcanza, 422 y la transacción no deja nada escrito.
+     * Las líneas ya aplicadas (registradas antes de que los saldos se planearan) solo suman su costo.
+     */
+    private function applyPlannedRemnants(ProductionOrder $lockedOrder): void
+    {
+        $plannedByRemnant = $lockedOrder->remnantConsumptions
+            ->reject(fn ($consumption) => $consumption->isApplied())
+            ->sortBy([['remnant_id', 'asc'], ['id', 'asc']])
+            ->groupBy('remnant_id');
+
+        foreach ($plannedByRemnant as $remnantId => $lines) {
+            $lockedRemnant = ProductionRemnant::query()
+                ->with('sourceOrder:id,order_number')
+                ->lockForUpdate()
+                ->findOrFail($remnantId);
+
+            foreach ($lines as $line) {
+                $this->remnantDrawdown->apply($line, $lockedRemnant);
+            }
+        }
     }
 
     /**

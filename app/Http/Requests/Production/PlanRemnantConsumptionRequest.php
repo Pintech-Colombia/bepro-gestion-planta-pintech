@@ -8,14 +8,14 @@ use App\Enums\NumberType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class ConsumeRemnantRequest extends FormRequest
+class PlanRemnantConsumptionRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('consumeRemnant', $this->route('production_order')) ?? false;
+        return $this->user()?->can('planRemnant', $this->route('production_order')) ?? false;
     }
 
     /**
@@ -38,7 +38,7 @@ class ConsumeRemnantRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'quantity_kg' => 'kilos a consumir',
+            'quantity_kg' => 'kilos a usar',
         ];
     }
 }

@@ -103,11 +103,11 @@ combinación, se crea un rol nuevo.
 | | `raw_materials.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si no tiene lotes, movimientos, fórmulas ni órdenes. |
 | **Órdenes de producción** | `production_orders.view` | [x] | [x] | [x] | [x] | [ ] | 🔁 Comercial `[ ]` (§7.3). Sin costos salvo `costs.view`. |
 | | `production_orders.create` | [x] | [x] | [x] | [ ] | [ ] | También corrige el **color** de la orden mientras está abierta (pendiente, en curso o en revisión): quien lo escribe al crear puede corregirlo. Al completar se congela (3.4). |
-| | `production_orders.operate` | [x] | [x] | [x] | [x] | [ ] | Iniciar, ajustes de línea, plan de empaque y consumo de remanentes. Los remanentes solo se consumen con la orden en curso, también para quien revisa (D-OPX1, auditoría 3.6). |
+| | `production_orders.operate` | [x] | [x] | [x] | [x] | [ ] | Iniciar, ajustes de línea, plan de empaque y saldos de PT a usar. Los saldos se agregan y se quitan con la orden pendiente o en curso; en revisión, solo quien puede revisarla, como los ajustes de línea (D-OPX1, §8.9). |
 | | `production_orders.submit_for_review` | [x] | [x] | [x] | [x] | [ ] | ⚠️ hoy solo Operador puede enviar a revisión. |
 | | `production_orders.reject_review` | [x] | [x] | [x] | [ ] | [ ] | |
 | | `production_orders.complete` | [x] | [x] | [x] | [ ] | [ ] | Descuenta inventario FIFO. |
-| | `production_orders.cancel` | [x] | [x] | [ ] | [ ] | [ ] | Botón «Cancelar orden» del detalle (D-OPX2): solo con la orden pendiente o en curso (`ProductionOrderStatus::cancellable()`), con motivo obligatorio de 10 a 1.000 caracteres. Los saldos que la orden ya consumió **no vuelven** al inventario hasta que se haga B66; quedan en la nota de cancelación. **Una orden no se elimina** (principio 4). |
+| | `production_orders.cancel` | [x] | [x] | [ ] | [ ] | [ ] | Botón «Cancelar orden» del detalle (D-OPX2): solo con la orden pendiente o en curso (`ProductionOrderStatus::cancellable()`), con motivo obligatorio de 10 a 1.000 caracteres. Los saldos planeados en la orden no se habían descontado (se descuentan al completar), así que no hay nada que devolver; solo los descontados antes de que los saldos se planearan quedan escritos en la nota de cancelación. **Una orden no se elimina** (principio 4). |
 | | `production_orders.export` | [x] | [x] | [x] | [x] | [ ] | PDF + Excel juntos. Los costos del archivo dependen de `costs.view`. |
 | | `production_orders.print_labels` | [x] | [x] | [x] | [ ] | [ ] | Estampita de lote (DYMO) de una presentación del plan de envasado, en cualquier estado menos cancelada; las copias se eligen al imprimir. La primera impresión crea el QR de la orden; no reactiva un QR desactivado. |
 | **Remanentes** | `production_remnants.view` | [x] | [x] | [x] | [x] | [ ] | El costo por galón solo con `costs.view`. ⚠️ hoy se envía a todos (`RemnantController:47`). |
@@ -176,9 +176,9 @@ Viven en las policies/Actions junto al permiso, nunca en la matriz. Se listan aq
 | Siempre debe quedar al menos un SuperAdmin activo (única regla ligada a un rol) | `UserController::update/destroy` |
 | Cotización: editar solo en `draft`; cambiar estado bloqueado si ya se convirtió; convertir solo si `accepted` | `QuotationPolicy` |
 | Registros con dueño: sin `view_all` solo se actúa sobre los propios | `scopeVisibleTo` en `Quotation`, `SalesOrder`, `PaintDevelopmentRequest` |
-| Orden: `operate` solo en `in_progress`/`pending_review`; `complete` solo en `in_progress`/`pending_review`; `reject_review` solo en `pending_review` | `ProductionOrderPolicy` |
+| Orden: `operate` solo en `in_progress`/`pending_review` (los saldos, también en `pending`); `complete` solo en `in_progress`/`pending_review`; `reject_review` solo en `pending_review` | `ProductionOrderPolicy` |
 | Orden en `pending_review`: **solo quien puede revisar** (`complete`) sigue operando | Hoy: `hasRole('operador')` → se reescribe sin rol |
-| Orden: consumir un remanente solo en `in_progress` (en revisión, ni siquiera quien revisa: se devuelve la orden a planta) | `ProductionOrderPolicy::consumeRemnant` |
+| Orden: agregar o quitar un saldo de PT en `pending` o `in_progress`; en `pending_review`, solo quien puede revisar (§8.9) | `ProductionOrderPolicy::planRemnant` |
 | Orden: toda escritura en una orden abierta bloquea la fila y vuelve a evaluar la habilidad con el estado bloqueado (el estado pudo cambiar mientras esperaba) | `ProductionOrderLock` |
 | Pedido: `edit` solo en `pending`; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` | `UpdateSalesOrderRequest` |
 | Movimiento MP generado por una orden (`production_order_id`) no se toca | `InventoryMovementPolicy` |
@@ -269,3 +269,4 @@ el código necesita saber vive aquí.
 | 8.6 | **`roles:audit` solo avisa, nunca corrige.** Lista roles personalizados con permisos reservados, obligatorios faltantes o dependencias rotas; se ejecuta en cada despliegue | `AuditCustomRolesCommand` |
 | 8.7 | **`visibleTo()` sin usuario no devuelve nada.** Con `view_all` ve todo; con `view_own`, solo lo propio; sin usuario, ningún registro (antes se trataba como admin sin restricción) | `Quotation`, `SalesOrder`, `PaintDevelopmentRequest` |
 | 8.8 | **Los permisos se agrupan por módulo** para la pantalla de roles, desde el propio enum | `PermissionCatalogService`, `PermissionModule` |
+| 8.9 | **Saldos de PT planeados (reemplaza D-OPX1, «solo en curso»).** Usar un saldo es una línea planeada de la orden: se agrega y se quita con `production_orders.operate` desde que la orden está pendiente (sale en el PDF que se imprime para planta), y en revisión solo con `production_orders.complete`. El inventario del saldo se mueve al completar; mientras tanto la línea reserva sus kilos para que otra orden abierta no los planee | `ProductionOrderPolicy::planRemnant`, `PlanRemnantConsumptionAction`, `AvailableRemnantsService` |

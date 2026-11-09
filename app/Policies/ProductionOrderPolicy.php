@@ -47,13 +47,17 @@ class ProductionOrderPolicy
     }
 
     /**
-     * Consumir un saldo es una acción de planta: cambia lo que entra a la mezcla. Solo en curso; en revisión los datos de
-     * planta ya se entregaron, y si hace falta un saldo la orden se devuelve a planta (D-OPX1).
+     * Planear o quitar un saldo de PT en la orden, y ver la lista de los que se pueden usar. Es una línea planeada: se
+     * agrega desde que la orden se crea (sale en el PDF que se imprime para planta) y su inventario se mueve al completar.
+     * Pendiente o en curso, con el permiso de operar; en revisión, como los ajustes de línea, solo quien puede revisarla.
      */
-    public function consumeRemnant(User $user, ProductionOrder $productionOrder): bool
+    public function planRemnant(User $user, ProductionOrder $productionOrder): bool
     {
-        return $productionOrder->status === ProductionOrderStatus::InProgress
-            && $user->can(Permission::ProductionOrdersOperate->value);
+        if ($productionOrder->status === ProductionOrderStatus::Pending) {
+            return $user->can(Permission::ProductionOrdersOperate->value);
+        }
+
+        return $this->updateOperationalData($user, $productionOrder);
     }
 
     public function startProduction(User $user, ProductionOrder $productionOrder): bool

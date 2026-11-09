@@ -23,6 +23,8 @@ type RemnantItem = {
     warehouse_name: string;
     available_quantity_gallons: number;
     available_quantity_kg: number;
+    /** Kilos planeados en órdenes abiertas que todavía no se descontaron; null si no hay. */
+    committed_quantity_kg: number | null;
     density_kg_per_gallon: number;
     cost_per_gallon: number | null;
     status: string;
@@ -125,8 +127,8 @@ export default function RemnantsIndex({
                     </span>
                 </>
             ),
-            // El principal no cuenta en los 4 datos: el peso por galón cabe en la tarjeta, también con el costo.
-            mobile: 'meta',
+            // En el celular cede su lugar a «Comprometido», que sirve para decidir si un saldo se puede usar.
+            mobile: 'hidden',
             align: 'right',
         },
         ...(can.viewCosts
@@ -159,6 +161,20 @@ export default function RemnantsIndex({
             mobile: 'primary',
             align: 'right',
             className: 'font-medium',
+        },
+        {
+            key: 'committed_kg',
+            header: 'Comprometido (kg)',
+            // Planeado en órdenes abiertas: se descuenta al completarlas. Sin nada planeado, «—».
+            cell: (remnant) =>
+                remnant.committed_quantity_kg === null ? null : (
+                    <FormattedNumber
+                        value={remnant.committed_quantity_kg}
+                        kind="quantity"
+                    />
+                ),
+            mobile: 'meta',
+            align: 'right',
         },
         {
             key: 'available_gallons',

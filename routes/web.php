@@ -353,6 +353,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('production-orders/{production_order}/packaging-plans', [PackagingPlanController::class, 'store'])->name('production-orders.packaging-plans.store');
         Route::delete('production-orders/{production_order}/packaging-plans/{plan}', [PackagingPlanController::class, 'destroy'])->name('production-orders.packaging-plans.destroy');
         Route::post('production-orders/{production_order}/consume-remnant', [RemnantConsumptionController::class, 'store'])->name('production-orders.consume-remnant');
+        Route::delete('production-orders/{production_order}/remnant-consumptions/{consumption}', [RemnantConsumptionController::class, 'destroy'])->name('production-orders.remnant-consumptions.destroy');
         Route::get('production-orders/{production_order}/available-remnants', [RemnantConsumptionController::class, 'availableRemnants'])->name('production-orders.available-remnants');
     });
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Actions\Production\ConsumeRemnantAction;
+use App\Actions\Production\PlanRemnantConsumptionAction;
 use App\Enums\ProductionOrderStatus;
 use App\Enums\RemnantStatus;
 use App\Enums\SystemRole;
@@ -11,9 +11,11 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductionOrder;
 use App\Models\ProductionRemnant;
+use App\Models\RemnantConsumption;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\AvailableRemnantsService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -161,61 +163,61 @@ it('answers a lost race with an error the dialog can show, not only a flash', fu
         ->assertInertiaFlash('error');
 });
 
-it('keeps consumed remnants consumed and writes them in the cancellation note (provisional, B66)', function () {
-    $order = makeOrderForCancellationTest($this, ProductionOrderStatus::InProgress);
+it('cancelling an order with planned remnants leaves the remnant untouched, frees it and keeps the lines', function () {
+    $order = makeOrderForCancellationTest($this, ProductionOrderStatus::Pending);
     $source = makeOrderForCancellationTest($this, ProductionOrderStatus::Completed);
-    $remnant = ProductionRemnant::create([
-        'source_order_id' => $source->id,
-        'product_id' => $this->formula->product_id,
-        'warehouse_id' => $this->warehouse->id,
-        'original_quantity_gallons' => 10,
-        'original_quantity_kg' => 50,
-        'available_quantity_gallons' => 10,
-        'available_quantity_kg' => 50,
-        'density_kg_per_gallon' => 5,
-        'cost_per_gallon' => 5.5,
-        'status' => RemnantStatus::Available,
-        'created_by' => $this->user->id,
-    ]);
-    app(ConsumeRemnantAction::class)->execute($remnant, $order, '12.5', $this->user);
+    $remnant = cancellationTestRemnant($this, $source);
+    app(PlanRemnantConsumptionAction::class)->execute($remnant, $order, '12.5', $this->user);
 
     $this->post(route('production-orders.cancel', $order), ['reason' => 'No es urgente, se hará más adelante'])
         ->assertSessionHasNoErrors();
 
     $order->refresh();
+    $remnant->refresh();
     expect($order->status)->toBe(ProductionOrderStatus::Cancelled)
-        ->and((string) $remnant->fresh()->available_quantity_gallons)->toBe('7.5000')
+        ->and($remnant->available_quantity_kg)->toBe('50.0000')
+        ->and($remnant->available_quantity_gallons)->toBe('10.0000')
+        ->and($remnant->status)->toBe(RemnantStatus::Available)
+        // La línea queda como historial, sin aplicar y sin reservar: lo libre vuelve a ser todo el saldo.
+        ->and($order->remnantConsumptions()->planned()->count())->toBe(1)
+        ->and(app(AvailableRemnantsService::class)->freeKilos($remnant))->toBe('50.0000')
         ->and($order->notes)->toContain('Cancelación: No es urgente, se hará más adelante')
-        ->and($order->notes)->toContain('Saldos consumidos que no vuelven al inventario')
-        ->and($order->notes)->toContain($source->order_number)
-        ->and($order->notes)->toContain('12.5 kg');
+        ->and($order->notes)->not->toContain('Saldos consumidos');
 });
 
 it('has the cancellable statuses in one place', function () {
     expect(ProductionOrderStatus::cancellable())->toBe([ProductionOrderStatus::Pending, ProductionOrderStatus::InProgress]);
 });
 
-it('lists the consumed remnants in the cancellation note in the order they were consumed', function () {
+it('lists the remnants already drawn down (before planning existed) in the cancellation note, in order', function () {
     $order = makeOrderForCancellationTest($this, ProductionOrderStatus::InProgress);
-    $remnant = function (object $context) {
-        $source = makeOrderForCancellationTest($context, ProductionOrderStatus::Completed);
-
-        return [$source, ProductionRemnant::create([
-            'source_order_id' => $source->id, 'product_id' => $context->formula->product_id,
-            'warehouse_id' => $context->warehouse->id, 'original_quantity_gallons' => 10, 'original_quantity_kg' => 50,
-            'available_quantity_gallons' => 10, 'available_quantity_kg' => 50, 'density_kg_per_gallon' => 5,
-            'cost_per_gallon' => 5.5, 'status' => RemnantStatus::Available, 'created_by' => $context->user->id,
-        ])];
-    };
-    [$firstSource, $first] = $remnant($this);
-    [$secondSource, $second] = $remnant($this);
-    $consume = app(ConsumeRemnantAction::class);
-    $firstConsumption = $consume->execute($first, $order, '5', $this->user);
-    $consume->execute($second, $order, '10', $this->user);
+    $firstSource = makeOrderForCancellationTest($this, ProductionOrderStatus::Completed);
+    $secondSource = makeOrderForCancellationTest($this, ProductionOrderStatus::Completed);
+    $first = cancellationTestRemnant($this, $firstSource);
+    $second = cancellationTestRemnant($this, $secondSource);
+    // Filas registradas antes de los saldos planeados: ya se habían descontado (la migración les puso `applied_at`).
+    $applied = fn (ProductionRemnant $remnant, string $kilos) => RemnantConsumption::create([
+        'remnant_id' => $remnant->id, 'target_order_id' => $order->id, 'quantity_kg' => $kilos, 'quantity_gallons' => '1',
+        'consumed_by' => $this->user->id, 'consumed_at' => now(), 'applied_at' => now(),
+    ]);
+    $firstConsumption = $applied($first, '5');
+    $applied($second, '10');
+    // Una planeada no va en la nota: no se había descontado.
+    app(PlanRemnantConsumptionAction::class)->execute($first, $order, '3', $this->user);
     // Un UPDATE mueve la fila: sin ORDER BY, PostgreSQL la devuelve al final en un barrido secuencial.
     $firstConsumption->update(['notes' => 'reubicada']);
 
     $this->post(route('production-orders.cancel', $order), ['reason' => 'Ya no se va a producir'])->assertSessionHasNoErrors();
 
-    expect($order->fresh()->notes)->toContain("{$firstSource->order_number} 5 kg; {$secondSource->order_number} 10 kg");
+    expect($order->fresh()->notes)->toContain("Saldos consumidos que no vuelven al inventario: {$firstSource->order_number} 5 kg; {$secondSource->order_number} 10 kg.");
 });
+
+function cancellationTestRemnant(object $context, ProductionOrder $source): ProductionRemnant
+{
+    return ProductionRemnant::create([
+        'source_order_id' => $source->id, 'product_id' => $context->formula->product_id,
+        'warehouse_id' => $context->warehouse->id, 'original_quantity_gallons' => 10, 'original_quantity_kg' => 50,
+        'available_quantity_gallons' => 10, 'available_quantity_kg' => 50, 'density_kg_per_gallon' => 5,
+        'cost_per_gallon' => 5.5, 'status' => RemnantStatus::Available, 'created_by' => $context->user->id,
+    ]);
+}

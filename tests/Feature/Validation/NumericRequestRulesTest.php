@@ -67,7 +67,7 @@ function numericRequestFields(): array
         'StoreLineAdjustmentRequest' => [
             'quantity' => 'production_order_line_adjustments.quantity',
         ],
-        'ConsumeRemnantRequest' => [
+        'PlanRemnantConsumptionRequest' => [
             'quantity_kg' => 'remnant_consumptions.quantity_kg',
         ],
         'StoreFormulaRequest|UpdateFormulaRequest' => [

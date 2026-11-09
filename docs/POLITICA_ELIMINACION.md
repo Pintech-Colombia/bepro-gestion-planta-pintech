@@ -86,7 +86,7 @@ Se retira el `SoftDeletes` que tenían (código muerto: ninguna ruta los borraba
 | --- | --- |
 | `inventory_movements`, `inventory_batches` | Libro contable de materia prima: se corrige con un movimiento contrario manual y una nota |
 | `finished_inventory_movements`, `finished_product_batches` | Libro contable de producto terminado |
-| `production_remnants`, `remnant_consumptions` | Movimientos de saldos de producción |
+| `production_remnants`, `remnant_consumptions` | Movimientos de saldos de producción. Una línea de `remnant_consumptions` **sin aplicar** (`applied_at` nulo) es una línea planeada de una orden abierta: se quita como un ajuste de línea, porque todavía no movió el saldo. Aplicada, ya no se toca |
 | `shrink_wraps`, `shrink_wrap_items` | Registros de termoencogido (3.8): ya descontaron inventario. Un error se corrige con un movimiento opuesto y una nota; no hay editar ni eliminar |
 | `production_costs` | Historial de costos |
 | `finished_inventories`, `finished_product_batch_stocks` | Saldos calculados por los movimientos |

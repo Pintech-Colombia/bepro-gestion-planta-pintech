@@ -156,7 +156,7 @@ it('quien puede revisar sí agrega una presentación a una orden que pasó a rev
     expect(ProductionOrderPackagingPlan::query()->where('production_order_id', $this->order->id)->count())->toBe(2);
 });
 
-it('no consume un saldo si la orden se completó mientras esperaba', function () {
+it('no agrega un saldo si la orden se completó mientras esperaba', function () {
     $source = ProductionOrder::factory()->completed()->create([
         'product_id' => $this->product->id, 'formula_id' => $this->order->formula_id, 'warehouse_id' => $this->warehouse->id,
     ]);
@@ -169,11 +169,12 @@ it('no consume un saldo si la orden se completó mientras esperaba', function ()
     $this->post(route('production-orders.consume-remnant', $this->order), [
         'remnant_id' => $remnant->id,
         'quantity_kg' => '1',
-    ])->assertInertiaFlash('error', "No se puede consumir un saldo en una orden en estado 'Completada'.")
+    ])->assertInertiaFlash('error', "No se puede agregar un saldo a una orden en estado 'Completada'.")
         // Como error de validación también: Inertia llama a onError y el formulario conserva lo escrito.
-        ->assertSessionHasErrors(['production_order' => "No se puede consumir un saldo en una orden en estado 'Completada'."]);
+        ->assertSessionHasErrors(['production_order' => "No se puede agregar un saldo a una orden en estado 'Completada'."]);
 
-    expect((string) $remnant->fresh()->available_quantity_gallons)->toBe('10.0000');
+    expect((string) $remnant->fresh()->available_quantity_gallons)->toBe('10.0000')
+        ->and($remnant->consumptions()->count())->toBe(0);
 });
 
 it('no inicia, no devuelve ni cambia el color si el estado cambió mientras esperaba', function (string $route, array $body, ProductionOrderStatus $from, string $message, bool $fromDialog) {

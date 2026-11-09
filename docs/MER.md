@@ -463,18 +463,22 @@ Saldos de producción sobrantes de una orden.
 
 ### 2.5.6 `remnant_consumptions`
 
-Consumo de saldos en otras órdenes.
+Saldos de PT que usa una orden. Cada fila es una **línea planeada** de la orden destino hasta que esta se completa: ahí
+se descuenta del saldo (`applied_at`) con los galones y el costo reales. Mientras está planeada, sus kilos quedan
+comprometidos: lo libre de un saldo es lo disponible menos las líneas sin aplicar de órdenes abiertas. Una orden
+cancelada conserva sus líneas como historial, sin reservar nada.
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `remnant_id` | BIGINT |  | FK → `production_remnants` (RESTRICT) |
 | `target_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT) |
-| `consumed_cost` | DECIMAL(16,4) | sí |  |
-| `quantity_gallons` | DECIMAL(12,4) |  |  |
-| `quantity_kg` | DECIMAL(12,4) |  |  |
-| `consumed_by` | BIGINT |  | FK → `users` (RESTRICT) |
-| `consumed_at` | TIMESTAMP |  |  |
+| `consumed_cost` | DECIMAL(16,4) | sí | Nulo hasta aplicarse (y si el saldo no tiene costo) |
+| `quantity_gallons` | DECIMAL(12,4) |  | Estimado mientras está planeada; real al aplicarse |
+| `quantity_kg` | DECIMAL(12,4) |  | Los kilos planeados; al aplicarse, los descontados (un resto de menos de 0,0001 gal agota el saldo) |
+| `consumed_by` | BIGINT |  | FK → `users` (RESTRICT). Quién planeó la línea |
+| `consumed_at` | TIMESTAMP |  | Cuándo se planeó |
+| `applied_at` | TIMESTAMP | sí | Cuándo se descontó del saldo (al completar la orden). Nulo = planeada. Índice (`remnant_id`, `applied_at`) |
 | `notes` | TEXT | sí |  |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |

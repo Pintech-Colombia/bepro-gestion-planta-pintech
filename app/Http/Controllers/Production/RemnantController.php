@@ -12,12 +12,17 @@ use App\Http\Requests\Production\IndexRemnantRequest;
 use App\Models\ProductionOrder;
 use App\Models\ProductionRemnant;
 use App\Models\Warehouse;
+use App\Services\AvailableRemnantsService;
 use App\Support\EnumOptions;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RemnantController extends Controller
 {
+    public function __construct(
+        private readonly AvailableRemnantsService $availableRemnants,
+    ) {}
+
     /**
      * Display a listing of the available production remnants.
      */
@@ -37,24 +42,29 @@ class RemnantController extends Controller
             ->latest('id')
             ->paginate(15)
             ->onEachSide(1)
-            ->withQueryString()
-            ->through(fn (ProductionRemnant $remnant) => [
-                'id' => $remnant->id,
-                'source_order_id' => $remnant->source_order_id,
-                'source_order_number' => $remnant->sourceOrder->order_number,
-                'product_id' => $remnant->product_id,
-                // Con el color de la orden de origen (3.4): el saldo de un RAL 3020 no es el del producto base.
-                'product_name' => ProductionOrder::nameWithColor($remnant->product->name, $remnant->sourceOrder->color),
-                'warehouse_id' => $remnant->warehouse_id,
-                'warehouse_name' => $remnant->warehouse->name,
-                'available_quantity_gallons' => (float) $remnant->available_quantity_gallons,
-                'available_quantity_kg' => (float) $remnant->available_quantity_kg,
-                'density_kg_per_gallon' => (float) $remnant->density_kg_per_gallon,
-                'cost_per_gallon' => $canViewCosts && $remnant->cost_per_gallon !== null ? (float) $remnant->cost_per_gallon : null,
-                'status' => $remnant->status->value,
-                'status_label' => $remnant->status->label(),
-                'created_at' => $remnant->created_at?->toIso8601String(),
-            ]);
+            ->withQueryString();
+
+        // Lo planeado en órdenes abiertas que todavía no se descontó: la misma cuenta que limita lo que se puede planear.
+        $plannedKilos = $this->availableRemnants->plannedKilos($remnants->getCollection()->modelKeys());
+
+        $remnants->through(fn (ProductionRemnant $remnant) => [
+            'id' => $remnant->id,
+            'source_order_id' => $remnant->source_order_id,
+            'source_order_number' => $remnant->sourceOrder->order_number,
+            'product_id' => $remnant->product_id,
+            // Con el color de la orden de origen (3.4): el saldo de un RAL 3020 no es el del producto base.
+            'product_name' => ProductionOrder::nameWithColor($remnant->product->name, $remnant->sourceOrder->color),
+            'warehouse_id' => $remnant->warehouse_id,
+            'warehouse_name' => $remnant->warehouse->name,
+            'available_quantity_gallons' => (float) $remnant->available_quantity_gallons,
+            'available_quantity_kg' => (float) $remnant->available_quantity_kg,
+            'committed_quantity_kg' => isset($plannedKilos[$remnant->id]) ? (float) $plannedKilos[$remnant->id] : null,
+            'density_kg_per_gallon' => (float) $remnant->density_kg_per_gallon,
+            'cost_per_gallon' => $canViewCosts && $remnant->cost_per_gallon !== null ? (float) $remnant->cost_per_gallon : null,
+            'status' => $remnant->status->value,
+            'status_label' => $remnant->status->label(),
+            'created_at' => $remnant->created_at?->toIso8601String(),
+        ]);
 
         return Inertia::render('Production/Remnants/Index', [
             'remnants' => $remnants,

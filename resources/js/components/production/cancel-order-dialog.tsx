@@ -16,7 +16,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { formatNumber } from '@/lib/formatters';
 
 /** Mínimo y máximo del motivo: los mismos del servidor (`CancelProductionOrderRequest`). */
 const REASON_MIN_LENGTH = 10;
@@ -25,8 +24,6 @@ const REASON_MAX_LENGTH = 1000;
 type CancelOrderDialogProps = {
     orderId: number;
     orderNumber: string;
-    /** Kilos de saldo que la orden ya consumió: al cancelar no vuelven al inventario. */
-    consumedRemnantKg: number;
 };
 
 /**
@@ -36,7 +33,6 @@ type CancelOrderDialogProps = {
 export function CancelOrderDialog({
     orderId,
     orderNumber,
-    consumedRemnantKg,
 }: CancelOrderDialogProps) {
     const [open, setOpen] = useState(false);
     const { data, setData, post, processing, errors, clearErrors, reset } =
@@ -86,22 +82,6 @@ export function CancelOrderDialog({
                         </DialogHeader>
 
                         <DialogBody className="space-y-4">
-                            {consumedRemnantKg > 0 && (
-                                <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-                                    Esta orden ya consumió{' '}
-                                    <strong>
-                                        {formatNumber(consumedRemnantKg, {
-                                            maxDecimals: 4,
-                                            trimTrailingZeros: true,
-                                        })}{' '}
-                                        kg
-                                    </strong>{' '}
-                                    de saldos. Al cancelar no vuelven al
-                                    inventario y quedan anotados en las notas de
-                                    la orden.
-                                </p>
-                            )}
-
                             <FormField
                                 id="reason"
                                 label="Motivo de la cancelación"

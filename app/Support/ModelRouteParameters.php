@@ -28,6 +28,7 @@ final class ModelRouteParameters
         'adjustment',
         'alert',
         'client',
+        'consumption',
         'document',
         'finished_inventory_movement',
         'formula',

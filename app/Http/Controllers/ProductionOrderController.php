@@ -154,6 +154,7 @@ class ProductionOrderController extends Controller
 
         $user = $request->user();
         $includeCosts = $user?->can('previewCosts', $productionOrder) ?? false;
+        $canPlanRemnant = $user?->can('planRemnant', $productionOrder) ?? false;
 
         // Firmantes del certificado: quien puede completar órdenes (misma regla que CompleteProductionOrderRequest).
         $qualitySigners = User::permission(Permission::ProductionOrdersComplete->value)
@@ -169,7 +170,7 @@ class ProductionOrderController extends Controller
             ]);
 
         return Inertia::render('Production/Orders/Show', [
-            'order' => $this->buildProductionOrderShowData->execute($productionOrder, $includeCosts),
+            'order' => $this->buildProductionOrderShowData->execute($productionOrder, $includeCosts, $canPlanRemnant),
             'rawMaterials' => $rawMaterials,
             // Etiquetas para el plan de envasado: las activas, más las inactivas que ya tiene algún plan de esta orden.
             'labelMaterials' => RawMaterial::query()
@@ -187,7 +188,7 @@ class ProductionOrderController extends Controller
                 'complete' => $user?->can('complete', $productionOrder) ?? false,
                 'rejectReview' => $user?->can('rejectReview', $productionOrder) ?? false,
                 'previewCosts' => $user?->can('previewCosts', $productionOrder) ?? false,
-                'consumeRemnant' => $user?->can('consumeRemnant', $productionOrder) ?? false,
+                'planRemnant' => $canPlanRemnant,
                 'updateColor' => $user?->can('updateColor', $productionOrder) ?? false,
                 'printLabels' => $user?->can('printLabels', $productionOrder) ?? false,
                 // El botón «Cancelar orden» (D-OPX2). La acción vuelve a revisar el estado con la fila bloqueada.
