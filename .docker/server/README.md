@@ -41,6 +41,9 @@ Es automático, con el workflow `cd` de GitHub Actions:
 
 Si dos merges a `develop` corren a la vez, despliega solo el último: el más viejo lo avisa y deja staging como está.
 
+**Después de un hotfix,** el arreglo tiene que volver a `develop` con otro PR. Si no, el siguiente merge a `develop`
+despliega una versión sin el arreglo y lo borra de staging.
+
 Los dos entornos de GitHub limitan desde dónde se despliega: `staging`, desde `develop` y `main` (`main` por el
 hotfix); `production`, solo desde `main`, con aprobación obligatoria. Cada uno guarda sus secretos: `DEPLOY_SSH_KEY`,
 `DEPLOY_KNOWN_HOSTS` y `DEPLOY_HOST`.
