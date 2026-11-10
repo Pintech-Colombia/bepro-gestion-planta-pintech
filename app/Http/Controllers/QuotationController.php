@@ -192,10 +192,11 @@ class QuotationController extends Controller
     {
         $order = $this->quotationService->convertToOrder(
             $quotation,
-            $request->validated()
+            $request->validated(),
+            $request->user(),
         );
 
-        Inertia::flash('success', __('Cotización convertida en pedido exitosamente.'));
+        Inertia::flash('success', __('Cotización convertida en pedido. Queda por aprobar.'));
 
         return redirect()->route('sales-orders.show', $order);
     }

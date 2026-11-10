@@ -682,7 +682,7 @@ it('allows comercial to convert accepted quotation to order', function () {
 
     expect($order)->not->toBeNull();
     expect($order->client_id)->toBe($this->client->id);
-    expect($order->status->value)->toBe('pending');
+    expect($order->status->value)->toBe('pending_approval');
     expect($order->priority->value)->toBe('high');
     expect($order->required_date->format('Y-m-d'))->toBe(now()->addDays(5)->format('Y-m-d'));
     expect($order->notes)->toBe('Notas del pedido');

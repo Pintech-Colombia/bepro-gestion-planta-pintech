@@ -36,6 +36,20 @@ class SalesOrderFactory extends Factory
         ];
     }
 
+    public function pendingApproval(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SalesOrderStatus::PendingApproval->value,
+        ]);
+    }
+
+    public function onHold(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SalesOrderStatus::OnHold->value,
+        ]);
+    }
+
     public function pending(): static
     {
         return $this->state(fn (array $attributes) => [

@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { FileText, ShoppingCart } from 'lucide-react';
 
+import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
 import { EmptyCell } from '@/components/empty-cell';
 import { FormattedDate } from '@/components/formatted-date';
@@ -8,6 +9,9 @@ import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import { PriorityBadge } from '@/components/priority-badge';
 import AdminOrderSidebar from '@/components/sales-orders/AdminOrderSidebar';
+import { ApproveOrderDialog } from '@/components/sales-orders/approve-order-dialog';
+import { HoldOrderDialog } from '@/components/sales-orders/hold-order-dialog';
+import { PartialApprovalBadge } from '@/components/sales-orders/partial-approval-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +56,16 @@ type SalesOrderDetail = {
     created_at: string;
     created_on: string | null;
     creator: { name: string } | null;
+    /** La decisión: retenido y/o aprobado. Al aprobar un retenido se conservan los datos de la retención. */
+    approval: {
+        is_partial: boolean;
+        approved_by: string | null;
+        approved_at: string | null;
+        note: string | null;
+        held_by: string | null;
+        held_at: string | null;
+        hold_reason: string | null;
+    };
 };
 
 type StatusTransition = {
@@ -65,6 +79,10 @@ type Props = {
     can: {
         update: boolean;
         updateStatus: boolean;
+        /** Aprobar: en «Por aprobar» o «Retenido», con `sales_orders.approve`. */
+        approve: boolean;
+        /** Retener: solo en «Por aprobar». */
+        hold: boolean;
         viewQuotation: boolean;
     };
 };
@@ -88,7 +106,22 @@ export default function SalesOrdersShow({
                                 enum="SalesOrderStatus"
                                 value={order.status}
                             />
+                            {order.approval.is_partial && (
+                                <PartialApprovalBadge />
+                            )}
                         </div>
+                    }
+                    actions={
+                        (can.approve || can.hold) && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {can.hold && (
+                                    <HoldOrderDialog orderId={order.id} />
+                                )}
+                                {can.approve && (
+                                    <ApproveOrderDialog orderId={order.id} />
+                                )}
+                            </div>
+                        )
                     }
                 />
 
@@ -169,6 +202,80 @@ export default function SalesOrdersShow({
                                 )}
                             </CardContent>
                         </Card>
+
+                        {(order.approval.held_at ||
+                            order.approval.approved_at) && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Aprobación</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <DetailList>
+                                        {order.approval.held_at && (
+                                            <>
+                                                <DetailItem
+                                                    label="Retenido por"
+                                                    value={
+                                                        <>
+                                                            {
+                                                                order.approval
+                                                                    .held_by
+                                                            }{' '}
+                                                            el{' '}
+                                                            <FormattedDate
+                                                                value={
+                                                                    order
+                                                                        .approval
+                                                                        .held_at
+                                                                }
+                                                                format="datetime"
+                                                            />
+                                                        </>
+                                                    }
+                                                />
+                                                <DetailItem
+                                                    label="Motivo de la retención"
+                                                    value={
+                                                        order.approval
+                                                            .hold_reason
+                                                    }
+                                                    valueClassName="whitespace-pre-wrap"
+                                                />
+                                            </>
+                                        )}
+                                        {order.approval.approved_at && (
+                                            <>
+                                                <DetailItem
+                                                    label="Aprobado por"
+                                                    value={
+                                                        <>
+                                                            {
+                                                                order.approval
+                                                                    .approved_by
+                                                            }{' '}
+                                                            el{' '}
+                                                            <FormattedDate
+                                                                value={
+                                                                    order
+                                                                        .approval
+                                                                        .approved_at
+                                                                }
+                                                                format="datetime"
+                                                            />
+                                                        </>
+                                                    }
+                                                />
+                                                <DetailItem
+                                                    label="Nota de la aprobación"
+                                                    value={order.approval.note}
+                                                    valueClassName="whitespace-pre-wrap"
+                                                />
+                                            </>
+                                        )}
+                                    </DetailList>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         <section className="space-y-4">
                             <h2 className="flex items-center gap-2 text-lg font-semibold">

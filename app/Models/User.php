@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\Permission;
 use App\Enums\SystemRole;
 use App\Models\Concerns\HasAuditDescription;
 use App\Notifications\ResetPasswordNotification;
@@ -171,11 +172,17 @@ class User extends Authenticatable
      * Indica si este usuario tiene, al menos, todos los permisos de otro. Es la regla contra la escalada de
      * privilegios: nadie gestiona a un usuario ni asigna un rol con permisos que él mismo no tiene.
      *
+     * Los permisos que solo eligen destinatarios de un aviso no cuentan (`Permission::isRecipientOnly`): no dan acceso a
+     * nada, y Admin debe poder gestionar a quien los tiene sin recibir él esos avisos (docs/MATRIZ_RBAC.md §8.10).
+     *
      * @param  iterable<string>  $permissions
      */
     public function holdsAllPermissions(iterable $permissions): bool
     {
-        return collect($permissions)->diff($this->getAllPermissions()->pluck('name'))->isEmpty();
+        return collect($permissions)
+            ->reject(fn (string $name): bool => Permission::tryFrom($name)?->isRecipientOnly() ?? false)
+            ->diff($this->getAllPermissions()->pluck('name'))
+            ->isEmpty();
     }
 
     /**

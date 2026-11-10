@@ -7,8 +7,9 @@ import {
     PanelLeftOpen,
 } from 'lucide-react';
 import { useState } from 'react';
-import { AlertsBell } from '@/components/alerts-bell';
+
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import { NotificationsBell } from '@/components/notifications-bell';
 import ThemeToggleButton from '@/components/theme-toggle-button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -68,9 +69,9 @@ export function AppSidebarHeader({
                         </Link>
                     </div>
 
-                    {/* En el celular la campana queda a la vista: las alertas no se esconden dentro de «…». */}
+                    {/* En el celular la campana queda a la vista: avisos y alertas no se esconden dentro de «…». */}
                     <div className="flex items-center gap-2 lg:hidden">
-                        <AlertsBell />
+                        <NotificationsBell />
                         <Button
                             variant="outline"
                             size="icon"
@@ -91,7 +92,7 @@ export function AppSidebarHeader({
                         <WarehouseSelector />
                         <ThemeToggleButton />
                         <div className="hidden lg:block">
-                            <AlertsBell />
+                            <NotificationsBell />
                         </div>
                     </div>
 

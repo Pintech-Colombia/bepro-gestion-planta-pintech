@@ -111,6 +111,8 @@ enum Permission: string
     case SalesOrdersCreate = 'sales_orders.create';
     case SalesOrdersEdit = 'sales_orders.edit';
     case SalesOrdersUpdateStatus = 'sales_orders.update_status';
+    case SalesOrdersApprove = 'sales_orders.approve';
+    case SalesOrdersReceiveApprovalRequests = 'sales_orders.receive_approval_requests';
 
     // Clientes
     case ClientsView = 'clients.view';
@@ -218,6 +220,8 @@ enum Permission: string
             self::SalesOrdersCreate => __('Crear pedidos'),
             self::SalesOrdersEdit => __('Editar pedidos'),
             self::SalesOrdersUpdateStatus => __('Cambiar el estado de pedidos'),
+            self::SalesOrdersApprove => __('Aprobar pedidos'),
+            self::SalesOrdersReceiveApprovalRequests => __('Recibir avisos de pedidos por aprobar'),
             self::ClientsView => __('Ver clientes'),
             self::ClientsCreate => __('Crear clientes'),
             self::ClientsEdit => __('Editar clientes'),
@@ -314,7 +318,9 @@ enum Permission: string
             self::SalesOrdersViewAll,
             self::SalesOrdersCreate,
             self::SalesOrdersEdit,
-            self::SalesOrdersUpdateStatus => PermissionModule::SalesOrders,
+            self::SalesOrdersUpdateStatus,
+            self::SalesOrdersApprove,
+            self::SalesOrdersReceiveApprovalRequests => PermissionModule::SalesOrders,
             self::ClientsView,
             self::ClientsCreate,
             self::ClientsEdit,
@@ -362,6 +368,111 @@ enum Permission: string
             self::RawMaterialsDelete,
             self::WarehousesDelete => true,
             default => false,
+        };
+    }
+
+    /**
+     * Permisos que solo eligen a quién le llega un aviso: no abren ninguna pantalla ni permiten ninguna acción.
+     *
+     * `User::holdsAllPermissions` no los cuenta, así Admin gestiona y asigna el rol de quien los tiene sin recibir él
+     * esos avisos (docs/MATRIZ_RBAC.md §8.10). Sin `default`: cada permiso nuevo decide aquí si lo es.
+     */
+    public function isRecipientOnly(): bool
+    {
+        return match ($this) {
+            self::SalesOrdersReceiveApprovalRequests => true,
+            self::DashboardView,
+            self::UsersView,
+            self::UsersCreate,
+            self::UsersEdit,
+            self::UsersDelete,
+            self::UsersManageRoles,
+            self::RolesView,
+            self::RolesCreate,
+            self::RolesEdit,
+            self::RolesDelete,
+            self::AuditLogsView,
+            self::CatalogsView,
+            self::CatalogsCreate,
+            self::CatalogsEdit,
+            self::CatalogsDelete,
+            self::SuppliersManage,
+            self::ProductsView,
+            self::ProductsCreate,
+            self::ProductsEdit,
+            self::ProductsDeactivate,
+            self::ProductsDelete,
+            self::ProductsManageVariants,
+            self::ProductsManageDocuments,
+            self::ProductsDownloadDocuments,
+            self::CostsView,
+            self::CostsUpdate,
+            self::FormulasView,
+            self::FormulasCreate,
+            self::FormulasEdit,
+            self::FormulasActivate,
+            self::FormulasDelete,
+            self::RawMaterialsView,
+            self::RawMaterialsCreate,
+            self::RawMaterialsEdit,
+            self::RawMaterialsDeactivate,
+            self::RawMaterialsReactivate,
+            self::RawMaterialsDelete,
+            self::ProductionOrdersView,
+            self::ProductionOrdersCreate,
+            self::ProductionOrdersOperate,
+            self::ProductionOrdersSubmitForReview,
+            self::ProductionOrdersRejectReview,
+            self::ProductionOrdersComplete,
+            self::ProductionOrdersCancel,
+            self::ProductionOrdersExport,
+            self::ProductionOrdersPrintLabels,
+            self::ProductionRemnantsView,
+            self::ShrinkWrapsView,
+            self::ShrinkWrapsCreate,
+            self::ShrinkWrapTypesManage,
+            self::InventoryMovementsView,
+            self::InventoryMovementsCreate,
+            self::FinishedInventoryView,
+            self::FinishedInventoryMovementsView,
+            self::FinishedInventoryMovementsCreate,
+            self::QuotationsViewOwn,
+            self::QuotationsViewAll,
+            self::QuotationsCreate,
+            self::QuotationsEdit,
+            self::QuotationsUpdateStatus,
+            self::QuotationsConvertToOrder,
+            self::QuotationsExportPdf,
+            self::SalesOrdersViewOwn,
+            self::SalesOrdersViewAll,
+            self::SalesOrdersCreate,
+            self::SalesOrdersEdit,
+            self::SalesOrdersUpdateStatus,
+            self::SalesOrdersApprove,
+            self::ClientsView,
+            self::ClientsCreate,
+            self::ClientsEdit,
+            self::ClientsDeactivate,
+            self::ClientsDelete,
+            self::PriceListsView,
+            self::PaintDevelopmentRequestsViewOwn,
+            self::PaintDevelopmentRequestsViewAll,
+            self::PaintDevelopmentRequestsCreate,
+            self::PaintDevelopmentRequestsEdit,
+            self::PaintDevelopmentRequestsSubmit,
+            self::PaintDevelopmentRequestsUpdateStatus,
+            self::PaintDevelopmentRequestsExportPdf,
+            self::AlertsView,
+            self::AlertsResolve,
+            self::QrCodesView,
+            self::QrCodesUpdate,
+            self::QrCodesManageDocuments,
+            self::WarehousesView,
+            self::WarehousesViewAll,
+            self::WarehousesCreate,
+            self::WarehousesEdit,
+            self::WarehousesAssignUsers,
+            self::WarehousesDelete => false,
         };
     }
 
@@ -432,6 +543,9 @@ enum Permission: string
             self::SalesOrdersCreate,
             self::SalesOrdersEdit,
             self::SalesOrdersUpdateStatus => [self::SalesOrdersViewOwn],
+            // Decidir sobre pedidos ajenos exige ver todos: sin view_all, el enlace del aviso daría 403.
+            self::SalesOrdersApprove,
+            self::SalesOrdersReceiveApprovalRequests => [self::SalesOrdersViewAll],
             self::ClientsCreate,
             self::ClientsEdit,
             self::ClientsDelete => [self::ClientsView],
@@ -494,6 +608,7 @@ enum Permission: string
                 SystemRole::Production,
                 SystemRole::Operator,
                 SystemRole::Commercial,
+                SystemRole::CommercialCoordination,
             ],
             self::UsersView,
             self::UsersCreate,
@@ -503,7 +618,6 @@ enum Permission: string
             self::ProductsCreate,
             self::ProductsEdit,
             self::ProductsDeactivate,
-            self::ProductsManageDocuments,
             self::CostsView,
             self::CostsUpdate,
             self::FormulasView,
@@ -516,10 +630,6 @@ enum Permission: string
             self::RawMaterialsReactivate,
             self::ProductionOrdersCancel,
             self::InventoryMovementsCreate,
-            self::QuotationsViewAll,
-            self::SalesOrdersEdit,
-            self::ClientsEdit,
-            self::ClientsDeactivate,
             self::ClientsDelete,
             self::PaintDevelopmentRequestsViewAll,
             self::PaintDevelopmentRequestsUpdateStatus,
@@ -554,6 +664,7 @@ enum Permission: string
                 SystemRole::Admin,
                 SystemRole::Production,
                 SystemRole::Commercial,
+                SystemRole::CommercialCoordination,
             ],
             self::ProductsManageVariants,
             self::RawMaterialsView,
@@ -562,15 +673,35 @@ enum Permission: string
             self::ProductionOrdersComplete,
             // Estampitas de lote: las imprime Producción (decisión del 2026-10-02).
             self::ProductionOrdersPrintLabels,
+            // Corregir el certificado de un lote lo resuelve la planta, sin depender del administrador.
+            self::QrCodesManageDocuments => [
+                SystemRole::Admin,
+                SystemRole::Production,
+            ],
+            // La coordinación comercial también despacha, sigue todos los pedidos y ve las alertas.
             self::FinishedInventoryMovementsView,
             self::FinishedInventoryMovementsCreate,
             self::SalesOrdersViewAll,
             self::SalesOrdersUpdateStatus,
-            // Corregir el certificado de un lote lo resuelve la planta, sin depender del administrador.
-            self::QrCodesManageDocuments,
             self::AlertsView => [
                 SystemRole::Admin,
                 SystemRole::Production,
+                SystemRole::CommercialCoordination,
+            ],
+            // Lo comercial que no hace Comercial: todas las cotizaciones, editar pedidos y clientes, documentos de
+            // producto y aprobar pedidos.
+            self::QuotationsViewAll,
+            self::SalesOrdersEdit,
+            self::SalesOrdersApprove,
+            self::ClientsEdit,
+            self::ClientsDeactivate,
+            self::ProductsManageDocuments => [
+                SystemRole::Admin,
+                SystemRole::CommercialCoordination,
+            ],
+            // Solo elige a quién le llega el aviso «por aprobar»: no lo tiene Admin (ver isRecipientOnly()).
+            self::SalesOrdersReceiveApprovalRequests => [
+                SystemRole::CommercialCoordination,
             ],
             self::ProductionOrdersView,
             self::ProductionOrdersOperate,
@@ -602,6 +733,7 @@ enum Permission: string
             self::PaintDevelopmentRequestsExportPdf => [
                 SystemRole::Admin,
                 SystemRole::Commercial,
+                SystemRole::CommercialCoordination,
             ],
         };
     }

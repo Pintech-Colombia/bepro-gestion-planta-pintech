@@ -1,7 +1,12 @@
 import type { Auth } from '@/types/auth';
 import type { SharedEnums } from '@/types/enums';
 import type { StockShortage } from '@/types/production-orders';
-import type { NewAlert, RecentAlert, WarehouseContext } from '@/types/shared';
+import type {
+    NewAlert,
+    RecentAlert,
+    UserNotifications,
+    WarehouseContext,
+} from '@/types/shared';
 
 /** Props que HandleInertiaRequests::share() envía a todas las páginas. */
 declare module '@inertiajs/core' {
@@ -22,6 +27,10 @@ declare module '@inertiajs/core' {
             warehouseContext: WarehouseContext | null;
             unresolvedAlertsCount: number;
             recentAlerts: RecentAlert[];
+            /** Avisos personales de la campana; `null` sin sesión. No dependen de permisos. */
+            notifications: UserNotifications | null;
+            /** Pedidos «Por aprobar» visibles, para el contador de «Pedidos»; 0 sin `sales_orders.approve`. */
+            pendingApprovalCount: number;
             /** Etiqueta y tono de los enums con color (`ToneEnums`). Llega una vez por sesión; sin sesión no existe. */
             enums?: SharedEnums;
             newAlerts: NewAlert[];

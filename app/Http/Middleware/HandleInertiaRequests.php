@@ -7,12 +7,14 @@ namespace App\Http\Middleware;
 use App\Enums\AlertType;
 use App\Enums\Permission;
 use App\Models\Alert;
+use App\Models\SalesOrder;
 use App\Models\User;
 use App\Services\AlertService;
 use App\Services\TimezoneService;
 use App\Services\WarehouseContextService;
 use App\Support\ToneEnums;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Inertia\Inertia;
 use Inertia\Middleware;
 
@@ -86,10 +88,41 @@ class HandleInertiaRequests extends Middleware
             'recentAlerts' => fn (): array => $user?->can(Permission::AlertsView->value)
                 ? $this->alertService->recentUnresolved($user, 5)
                 : [],
+            // Avisos personales de la campana: cada usuario, los suyos. No dependen de ningún permiso.
+            'notifications' => fn (): ?array => $user ? $this->unreadNotifications($user) : null,
+            // Contador del ítem «Pedidos» del menú: lo que espera la decisión de quien aprueba. Los retenidos esperan
+            // al cliente, no cuentan.
+            'pendingApprovalCount' => fn (): int => $user?->can(Permission::SalesOrdersApprove->value)
+                ? SalesOrder::query()->visibleTo($user)->awaitingApproval()->count()
+                : 0,
             // Etiqueta y tono de cada caso de los enums con color, para `<StatusBadge>` (ToneEnums). `once`: el cliente
             // la guarda y no se vuelve a enviar al navegar. Solo con sesión: si el login la recibiera vacía, el cliente
             // la daría por cargada y no la pediría tras entrar.
             ...($user ? ['enums' => Inertia::once(fn (): array => ToneEnums::shared())] : []),
+        ];
+    }
+
+    /**
+     * Cuántos avisos sin leer tiene el usuario y los diez más recientes.
+     *
+     * @return array{unread_count: int, items: list<array{id: string, message: string, sales_order_id: int|null, created_at: string|null}>}
+     */
+    private function unreadNotifications(User $user): array
+    {
+        return [
+            'unread_count' => $user->unreadNotifications()->count(),
+            // La relación ya los trae del más reciente al más antiguo.
+            'items' => $user->unreadNotifications()
+                ->limit(10)
+                ->get()
+                ->map(fn (DatabaseNotification $notification): array => [
+                    'id' => $notification->id,
+                    'message' => (string) ($notification->data['message'] ?? ''),
+                    'sales_order_id' => $notification->data['sales_order_id'] ?? null,
+                    'created_at' => $notification->created_at?->toIso8601String(),
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

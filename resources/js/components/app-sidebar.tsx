@@ -261,24 +261,30 @@ function buildSidebarGroups(userPermissions: Permission[]): NavGroup[] {
 }
 
 export function AppSidebar() {
-    const { auth, unresolvedAlertsCount } = usePage().props;
+    const { auth, unresolvedAlertsCount, pendingApprovalCount } =
+        usePage().props;
     const userPermissions = auth.user?.permissions ?? [];
+
+    // Contadores por ruta, no por título: renombrar el elemento no debe quitarlos. «Pedidos» cuenta los que esperan
+    // aprobación (solo llega con `sales_orders.approve`).
+    const counters: Record<string, number> = {
+        [alertsIndex().url]: unresolvedAlertsCount,
+        [salesOrdersIndex().url]: pendingApprovalCount,
+    };
 
     // Sin useMemo: React Compiler (babel-plugin-react-compiler) ya memoriza el componente.
     const filteredGroups = buildSidebarGroups(userPermissions).map((group) => ({
         ...group,
-        items: group.items.map((item) =>
-            // Se identifica por la ruta, no por el título: renombrar el elemento no debe quitar el contador.
-            item.href === alertsIndex().url
-                ? {
+        items: group.items.map((item) => {
+            const count = counters[String(item.href)];
+
+            return count === undefined
+                ? item
+                : {
                       ...item,
-                      badge:
-                          unresolvedAlertsCount > 0
-                              ? formatBadgeCount(unresolvedAlertsCount)
-                              : undefined,
-                  }
-                : item,
-        ),
+                      badge: count > 0 ? formatBadgeCount(count) : undefined,
+                  };
+        }),
     }));
 
     return (

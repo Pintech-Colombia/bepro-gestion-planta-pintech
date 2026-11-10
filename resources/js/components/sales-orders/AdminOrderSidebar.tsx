@@ -47,7 +47,7 @@ type Props = {
     order: SalesOrderMeta;
     statusTransitions: StatusTransition[];
     can: {
-        /** Editar datos del pedido (solo mientras está pendiente). */
+        /** Editar datos del pedido: mientras no arranca («Por aprobar», «Retenido» o «Pendiente»). */
         update: boolean;
         /** Cambiar el estado del pedido. */
         updateStatus: boolean;
@@ -59,10 +59,6 @@ export default function AdminOrderSidebar({
     statusTransitions,
     can,
 }: Props) {
-    const statusForm = useForm({
-        status: order.status,
-    });
-
     const dataForm = useForm({
         priority: order.priority,
         estimated_delivery_date: order.estimated_delivery_date ?? '',
@@ -70,11 +66,6 @@ export default function AdminOrderSidebar({
         client_contact_name: order.client.contact_name ?? '',
         client_phone: order.client.phone ?? '',
     });
-
-    const handleStatusUpdate = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        statusForm.patch(salesOrderUpdateStatus(order.id).url);
-    };
 
     const handleDataUpdate = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -84,62 +75,13 @@ export default function AdminOrderSidebar({
     return (
         <div className="space-y-6">
             {can.updateStatus && statusTransitions.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Estado</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <form
-                            noValidate
-                            onSubmit={handleStatusUpdate}
-                            className="space-y-4"
-                        >
-                            <FormField
-                                id="status"
-                                label="Estado del pedido"
-                                error={statusForm.errors.status}
-                            >
-                                {(control) => (
-                                    <Select
-                                        value={statusForm.data.status}
-                                        onValueChange={(value) =>
-                                            statusForm.setData('status', value)
-                                        }
-                                    >
-                                        <SelectTrigger {...control}>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value={order.status}>
-                                                {order.status_label}
-                                            </SelectItem>
-                                            {statusTransitions.map((t) => (
-                                                <SelectItem
-                                                    key={t.value}
-                                                    value={t.value}
-                                                >
-                                                    {t.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            </FormField>
-
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                disabled={
-                                    statusForm.processing ||
-                                    statusForm.data.status === order.status
-                                }
-                            >
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Actualizar estado
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
+                // `key`: Aprobar y Retener cambian el estado desde fuera de este panel. Rearmar solo este formulario
+                // lo deja con el estado nuevo; rearmar el panel entero borraría lo escrito sin guardar en «Datos».
+                <OrderStatusCard
+                    key={order.status}
+                    order={order}
+                    statusTransitions={statusTransitions}
+                />
             )}
 
             {can.update && (
@@ -308,5 +250,82 @@ export default function AdminOrderSidebar({
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+/**
+ * Selector de estado. Su formulario guarda el estado al montarse: quien lo usa le pone `key={order.status}` para que
+ * vuelva a empezar cuando el estado cambia por otro lado (aprobar, retener).
+ */
+function OrderStatusCard({
+    order,
+    statusTransitions,
+}: Pick<Props, 'order' | 'statusTransitions'>) {
+    const statusForm = useForm({
+        status: order.status,
+    });
+
+    const handleStatusUpdate = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        statusForm.patch(salesOrderUpdateStatus(order.id).url);
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Estado</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form
+                    noValidate
+                    onSubmit={handleStatusUpdate}
+                    className="space-y-4"
+                >
+                    <FormField
+                        id="status"
+                        label="Estado del pedido"
+                        error={statusForm.errors.status}
+                    >
+                        {(control) => (
+                            <Select
+                                value={statusForm.data.status}
+                                onValueChange={(value) =>
+                                    statusForm.setData('status', value)
+                                }
+                            >
+                                <SelectTrigger {...control}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={order.status}>
+                                        {order.status_label}
+                                    </SelectItem>
+                                    {statusTransitions.map((t) => (
+                                        <SelectItem
+                                            key={t.value}
+                                            value={t.value}
+                                        >
+                                            {t.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    </FormField>
+
+                    <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={
+                            statusForm.processing ||
+                            statusForm.data.status === order.status
+                        }
+                    >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Actualizar estado
+                    </Button>
+                </form>
+            </CardContent>
+        </Card>
     );
 }

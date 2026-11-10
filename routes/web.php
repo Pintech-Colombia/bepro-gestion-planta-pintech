@@ -13,6 +13,7 @@ use App\Http\Controllers\Inventory\FinishedInventoryMovementController;
 use App\Http\Controllers\Inventory\RawMaterialController;
 use App\Http\Controllers\Inventory\WarehouseController;
 use App\Http\Controllers\InventoryMovementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaintDevelopmentRequestController;
 use App\Http\Controllers\Pricing\CostController;
 use App\Http\Controllers\Pricing\PriceListController;
@@ -303,6 +304,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('sales-orders/{sales_order}/status', [SalesOrderController::class, 'updateStatus'])
         ->middleware(['can:'.Permission::SalesOrdersUpdateStatus->value, 'can:updateStatus,sales_order'])
         ->name('sales-orders.update-status');
+    Route::post('sales-orders/{sales_order}/approve', [SalesOrderController::class, 'approve'])
+        ->middleware(['can:'.Permission::SalesOrdersApprove->value, 'can:approve,sales_order'])
+        ->name('sales-orders.approve');
+    Route::post('sales-orders/{sales_order}/hold', [SalesOrderController::class, 'hold'])
+        ->middleware(['can:'.Permission::SalesOrdersApprove->value, 'can:hold,sales_order'])
+        ->name('sales-orders.hold');
 
     // Órdenes de producción (cada habilidad combina permiso y estado en ProductionOrderPolicy)
     Route::get('production-orders', [ProductionOrderController::class, 'index'])
@@ -369,6 +376,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('set-current-warehouse', [WarehouseController::class, 'setCurrentWarehouse'])->name('warehouses.set-current');
+    // Avisos personales de la campana: cada usuario marca solo los suyos.
+    Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    // `whereUuid`: el id es un uuid; sin esto, PostgreSQL rechaza un id con otro formato y la ruta daría 500, no 404.
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->whereUuid('notification')
+        ->name('notifications.read');
 });
 
 require __DIR__.'/settings.php';
