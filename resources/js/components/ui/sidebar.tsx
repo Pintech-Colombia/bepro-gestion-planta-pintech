@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { closesMobileSidebar } from "@/lib/sidebar-link-tap"
 import { cn } from "@/lib/utils"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
@@ -107,6 +108,15 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
+  // Panel del celular y Atrás/Adelante del navegador (o el gesto de deslizar): la página cambia por el historial, sin
+  // tocar el panel, así que se cierra aquí. Los toques en sus enlaces, en `Sidebar`. Cerrarlo ya cerrado no hace nada.
+  React.useEffect(() => {
+    const close = () => setOpenMobile(false)
+
+    window.addEventListener("popstate", close)
+    return () => window.removeEventListener("popstate", close)
+  }, [])
+
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
@@ -177,6 +187,31 @@ function Sidebar({
   }
 
   if (isMobile) {
+    // En el celular el menú es un panel encima de la página, y el layout persiste entre páginas (Inertia solo cambia
+    // el contenido): sin esto, el panel sigue abierto tapando la pantalla nueva. Se cierra al tocar un enlace, en el
+    // acto (red lenta de la planta) y también en el de la página actual; qué toques cuentan lo decide
+    // `closesMobileSidebar`. React corre este `onClick` después del del `Link` (que ya inició la visita) y también
+    // recibe los toques de lo que el panel dibuja en otra capa. No se usan los eventos de Inertia: `navigate` llega
+    // tarde y no llega en la página actual, y `start` llega también por precargas y visitas que no son del menú.
+    const closeOnLinkTap = (event: React.MouseEvent<HTMLDivElement>) => {
+      const anchor =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null
+      const link =
+        anchor instanceof HTMLAnchorElement
+          ? {
+              target: anchor.target,
+              download: anchor.hasAttribute("download"),
+              origin: anchor.origin,
+            }
+          : null
+
+      if (closesMobileSidebar(event, link, window.location.origin)) {
+        setOpenMobile(false)
+      }
+    }
+
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetHeader className="sr-only">
@@ -194,6 +229,7 @@ function Sidebar({
             } as React.CSSProperties
           }
           side={side}
+          onClick={closeOnLinkTap}
         >
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
