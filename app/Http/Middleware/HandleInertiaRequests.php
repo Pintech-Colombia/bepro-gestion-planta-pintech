@@ -6,7 +6,6 @@ namespace App\Http\Middleware;
 
 use App\Enums\AlertType;
 use App\Enums\Permission;
-use App\Enums\SalesOrderStatus;
 use App\Models\Alert;
 use App\Models\SalesOrder;
 use App\Models\User;
@@ -94,7 +93,7 @@ class HandleInertiaRequests extends Middleware
             // Contador del ítem «Pedidos» del menú: lo que espera la decisión de quien aprueba. Los retenidos esperan
             // al cliente, no cuentan.
             'pendingApprovalCount' => fn (): int => $user?->can(Permission::SalesOrdersApprove->value)
-                ? SalesOrder::query()->visibleTo($user)->where('status', SalesOrderStatus::PendingApproval->value)->count()
+                ? SalesOrder::query()->visibleTo($user)->awaitingApproval()->count()
                 : 0,
             // Etiqueta y tono de cada caso de los enums con color, para `<StatusBadge>` (ToneEnums). `once`: el cliente
             // la guarda y no se vuelve a enviar al navegar. Solo con sesión: si el login la recibiera vacía, el cliente

@@ -117,6 +117,15 @@ class SalesOrder extends Model
     }
 
     /**
+     * Lo que espera la decisión de quien aprueba (contador del menú y tarjeta del dashboard). Los retenidos esperan al
+     * cliente, no a ella: no cuentan.
+     */
+    public function scopeAwaitingApproval(Builder $query): void
+    {
+        $query->where('status', SalesOrderStatus::PendingApproval->value);
+    }
+
+    /**
      * Registros con dueño (docs/MATRIZ_RBAC.md §1): view_all ve todos; view_own solo los propios.
      * Sin usuario autenticado no se ve nada (fail-safe): este scope solo se llama detrás de 'auth',
      * pero no debe asumir eso silenciosamente si algún día se reutiliza desde un job o comando.

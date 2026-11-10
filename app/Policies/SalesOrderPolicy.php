@@ -60,10 +60,14 @@ class SalesOrderPolicy
             && $this->canAccess($user, $salesOrder);
     }
 
+    /**
+     * Un pedido «Retenido» solo se cancela por una decisión de cartera: lo hace quien aprueba, no la planta.
+     */
     public function updateStatus(User $user, SalesOrder $salesOrder): bool
     {
         return $salesOrder->status->nextTransitions() !== []
             && $user->can(Permission::SalesOrdersUpdateStatus->value)
+            && ($salesOrder->status !== SalesOrderStatus::OnHold || $user->can(Permission::SalesOrdersApprove->value))
             && $this->canAccess($user, $salesOrder);
     }
 

@@ -131,7 +131,7 @@ combinación, se crea un rol nuevo.
 | | `sales_orders.view_all` | [x] | [x] | [x] | [ ] | [ ] | [x] | |
 | | `sales_orders.create` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
 | | `sales_orders.edit` | [x] | [x] | [ ] | [ ] | [ ] | [x] | Contacto, dirección, prioridad, fecha y notas. **Solo mientras no arranca: «Por aprobar», «Retenido» o «Pendiente»** (así quien aprueba corrige la dirección o la prioridad antes de aprobar); en cuanto arranca queda congelado. |
-| | `sales_orders.update_status` | [x] | [x] | [x] | [ ] | [ ] | [x] | 🔁 Producción `[x]` (confirmado): es quien sabe cuándo el pedido pasa a `in_progress`/`ready` (hoy ya lo hace). Un pedido «Por aprobar» no tiene transiciones (solo sale aprobándolo o reteniéndolo); uno «Retenido» solo se cancela. |
+| | `sales_orders.update_status` | [x] | [x] | [x] | [ ] | [ ] | [x] | 🔁 Producción `[x]` (confirmado): es quien sabe cuándo el pedido pasa a `in_progress`/`ready` (hoy ya lo hace). Un pedido «Por aprobar» no tiene transiciones (solo sale aprobándolo o reteniéndolo); uno «Retenido» solo se cancela, y eso exige además `sales_orders.approve` (cancelar por cartera es decisión comercial, no de la planta). |
 | | `sales_orders.approve` | [x] | [x] | [ ] | [ ] | [ ] | [x] | 🆕 Aprobar (total, o parcial con nota obligatoria) un pedido «Por aprobar» o «Retenido», y retener con motivo uno «Por aprobar». Depende de `view_all`: decide sobre pedidos ajenos. |
 | | `sales_orders.receive_approval_requests` | [x] | [ ] | [ ] | [ ] | [ ] | [x] | 🆕 Recibe el aviso «por aprobar» de cada pedido nuevo. **Solo elige destinatarios**: no abre ninguna pantalla ni permite ninguna acción (§8.10). SuperAdmin lo tiene por regla. Depende de `view_all`: sin él, el enlace del aviso daría 403. |
 | **Clientes** | `clients.view` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
@@ -188,7 +188,7 @@ Viven en las policies/Actions junto al permiso, nunca en la matriz. Se listan aq
 | Orden: agregar o quitar un saldo de PT en `pending` o `in_progress`; en `pending_review`, solo quien puede revisar (§8.9) | `ProductionOrderPolicy::planRemnant` |
 | Orden: toda escritura en una orden abierta bloquea la fila y vuelve a evaluar la habilidad con el estado bloqueado (el estado pudo cambiar mientras esperaba) | `ProductionOrderLock` |
 | Pedido: todo pedido nace «Por aprobar» (`pending_approval`), también el que viene de una cotización | `SalesOrderController::store`, `QuotationService::convertToOrder` |
-| Pedido: `edit` en «Por aprobar», «Retenido» o «Pendiente»; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` («Por aprobar» no tiene ninguna; «Retenido» solo pasa a cancelado) | `SalesOrderPolicy::update`, `UpdateSalesOrderStatusRequest` |
+| Pedido: `edit` en «Por aprobar», «Retenido» o «Pendiente»; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` («Por aprobar» no tiene ninguna; «Retenido» solo pasa a cancelado, y solo con `sales_orders.approve`) | `SalesOrderPolicy::update/updateStatus`, `UpdateSalesOrderStatusRequest` |
 | Pedido: aprobar en «Por aprobar» o «Retenido»; retener solo en «Por aprobar» (con motivo). Aprobar un retenido conserva los datos de la retención | `SalesOrderPolicy::approve/hold` |
 | Pedido: aprobar y retener bloquean la fila y vuelven a evaluar la habilidad con el estado bloqueado; si cambió, error «El pedido ya cambió de estado» | `SalesOrderDecisionLock` |
 | Movimiento MP generado por una orden (`production_order_id`) no se toca | `InventoryMovementPolicy` |

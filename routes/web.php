@@ -378,7 +378,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('set-current-warehouse', [WarehouseController::class, 'setCurrentWarehouse'])->name('warehouses.set-current');
     // Avisos personales de la campana: cada usuario marca solo los suyos.
     Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
-    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+    // `whereUuid`: el id es un uuid; sin esto, PostgreSQL rechaza un id con otro formato y la ruta daría 500, no 404.
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])
+        ->whereUuid('notification')
+        ->name('notifications.read');
 });
 
 require __DIR__.'/settings.php';

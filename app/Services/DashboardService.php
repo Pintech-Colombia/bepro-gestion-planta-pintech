@@ -9,7 +9,6 @@ use App\Enums\DashboardProfile;
 use App\Enums\Permission;
 use App\Enums\ProductionOrderStatus;
 use App\Enums\QuotationStatus;
-use App\Enums\SalesOrderStatus;
 use App\Models\Alert;
 use App\Models\Client;
 use App\Models\Product;
@@ -154,10 +153,7 @@ class DashboardService
                     : []),
                 // Lo que espera su decisión: la tarjeta lleva al listado filtrado por «Por aprobar».
                 ...($user->can(Permission::SalesOrdersApprove->value)
-                    ? ['pending_approval_orders' => SalesOrder::query()
-                        ->visibleTo($user)
-                        ->where('status', SalesOrderStatus::PendingApproval->value)
-                        ->count()]
+                    ? ['pending_approval_orders' => SalesOrder::query()->visibleTo($user)->awaitingApproval()->count()]
                     : []),
                 ...($user->can(Permission::ClientsView->value) ? ['total_clients' => Client::query()->count()] : []),
             ],

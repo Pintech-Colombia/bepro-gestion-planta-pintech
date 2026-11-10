@@ -346,20 +346,30 @@ it('aprueba un retenido: conserva la retención, avisa a la planta y le dice al 
         ->toBe("Pedido #{$order->id} de Pinturas Andinas liberado parcial: Abonó la mitad");
 });
 
-it('cancela un retenido con el permiso de cambiar estado', function () {
+it('deja cancelar un retenido a quien aprueba', function () {
     $order = orderFor($this->commercial, SalesOrderStatus::OnHold);
 
-    $this->actingAs($this->production)
+    $this->actingAs($this->coordinator)
         ->patch(route('sales-orders.update-status', $order), ['status' => SalesOrderStatus::Cancelled->value])
         ->assertRedirect();
 
     expect($order->fresh()->status)->toBe(SalesOrderStatus::Cancelled);
 });
 
-it('no deja pasar de retenido a pendiente sin aprobarlo', function () {
+it('no deja a la planta cancelar un retenido: es decisión de cartera', function () {
     $order = orderFor($this->commercial, SalesOrderStatus::OnHold);
 
     $this->actingAs($this->production)
+        ->patch(route('sales-orders.update-status', $order), ['status' => SalesOrderStatus::Cancelled->value])
+        ->assertForbidden();
+
+    expect($order->fresh()->status)->toBe(SalesOrderStatus::OnHold);
+});
+
+it('no deja pasar de retenido a pendiente sin aprobarlo', function () {
+    $order = orderFor($this->commercial, SalesOrderStatus::OnHold);
+
+    $this->actingAs($this->coordinator)
         ->patch(route('sales-orders.update-status', $order), ['status' => SalesOrderStatus::Pending->value])
         ->assertSessionHasErrors('status');
 
@@ -511,6 +521,13 @@ it('responde 404 al marcar leído un aviso ajeno', function () {
         ->assertNotFound();
 
     expect($notification->fresh()->read_at)->toBeNull();
+});
+
+it('responde 404, no 500, a un id de aviso que no es un uuid', function () {
+    // En PostgreSQL la columna es `uuid` y rechaza otro formato antes de buscar: la ruta lo filtra.
+    $this->actingAs($this->commercial)
+        ->post('/notifications/no-es-un-uuid/read')
+        ->assertNotFound();
 });
 
 it('marca leídos todos los avisos propios y ninguno ajeno', function () {
