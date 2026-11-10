@@ -1,3 +1,4 @@
+import { router } from "@inertiajs/react"
 import { Slot } from "@radix-ui/react-slot"
 import type { VariantProps} from "class-variance-authority";
 import { cva } from "class-variance-authority"
@@ -170,6 +171,36 @@ function Sidebar({
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  // Se tocó un enlace del panel del celular: el panel se cierra cuando esa visita termina (ver `closeOnLinkTap`).
+  const closeAfterVisit = React.useRef(false)
+
+  // Con la página nueva ya pintada (`navigate`), o al terminar la visita si no hubo página nueva (`finish`: la misma
+  // URL, un error del servidor o sin red). Las precargas también disparan `finish` y no cuentan; una visita que usa una
+  // precarga no dispara `finish`, pero sí `navigate`. Si el panel se cierra por otro medio, el toque se olvida.
+  React.useEffect(() => {
+    if (!openMobile) {
+      closeAfterVisit.current = false
+      return
+    }
+
+    const closeIfLinkTapped = () => {
+      if (closeAfterVisit.current) {
+        closeAfterVisit.current = false
+        setOpenMobile(false)
+      }
+    }
+    const removeNavigateListener = router.on("navigate", closeIfLinkTapped)
+    const removeFinishListener = router.on("finish", (event) => {
+      if (!event.detail.visit.prefetch) {
+        closeIfLinkTapped()
+      }
+    })
+
+    return () => {
+      removeNavigateListener()
+      removeFinishListener()
+    }
+  }, [openMobile, setOpenMobile])
 
   if (collapsible === "none") {
     return (
@@ -188,11 +219,11 @@ function Sidebar({
 
   if (isMobile) {
     // En el celular el menú es un panel encima de la página, y el layout persiste entre páginas (Inertia solo cambia
-    // el contenido): sin esto, el panel sigue abierto tapando la pantalla nueva. Se cierra al tocar un enlace, en el
-    // acto (red lenta de la planta) y también en el de la página actual; qué toques cuentan lo decide
-    // `closesMobileSidebar`. React corre este `onClick` después del del `Link` (que ya inició la visita) y también
-    // recibe los toques de lo que el panel dibuja en otra capa. No se usan los eventos de Inertia: `navigate` llega
-    // tarde y no llega en la página actual, y `start` llega también por precargas y visitas que no son del menú.
+    // el contenido): sin esto, el panel sigue abierto tapando la pantalla nueva. Al tocar un enlace no se cierra en el
+    // acto, se anota: se cierra cuando la visita termina (el efecto de arriba), así el usuario ve la pantalla nueva ya
+    // hecha y no la vieja transformándose. Qué toques cuentan lo decide `closesMobileSidebar`. React corre este
+    // `onClick` después del del `Link` (que ya inició la visita) y también recibe los toques de lo que el panel dibuja
+    // en otra capa. Atrás y Adelante: `SidebarProvider`.
     const closeOnLinkTap = (event: React.MouseEvent<HTMLDivElement>) => {
       const anchor =
         event.target instanceof Element
@@ -208,7 +239,7 @@ function Sidebar({
           : null
 
       if (closesMobileSidebar(event, link, window.location.origin)) {
-        setOpenMobile(false)
+        closeAfterVisit.current = true
       }
     }
 
