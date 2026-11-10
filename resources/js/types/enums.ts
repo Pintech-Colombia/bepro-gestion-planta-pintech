@@ -14,7 +14,6 @@ export type ToneEnumName =
     | 'ProductionOrderStatus'
     | 'QuotationStatus'
     | 'RemnantStatus'
-    | 'SalesOrderApproval'
     | 'SalesOrderPriority'
     | 'SalesOrderStatus'
     | 'WarehouseType';

@@ -190,6 +190,7 @@ Viven en las policies/Actions junto al permiso, nunca en la matriz. Se listan aq
 | Pedido: todo pedido nace «Por aprobar» (`pending_approval`), también el que viene de una cotización | `SalesOrderController::store`, `QuotationService::convertToOrder` |
 | Pedido: `edit` en «Por aprobar», «Retenido» o «Pendiente»; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` («Por aprobar» no tiene ninguna; «Retenido» solo pasa a cancelado, y solo con `sales_orders.approve`) | `SalesOrderPolicy::update/updateStatus`, `UpdateSalesOrderStatusRequest` |
 | Pedido: aprobar en «Por aprobar» o «Retenido»; retener solo en «Por aprobar» (con motivo). Aprobar un retenido conserva los datos de la retención | `SalesOrderPolicy::approve/hold` |
+| Pedido: aprobar parcial parte el pedido: lo no aprobado pasa a un pedido nuevo retenido, enlazado al original (mismo cliente y creador, la nota como motivo). Exige al menos una unidad aprobada y al menos una que pase al resto | `ApproveSalesOrderAction`, `SplitSalesOrderRemainder` |
 | Pedido: aprobar y retener bloquean la fila y vuelven a evaluar la habilidad con el estado bloqueado; si cambió, error «El pedido ya cambió de estado» | `SalesOrderDecisionLock` |
 | Movimiento MP generado por una orden (`production_order_id`) no se toca | `InventoryMovementPolicy` |
 | Desactivar materia prima: se niega si hay lotes con stock | `RawMaterialController::destroy` |

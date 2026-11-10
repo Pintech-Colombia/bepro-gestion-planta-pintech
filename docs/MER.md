@@ -730,7 +730,9 @@ Cotizaciones (COT-YYYY-XXXX). Se cancelan por estado, nunca se eliminan.
 Pedidos de venta. Se cancelan por estado, nunca se eliminan. Todo pedido nace «Por aprobar» (`pending_approval`):
 quien tiene `sales_orders.approve` lo aprueba (pasa a `pending`) o lo retiene (`on_hold`, con motivo); un retenido se
 aprueba después o se cancela. La decisión queda en las columnas `approved_*` y `held_*`: al aprobar un retenido, los
-datos de la retención se conservan.
+datos de la retención se conservan. Aprobar parcial parte el pedido: lo aprobado se queda en él y lo no aprobado pasa
+a un pedido nuevo «Retenido» (`parent_sales_order_id` = el original), con el mismo cliente y creador y la nota como
+motivo; sus líneas se mueven (0 aprobado) o se reducen y la diferencia se crea en el nuevo, nunca se borran.
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
@@ -752,11 +754,12 @@ datos de la retención se conservan.
 | `quotation_id` | BIGINT | sí | FK → `quotations` (RESTRICT); UNIQUE |
 | `approved_by` | BIGINT | sí | FK → `users` (RESTRICT); quién aprobó |
 | `approved_at` | TIMESTAMP | sí |  |
-| `approval_note` | TEXT | sí | nota de la aprobación; obligatoria si es parcial |
-| `is_partial_approval` | BOOLEAN |  | default `false`; parcial no cambia líneas ni cantidades: la nota dice qué se aprobó |
+| `approval_note` | TEXT | sí | nota de la aprobación; obligatoria si es parcial (es el motivo del pedido con el resto) |
+| `is_partial_approval` | BOOLEAN |  | default `false`; se guarda y se audita, no se muestra (los enlaces al resto dicen que fue parcial) |
 | `held_by` | BIGINT | sí | FK → `users` (RESTRICT); quién lo retuvo |
 | `held_at` | TIMESTAMP | sí |  |
 | `hold_reason` | TEXT | sí | motivo de la retención |
+| `parent_sales_order_id` | BIGINT | sí | FK → `sales_orders` (RESTRICT), con índice; pedido del que salió este como resto de una aprobación parcial. Un resto aprobado parcial otra vez cuelga del segundo, no del primero |
 
 ### 2.8.5 `sales_order_items`
 
@@ -768,7 +771,7 @@ datos de la retención se conservan.
 | `sales_order_id` | BIGINT |  | FK → `sales_orders` (RESTRICT) |
 | `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
 | `product_variant_id` | BIGINT | sí | FK → `product_variants` (RESTRICT) |
-| `quantity` | INTEGER |  |  |
+| `quantity` | INTEGER |  | Solo cambia al aprobar parcial (se reduce a lo aprobado); `sales_order_id` también (pasa al pedido con el resto). Las dos se auditan |
 | `color` | VARCHAR(100) | sí | Color que pide el cliente («RAL 3020»): heredado del ítem de la cotización o escrito a mano |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
@@ -1013,8 +1016,7 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 | `PaintDevelopmentRequestStatus` | `paint_development_requests.status` | draft, submitted, in_review, approved, rejected |
 
 Enums sin columna propia: `SystemRole` (nombres de `roles.name` de los roles del sistema), `Permission` y
-`PermissionModule` (catálogo de `permissions.name`, ver `MATRIZ_RBAC.md`), `DashboardProfile` (vista del dashboard) y
-`SalesOrderApproval` (total o parcial, derivado de `sales_orders.is_partial_approval` para la etiqueta «Parcial»).
+`PermissionModule` (catálogo de `permissions.name`, ver `MATRIZ_RBAC.md`) y `DashboardProfile` (vista del dashboard).
 
 ## 5. Notas de implementación
 

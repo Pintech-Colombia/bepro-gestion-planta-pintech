@@ -259,19 +259,6 @@ it('no le avisa del aprobado a quien no puede abrir el pedido', function () {
         ->not->toContain($planner->id);
 });
 
-it('aprueba como parcial con la nota en el aviso', function () {
-    $order = orderFor($this->commercial, SalesOrderStatus::PendingApproval);
-
-    $this->actingAs($this->coordinator)
-        ->post(route('sales-orders.approve', $order), ['is_partial' => true, 'note' => 'Solo el primer despacho'])
-        ->assertInertiaFlash('success', 'Pedido aprobado como parcial.');
-
-    expect($order->fresh()->is_partial_approval)->toBeTrue()
-        ->and(notifiedUserIds(SalesOrderApproved::class))->toEqualCanonicalizing([$this->admin->id, $this->production->id, $this->superAdmin->id])
-        ->and($this->production->notifications()->sole()->data['message'])
-        ->toBe("Pedido #{$order->id} de Pinturas Andinas aprobado parcial: Solo el primer despacho");
-});
-
 // Retener
 
 it('exige el motivo para retener', function () {
@@ -344,7 +331,7 @@ it('aprueba un retenido: conserva la retención, avisa a la planta y le dice al 
     ]);
 
     $this->actingAs($this->coordinator)
-        ->post(route('sales-orders.approve', $order), ['is_partial' => true, 'note' => 'Abonó la mitad'])
+        ->post(route('sales-orders.approve', $order), ['note' => 'Abonó'])
         ->assertRedirect();
 
     $order->refresh();
@@ -355,7 +342,7 @@ it('aprueba un retenido: conserva la retención, avisa a la planta y le dice al 
         ->and(notifiedUserIds(SalesOrderApproved::class))->toEqualCanonicalizing([$this->admin->id, $this->production->id, $this->superAdmin->id])
         ->and(notifiedUserIds(SalesOrderReleased::class))->toBe([$this->commercial->id])
         ->and($this->commercial->notifications()->sole()->data['message'])
-        ->toBe("Pedido #{$order->id} de Pinturas Andinas liberado parcial: Abonó la mitad");
+        ->toBe("Pedido #{$order->id} de Pinturas Andinas liberado");
 });
 
 it('deja cancelar un retenido a quien aprueba', function () {
@@ -453,19 +440,22 @@ it('muestra los botones y la ficha de la decisión en el detalle', function () {
             ->where('order.approval.held_by', $this->coordinator->name)
             ->where('order.approval.hold_reason', 'Cartera vencida')
             ->where('order.approval.approved_at', null)
-            ->where('order.approval.is_partial', false));
+            ->where('order.approval.parent_id', null)
+            ->where('order.approval.remainder_ids', [])
+            ->missing('order.approval.is_partial'));
 
     $this->actingAs($this->commercial)
         ->get(route('sales-orders.show', $order))
         ->assertInertia(fn (Assert $page) => $page->where('can.approve', false)->where('can.hold', false));
 });
 
-it('lleva la etiqueta de parcial al listado', function () {
+// La etiqueta «Parcial» se quitó: los enlaces al resto dicen que la aprobación fue parcial.
+it('no lleva la etiqueta de parcial al listado', function () {
     orderFor($this->commercial, SalesOrderStatus::Pending, ['is_partial_approval' => true, 'approved_at' => now()]);
 
     $this->actingAs($this->coordinator)
         ->get(route('sales-orders.index'))
-        ->assertInertia(fn (Assert $page) => $page->where('orders.data.0.is_partial_approval', true));
+        ->assertInertia(fn (Assert $page) => $page->missing('orders.data.0.is_partial_approval'));
 });
 
 it('cuenta los pedidos por aprobar en el menú y en el dashboard de quien aprueba', function () {

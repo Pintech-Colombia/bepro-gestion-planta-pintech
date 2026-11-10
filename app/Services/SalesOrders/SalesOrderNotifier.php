@@ -41,24 +41,31 @@ class SalesOrderNotifier
 
     /**
      * Pedido aprobado: a la planta (quien crea órdenes de producción). Si estaba retenido, además «liberado» a quien lo
-     * creó, que recibió el aviso de retenido.
+     * creó, que recibió el aviso de retenido. En una aprobación parcial, `$remainder` es el pedido con el resto: el
+     * aviso dice dónde quedó.
      */
-    public function approved(SalesOrder $order, User $actor, bool $wasOnHold): void
+    public function approved(SalesOrder $order, User $actor, bool $wasOnHold, ?SalesOrder $remainder = null): void
     {
         $this->sendAfterCommit(
             $order,
             fn (): Collection => $this->withPermission(Permission::ProductionOrdersCreate),
-            new SalesOrderApproved($order),
+            new SalesOrderApproved($order, $remainder),
             $actor,
         );
 
         if ($wasOnHold) {
-            $this->sendAfterCommit($order, fn (): Collection => $this->creatorOf($order), new SalesOrderReleased($order), $actor);
+            $this->sendAfterCommit(
+                $order,
+                fn (): Collection => $this->creatorOf($order),
+                new SalesOrderReleased($order, $remainder),
+                $actor,
+            );
         }
     }
 
     /**
-     * Pedido retenido: a quien lo creó (en uno convertido, el creador de la cotización).
+     * Pedido retenido: a quien lo creó (en uno convertido, el creador de la cotización). También el resto de una
+     * aprobación parcial, que nace retenido con el mismo creador.
      */
     public function onHold(SalesOrder $order, User $actor): void
     {

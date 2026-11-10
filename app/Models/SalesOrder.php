@@ -43,6 +43,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int|null $held_by
  * @property Carbon|null $held_at
  * @property string|null $hold_reason
+ * @property int|null $parent_sales_order_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Client $client
@@ -51,6 +52,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read User|null $approver
  * @property-read User|null $holder
  * @property-read Collection|SalesOrderItem[] $items
+ * @property-read SalesOrder|null $parent
+ * @property-read Collection|SalesOrder[] $remainders
  */
 #[Fillable([
     'client_id',
@@ -73,6 +76,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'held_by',
     'held_at',
     'hold_reason',
+    'parent_sales_order_id',
 ])]
 class SalesOrder extends Model
 {
@@ -88,7 +92,7 @@ class SalesOrder extends Model
         return LogOptions::defaults()
             ->useLogName('pedidos')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['client_id', 'status', 'required_date', 'estimated_delivery_date', 'notes', 'shipping_address', 'client_business_name', 'client_nit', 'client_contact_name', 'client_phone', 'priority', 'quotation_id', 'approved_by', 'approved_at', 'approval_note', 'is_partial_approval', 'held_by', 'held_at', 'hold_reason'])
+            ->logOnly(['client_id', 'status', 'required_date', 'estimated_delivery_date', 'notes', 'shipping_address', 'client_business_name', 'client_nit', 'client_contact_name', 'client_phone', 'priority', 'quotation_id', 'approved_by', 'approved_at', 'approval_note', 'is_partial_approval', 'held_by', 'held_at', 'hold_reason', 'parent_sales_order_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -172,6 +176,23 @@ class SalesOrder extends Model
     public function items(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class, 'sales_order_id');
+    }
+
+    /**
+     * Pedido del que salió este como resto de una aprobación parcial.
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class, 'parent_sales_order_id');
+    }
+
+    /**
+     * Pedidos con lo que no se aprobó de este (aprobación parcial). El resto de un resto cuelga del segundo, no del
+     * primero.
+     */
+    public function remainders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class, 'parent_sales_order_id');
     }
 
     /**
