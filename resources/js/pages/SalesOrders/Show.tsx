@@ -341,10 +341,7 @@ export default function SalesOrdersShow({
                     </div>
 
                     {(can.update || can.updateStatus) && (
-                        // `key`: Aprobar y Retener cambian el estado sin pasar por este panel; sin rearmarlo, su
-                        // formulario conserva el estado anterior y el selector queda vacío.
                         <AdminOrderSidebar
-                            key={order.status}
                             order={order}
                             statusTransitions={statusTransitions}
                             can={can}

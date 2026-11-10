@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\User;
+use App\Services\SalesOrders\SalesOrderNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +22,7 @@ class QuotationService
         private readonly QuotationPricingService $pricingService,
         private readonly TimezoneService $timezone,
         private readonly DecimalCalculator $calculator,
+        private readonly SalesOrderNotifier $notifier,
     ) {}
 
     /**
@@ -277,11 +279,14 @@ class QuotationService
     }
 
     /**
+     * Crea el pedido «Por aprobar» y avisa a quien aprueba, aquí y no en quien llama: todo pedido que nace de una
+     * cotización avisa, venga de donde venga. `$actor` es quien convierte (no recibe su propio aviso).
+     *
      * @param  array<string, mixed>  $data
      */
-    public function convertToOrder(Quotation $quotation, array $data): SalesOrder
+    public function convertToOrder(Quotation $quotation, array $data, ?User $actor = null): SalesOrder
     {
-        return DB::transaction(function () use ($quotation, $data): SalesOrder {
+        return DB::transaction(function () use ($quotation, $data, $actor): SalesOrder {
             $lockedQuotation = Quotation::query()->where('id', $quotation->id)->lockForUpdate()->first();
 
             if ($lockedQuotation?->status !== QuotationStatus::Accepted) {
@@ -338,6 +343,7 @@ class QuotationService
             }
 
             $lockedQuotation->update(['convert_to_order_id' => $order->id]);
+            $this->notifier->awaitingApproval($order, $actor);
 
             return $order->load(['client', 'creator', 'items.product', 'items.productVariant']);
         });

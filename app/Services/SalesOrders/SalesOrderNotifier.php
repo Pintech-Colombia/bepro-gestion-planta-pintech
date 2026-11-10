@@ -20,8 +20,9 @@ use Illuminate\Support\Facades\Notification;
 /**
  * Único lugar que decide a quién le llega cada aviso de un pedido y lo envía.
  *
- * Siempre a usuarios activos y nunca a quien hizo la acción. Se envía después del commit: si la transacción falla, no
- * queda un aviso de algo que no pasó (fuera de una transacción, `afterCommit` envía en el acto).
+ * Siempre a usuarios activos que pueden abrir el pedido (`SalesOrderPolicy::view`: el aviso lleva a él, y sin acceso
+ * daría 403), nunca a quien hizo la acción. Se envía después del commit: si la transacción falla, no queda un aviso de
+ * algo que no pasó (fuera de una transacción, `afterCommit` envía en el acto).
  */
 class SalesOrderNotifier
 {
@@ -31,6 +32,7 @@ class SalesOrderNotifier
     public function awaitingApproval(SalesOrder $order, ?User $actor): void
     {
         $this->sendAfterCommit(
+            $order,
             fn (): Collection => $this->withPermission(Permission::SalesOrdersReceiveApprovalRequests),
             new SalesOrderAwaitingApproval($order),
             $actor,
@@ -44,13 +46,14 @@ class SalesOrderNotifier
     public function approved(SalesOrder $order, User $actor, bool $wasOnHold): void
     {
         $this->sendAfterCommit(
+            $order,
             fn (): Collection => $this->withPermission(Permission::ProductionOrdersCreate),
             new SalesOrderApproved($order),
             $actor,
         );
 
         if ($wasOnHold) {
-            $this->sendAfterCommit(fn (): Collection => $this->creatorOf($order), new SalesOrderReleased($order), $actor);
+            $this->sendAfterCommit($order, fn (): Collection => $this->creatorOf($order), new SalesOrderReleased($order), $actor);
         }
     }
 
@@ -59,17 +62,22 @@ class SalesOrderNotifier
      */
     public function onHold(SalesOrder $order, User $actor): void
     {
-        $this->sendAfterCommit(fn (): Collection => $this->creatorOf($order), new SalesOrderOnHold($order), $actor);
+        $this->sendAfterCommit($order, fn (): Collection => $this->creatorOf($order), new SalesOrderOnHold($order), $actor);
     }
 
     /**
      * @param  \Closure(): Collection<int, User>  $recipients  Se resuelve ya confirmada la transacción.
      */
-    private function sendAfterCommit(\Closure $recipients, SalesOrderNotification $notification, ?User $actor): void
-    {
-        DB::afterCommit(function () use ($recipients, $notification, $actor): void {
+    private function sendAfterCommit(
+        SalesOrder $order,
+        \Closure $recipients,
+        SalesOrderNotification $notification,
+        ?User $actor,
+    ): void {
+        DB::afterCommit(function () use ($order, $recipients, $notification, $actor): void {
             $users = $recipients()
                 ->reject(fn (User $user): bool => $actor !== null && $user->is($actor))
+                ->filter(fn (User $user): bool => $user->can('view', $order))
                 ->values();
 
             if ($users->isNotEmpty()) {

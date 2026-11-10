@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\SalesOrders\HoldSalesOrderAction;
+use App\Enums\Permission;
 use App\Enums\QuotationStatus;
 use App\Enums\SalesOrderStatus;
 use App\Enums\SystemRole;
@@ -245,6 +246,17 @@ it('aprueba un pedido y avisa a la planta, no a quien aprobó', function () {
 
     expect($this->production->notifications()->sole()->data['message'])
         ->toBe("Pedido #{$order->id} de Pinturas Andinas aprobado");
+});
+
+it('no le avisa del aprobado a quien no puede abrir el pedido', function () {
+    // Un rol de pantalla puede crear OP sin ver pedidos: el aviso lo llevaría a un 403.
+    $planner = userWithPermissions([Permission::ProductionOrdersView, Permission::ProductionOrdersCreate]);
+    $order = orderFor($this->commercial, SalesOrderStatus::PendingApproval);
+
+    $this->actingAs($this->coordinator)->post(route('sales-orders.approve', $order), ['note' => 'Cliente al día']);
+
+    expect(notifiedUserIds(SalesOrderApproved::class))->toContain($this->production->id)
+        ->not->toContain($planner->id);
 });
 
 it('aprueba como parcial con la nota en el aviso', function () {
