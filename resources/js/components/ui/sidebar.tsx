@@ -1,3 +1,4 @@
+import { router } from "@inertiajs/react"
 import { Slot } from "@radix-ui/react-slot"
 import type { VariantProps} from "class-variance-authority";
 import { cva } from "class-variance-authority"
@@ -21,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { closesMobileSidebar } from "@/lib/sidebar-link-tap"
 import { cn } from "@/lib/utils"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
@@ -107,6 +109,15 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
+  // Panel del celular y Atrás/Adelante del navegador (o el gesto de deslizar): la página cambia por el historial, sin
+  // tocar el panel, así que se cierra aquí. Los toques en sus enlaces, en `Sidebar`. Cerrarlo ya cerrado no hace nada.
+  React.useEffect(() => {
+    const close = () => setOpenMobile(false)
+
+    window.addEventListener("popstate", close)
+    return () => window.removeEventListener("popstate", close)
+  }, [])
+
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
@@ -160,6 +171,36 @@ function Sidebar({
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  // Se tocó un enlace del panel del celular: el panel se cierra cuando esa visita termina (ver `closeOnLinkTap`).
+  const closeAfterVisit = React.useRef(false)
+
+  // Con la página nueva ya pintada (`navigate`), o al terminar la visita si no hubo página nueva (`finish`: la misma
+  // URL, un error del servidor o sin red). Las precargas también disparan `finish` y no cuentan; una visita que usa una
+  // precarga no dispara `finish`, pero sí `navigate`. Si el panel se cierra por otro medio, el toque se olvida.
+  React.useEffect(() => {
+    if (!openMobile) {
+      closeAfterVisit.current = false
+      return
+    }
+
+    const closeIfLinkTapped = () => {
+      if (closeAfterVisit.current) {
+        closeAfterVisit.current = false
+        setOpenMobile(false)
+      }
+    }
+    const removeNavigateListener = router.on("navigate", closeIfLinkTapped)
+    const removeFinishListener = router.on("finish", (event) => {
+      if (!event.detail.visit.prefetch) {
+        closeIfLinkTapped()
+      }
+    })
+
+    return () => {
+      removeNavigateListener()
+      removeFinishListener()
+    }
+  }, [openMobile, setOpenMobile])
 
   if (collapsible === "none") {
     return (
@@ -177,6 +218,31 @@ function Sidebar({
   }
 
   if (isMobile) {
+    // En el celular el menú es un panel encima de la página, y el layout persiste entre páginas (Inertia solo cambia
+    // el contenido): sin esto, el panel sigue abierto tapando la pantalla nueva. Al tocar un enlace no se cierra en el
+    // acto, se anota: se cierra cuando la visita termina (el efecto de arriba), así el usuario ve la pantalla nueva ya
+    // hecha y no la vieja transformándose. Qué toques cuentan lo decide `closesMobileSidebar`. React corre este
+    // `onClick` después del del `Link` (que ya inició la visita) y también recibe los toques de lo que el panel dibuja
+    // en otra capa. Atrás y Adelante: `SidebarProvider`.
+    const closeOnLinkTap = (event: React.MouseEvent<HTMLDivElement>) => {
+      const anchor =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null
+      const link =
+        anchor instanceof HTMLAnchorElement
+          ? {
+              target: anchor.target,
+              download: anchor.hasAttribute("download"),
+              origin: anchor.origin,
+            }
+          : null
+
+      if (closesMobileSidebar(event, link, window.location.origin)) {
+        closeAfterVisit.current = true
+      }
+    }
+
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetHeader className="sr-only">
@@ -194,6 +260,7 @@ function Sidebar({
             } as React.CSSProperties
           }
           side={side}
+          onClick={closeOnLinkTap}
         >
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
