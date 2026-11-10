@@ -88,6 +88,8 @@ export type Permission =
     | 'sales_orders.create'
     | 'sales_orders.edit'
     | 'sales_orders.update_status'
+    | 'sales_orders.approve'
+    | 'sales_orders.receive_approval_requests'
     // Clientes
     | 'clients.view'
     | 'clients.create'

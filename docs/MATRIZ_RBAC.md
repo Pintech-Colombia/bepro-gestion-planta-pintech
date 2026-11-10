@@ -22,6 +22,7 @@
 | **Producción** | Auxiliares y ayudantes de la jefa | Ejecutan y supervisan en planta (crear, operar, revisar y completar órdenes), pero no definen fórmulas ni productos. |
 | **Operador** | Personal de planta | Ejecuta las órdenes. |
 | **Comercial** | Ventas | Clientes, cotizaciones, pedidos y solicitudes de desarrollo. Ve precios, nunca costos. |
+| **Coordinación comercial** | La encargada de cartera: valida que el cliente esté al día antes de que un pedido pase a la planta (antes, en el punto de venta de Cali). En rango, sigue a la jefa y al jefe | Todo lo de Comercial, más ver todas las cotizaciones y pedidos, editar pedidos y clientes, cambiar el estado de pedidos, despachar producto terminado, gestionar documentos de producto, ver alertas y **aprobar o retener pedidos**. Nunca ve costos, fórmulas, OP ni materias primas. |
 
 **Regla de asignación:** un rol por usuario, sin permisos directos por usuario en esta fase. Si alguien necesita otra
 combinación, se crea un rol nuevo.
@@ -62,105 +63,111 @@ combinación, se crea un rol nuevo.
 
 ## 3. Matriz
 
-| Módulo | Permiso (key) | SuperAdmin | Admin | Producción | Operador | Comercial | Descripción |
-| :-- | :-- | :-: | :-: | :-: | :-: | :-: | :-- |
-| **Dashboard** | `dashboard.view` | [x] | [x] | [x] | [x] | [x] | Las tarjetas se muestran según los permisos de cada módulo (ver §5, Dashboard). |
-| **Usuarios** | `users.view` | [x] | [x] | [ ] | [ ] | [ ] | Listado de personal. |
-| | `users.create` | [x] | [x] | [ ] | [ ] | [ ] | Crear empleado asignando rol. |
-| | `users.edit` | [x] | [x] | [ ] | [ ] | [ ] | Datos, firma y activar/desactivar (`is_active`). |
-| | `users.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si el usuario está intacto; si tiene actividad → desactivar. ⚠️ hoy Admin puede borrar. |
-| | `users.manage_roles` | [x] | [x]\* | [ ] | [ ] | [ ] | \*Admin asigna admin/producción/comercial/operador. `super-admin` nunca aparece para Admin (filtrado en servidor). |
-| **Roles** | `roles.view` | [x] | [ ] | [ ] | [ ] | [ ] | Exclusivo de SuperAdmin. |
-| | `roles.create` | [x] | [ ] | [ ] | [ ] | [ ] | Exclusivo de SuperAdmin. |
-| | `roles.edit` | [x] | [ ] | [ ] | [ ] | [ ] | Incluye asignar permisos al rol. |
-| | `roles.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Los 5 roles del sistema no se pueden eliminar ni renombrar. No se elimina un rol con usuarios asignados. |
-| **Auditoría** | `audit_logs.view` | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy lo ve Admin (vía `Gate::define('view-audit-logs')`). |
-| **Catálogos** (Configuración) | `catalogs.view` | [x] | [x] | [ ] | [ ] | [ ] | Unidades de medida, categorías de producto y de materia prima, tipos de termoencogido y proveedores. Los `<select>` de los formularios **no** requieren este permiso. |
-| | `catalogs.create` | [x] | [ ] | [ ] | [ ] | [ ] | CRUDs de la Fase 3 (3.1, 3.2). Viven en el menú Configuración. |
-| | `catalogs.edit` | [x] | [ ] | [ ] | [ ] | [ ] | |
-| | `catalogs.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Solo si nadie usa el valor; si no, desactivar. |
-| | `suppliers.manage` | [x] | [x] | [ ] | [ ] | [ ] | 🆕 Crear, editar, desactivar y eliminar proveedores, en Configuración → Catálogos (la pestaña se ve con `catalogs.view`, del que depende). No es reservado: a diferencia de `catalogs.*`, también lo tiene Admin, que registra las entradas de materia prima. La ficha del movimiento de MP muestra el nombre del proveedor a quien ve movimientos, sin NIT ni contacto. |
-| **Productos** | `products.view` | [x] | [x] | [x] | [ ] | [x] | |
-| | `products.create` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede crear. Cambio intencional (§0). |
-| | `products.edit` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede editar; cambio intencional (§0). Cambiar CIF % o umbral de precio exige además `costs.update`. |
-| | `products.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | 🔁 corregido el typo `desactive`. |
-| | `products.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Solo si está intacto. ⚠️ hoy Admin puede, y **sin comprobar relaciones**. |
-| | `products.manage_variants` | [x] | [x] | [x] | [ ] | [ ] | Presentaciones, dentro de la página del producto (no tendrán página propia). |
-| | `products.manage_documents` | [x] | [x] | [ ] | [ ] | [ ] | Subir y eliminar fichas técnicas y hojas de seguridad. |
-| | `products.download_documents` | [x] | [x] | [x] | [ ] | [x] | 🆕 Hoy lo hace cualquiera que vea el producto; se separa de `manage_documents`. |
-| **Costos** | `costs.view` | [x] | [x] | [ ] | [ ] | [ ] | 🆕 alcance global (principio 1): sustituye a `products.view_costs`, `raw_materials.view_costs` y `production_orders.preview_costs`, y oculta el costo de remanentes. |
-| | `costs.update` | [x] | [x] | [ ] | [ ] | [ ] | Márgenes, CIF % y umbral de precio (en la página de costos y en el formulario de producto). También el precio manual de las materias primas sin control de inventario y el interruptor «Controla inventario» (ver `raw_materials.edit`). |
-| **Fórmulas** | `formulas.view` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción ve, crea y edita fórmulas. Cambio intencional (§0). |
-| | `formulas.create` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ |
-| | `formulas.edit` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ |
-| | `formulas.activate` | [x] | [x] | [ ] | [ ] | [ ] | Activar y desactivar cada versión (varias activas por producto) y elegir la de referencia de precio («Usar para el precio»). |
-| | `formulas.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Solo si ninguna orden la usó. ⚠️ hoy Admin puede. |
-| **Materias primas** | `raw_materials.view` | [x] | [x] | [x] | [ ] | [ ] | Sin costos salvo `costs.view`. |
-| | `raw_materials.create` | [x] | [x] | [ ] | [ ] | [ ] | Crearla **sin control de inventario** exige además `costs.update`: su precio se escribe a mano y entra en los costos. |
-| | `raw_materials.edit` | [x] | [x] | [ ] | [ ] | [ ] | Cambiar «Controla inventario» (en cualquier sentido) o el precio manual exige además `costs.update`. Hoy los dos permisos van juntos en los roles del sistema; la regla aplica a roles personalizados. |
-| | `raw_materials.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | 🆕 Se separa de `delete`. Se niega si hay lotes con stock. |
-| | `raw_materials.reactivate` | [x] | [x] | [ ] | [ ] | [ ] | |
-| | `raw_materials.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si no tiene lotes, movimientos, fórmulas ni órdenes. |
-| **Órdenes de producción** | `production_orders.view` | [x] | [x] | [x] | [x] | [ ] | 🔁 Comercial `[ ]` (§7.3). Sin costos salvo `costs.view`. |
-| | `production_orders.create` | [x] | [x] | [x] | [ ] | [ ] | También corrige el **color** de la orden mientras está abierta (pendiente, en curso o en revisión): quien lo escribe al crear puede corregirlo. Al completar se congela (3.4). |
-| | `production_orders.operate` | [x] | [x] | [x] | [x] | [ ] | Iniciar, ajustes de línea, plan de empaque y saldos de PT a usar. Los saldos se agregan y se quitan con la orden pendiente o en curso; en revisión, solo quien puede revisarla, como los ajustes de línea (D-OPX1, §8.9). |
-| | `production_orders.submit_for_review` | [x] | [x] | [x] | [x] | [ ] | ⚠️ hoy solo Operador puede enviar a revisión. |
-| | `production_orders.reject_review` | [x] | [x] | [x] | [ ] | [ ] | |
-| | `production_orders.complete` | [x] | [x] | [x] | [ ] | [ ] | Descuenta inventario FIFO. |
-| | `production_orders.cancel` | [x] | [x] | [ ] | [ ] | [ ] | Botón «Cancelar orden» del detalle (D-OPX2): solo con la orden pendiente o en curso (`ProductionOrderStatus::cancellable()`), con motivo obligatorio de 10 a 1.000 caracteres. Los saldos planeados en la orden no se habían descontado (se descuentan al completar), así que no hay nada que devolver; solo los descontados antes de que los saldos se planearan quedan escritos en la nota de cancelación. **Una orden no se elimina** (principio 4). |
-| | `production_orders.export` | [x] | [x] | [x] | [x] | [ ] | PDF + Excel juntos. Los costos del archivo dependen de `costs.view`. |
-| | `production_orders.print_labels` | [x] | [x] | [x] | [ ] | [ ] | Estampita de lote (DYMO) de una presentación del plan de envasado, en cualquier estado menos cancelada; las copias se eligen al imprimir. La primera impresión crea el QR de la orden; no reactiva un QR desactivado. |
-| **Remanentes** | `production_remnants.view` | [x] | [x] | [x] | [x] | [ ] | El costo por galón solo con `costs.view`. ⚠️ hoy se envía a todos (`RemnantController:47`). |
-| **Termoencogido** | `shrink_wraps.view` | [x] | [x] | [x] | [x] | [ ] | 🆕 (3.8) Listado y detalle de los registros de termoencogido. El costo (gasto general) solo con `costs.view`. |
-| | `shrink_wraps.create` | [x] | [x] | [x] | [x] | [ ] | 🆕 (3.8) Registrar un termoencogido: OP completada, tipo y aplicaciones; descuenta el empaque secundario de la bodega de la OP. Inmutable: no existen `edit` ni `delete` (un error se corrige con un movimiento opuesto). |
-| | `shrink_wrap_types.manage` | [x] | [x] | [ ] | [ ] | [ ] | 🆕 (3.8) Crear, editar, desactivar y eliminar los tipos de termoencogido y su receta, en Configuración → Catálogos (la pestaña se ve con `catalogs.view`, del que depende). No es reservado: a diferencia de `catalogs.*`, también lo tiene Admin. |
-| **Movimientos MP** | `inventory_movements.view` | [x] | [x] | [x] | [x] | [ ] | ⚠️ hoy Operador no los ve. |
-| | `inventory_movements.create` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede crear. Inmutables: no existen `edit` ni `delete` (principio 5). |
-| **Inventario PT** | `finished_inventory.view` | [x] | [x] | [x] | [x] | [x] | ⚠️ hoy Operador no lo ve. La vista no muestra costos ni precios. |
-| | `finished_inventory_movements.view` | [x] | [x] | [x] | [ ] | [ ] | 🔁 key renombrada (`finished_inventory.movements.view` → dos segmentos, como el resto). |
-| | `finished_inventory_movements.create` | [x] | [x] | [x] | [ ] | [ ] | Inmutables (ya lo son hoy). |
-| **Cotizaciones** | `quotations.view_own` | [x] | [x] | [ ] | [ ] | [x] | Solo las propias (`created_by`). |
-| | `quotations.view_all` | [x] | [x] | [ ] | [ ] | [ ] | |
-| | `quotations.create` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `quotations.edit` | [x] | [x] | [ ] | [ ] | [x] | Solo en borrador. |
-| | `quotations.update_status` | [x] | [x] | [ ] | [ ] | [x] | Se bloquea una vez convertida en pedido. |
-| | `quotations.convert_to_order` | [x] | [x] | [ ] | [ ] | [x] | Solo si está aceptada y no se convirtió antes. |
-| | `quotations.export_pdf` | [x] | [x] | [ ] | [ ] | [x] | |
-| **Pedidos de venta** | `sales_orders.view_own` | [x] | [x] | [x] | [ ] | [x] | Solo los propios (`created_by`). |
-| | `sales_orders.view_all` | [x] | [x] | [x] | [ ] | [ ] | |
-| | `sales_orders.create` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `sales_orders.edit` | [x] | [x] | [ ] | [ ] | [ ] | Contacto, dirección, prioridad, fecha y notas. **Solo mientras está `pending`**; en cuanto arranca queda congelado. |
-| | `sales_orders.update_status` | [x] | [x] | [x] | [ ] | [ ] | 🔁 Producción `[x]` (confirmado): es quien sabe cuándo el pedido pasa a `in_progress`/`ready` (hoy ya lo hace). |
-| **Clientes** | `clients.view` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `clients.create` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `clients.edit` | [x] | [x] | [ ] | [ ] | [ ] | |
-| | `clients.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | 🆕 Casilla "Cliente activo" al editar (`POLITICA_ELIMINACION.md`). Un cliente inactivo no aparece en cotizaciones ni pedidos nuevos; los abiertos siguen su curso. |
-| | `clients.delete` | [x] | [x] | [ ] | [ ] | [ ] | Borrado físico solo si no tiene cotizaciones ni pedidos (`POLITICA_ELIMINACION.md`). |
-| **Listas de precios** | `price_lists.view` | [x] | [x] | [ ] | [ ] | [x] | Comercial ve precios; los costos solo con `costs.view`. |
-| **Desarrollo de pinturas** | `paint_development_requests.view_own` | [x] | [x] | [ ] | [ ] | [x] | Solo las propias (`created_by`). ⚠️ hoy Producción las ve todas; se retira: solo la jefa recibe y revisa estas solicitudes. |
-| | `paint_development_requests.view_all` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ |
-| | `paint_development_requests.create` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `paint_development_requests.edit` | [x] | [x] | [ ] | [ ] | [x] | Solo en borrador. |
-| | `paint_development_requests.submit` | [x] | [x] | [ ] | [ ] | [x] | |
-| | `paint_development_requests.update_status` | [x] | [x] | [ ] | [ ] | [ ] | En revisión → aprobada/rechazada. ⚠️ hoy lo hace Producción; pasa a solo Admin. |
-| | `paint_development_requests.export_pdf` | [x] | [x] | [ ] | [ ] | [x] | |
-| **Alertas** | `alerts.view` | [x] | [x] | [x] | [ ] | [ ] | Incluye la campana de notificaciones de la cabecera. |
-| | `alerts.resolve` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede resolver. |
-| **Códigos QR** | `qr_codes.view` | [x] | [x] | [x] | [ ] | [x] | ⚠️ hoy Comercial no los ve. La landing pública `/c/{token}` no requiere sesión. |
-| | `qr_codes.update` | [x] | [x] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede editar. |
-| | `qr_codes.manage_documents` | [x] | [x] | [x] | [ ] | [ ] | 🆕 Subir el certificado de calidad de una orden completada y eliminar sus versiones. |
-| **Bodegas** | `warehouses.view` | [x] | [x] | [x] | [ ] | [x] | Solo las bodegas asignadas. |
-| | `warehouses.view_all` | [x] | [x] | [ ] | [ ] | [ ] | Todas las bodegas, también en el selector de bodega de la cabecera. |
-| | `warehouses.create` | [x] | [x] | [ ] | [ ] | [ ] | |
-| | `warehouses.edit` | [x] | [x] | [ ] | [ ] | [ ] | Incluye activar/desactivar. |
-| | `warehouses.assign_users` | [x] | [x] | [ ] | [ ] | [ ] | |
-| | `warehouses.delete` | [x] | [ ] | [ ] | [ ] | [ ] | Solo si está intacta. ⚠️ hoy Admin puede. |
+| Módulo | Permiso (key) | SuperAdmin | Admin | Producción | Operador | Comercial | Coord. comercial | Descripción |
+| :-- | :-- | :-: | :-: | :-: | :-: | :-: | :-: | :-- |
+| **Dashboard** | `dashboard.view` | [x] | [x] | [x] | [x] | [x] | [x] | Las tarjetas se muestran según los permisos de cada módulo (ver §5, Dashboard). |
+| **Usuarios** | `users.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Listado de personal. |
+| | `users.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Crear empleado asignando rol. |
+| | `users.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Datos, firma y activar/desactivar (`is_active`). |
+| | `users.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si el usuario está intacto; si tiene actividad → desactivar. ⚠️ hoy Admin puede borrar. |
+| | `users.manage_roles` | [x] | [x]\* | [ ] | [ ] | [ ] | [ ] | \*Admin asigna admin/producción/comercial/operador. `super-admin` nunca aparece para Admin (filtrado en servidor). |
+| **Roles** | `roles.view` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Exclusivo de SuperAdmin. |
+| | `roles.create` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Exclusivo de SuperAdmin. |
+| | `roles.edit` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Incluye asignar permisos al rol. |
+| | `roles.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Los 6 roles del sistema no se pueden eliminar ni renombrar. No se elimina un rol con usuarios asignados. |
+| **Auditoría** | `audit_logs.view` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy lo ve Admin (vía `Gate::define('view-audit-logs')`). |
+| **Catálogos** (Configuración) | `catalogs.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Unidades de medida, categorías de producto y de materia prima, tipos de termoencogido y proveedores. Los `<select>` de los formularios **no** requieren este permiso. |
+| | `catalogs.create` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | CRUDs de la Fase 3 (3.1, 3.2). Viven en el menú Configuración. |
+| | `catalogs.edit` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| | `catalogs.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Solo si nadie usa el valor; si no, desactivar. |
+| | `suppliers.manage` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 Crear, editar, desactivar y eliminar proveedores, en Configuración → Catálogos (la pestaña se ve con `catalogs.view`, del que depende). No es reservado: a diferencia de `catalogs.*`, también lo tiene Admin, que registra las entradas de materia prima. La ficha del movimiento de MP muestra el nombre del proveedor a quien ve movimientos, sin NIT ni contacto. |
+| **Productos** | `products.view` | [x] | [x] | [x] | [ ] | [x] | [x] | |
+| | `products.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede crear. Cambio intencional (§0). |
+| | `products.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede editar; cambio intencional (§0). Cambiar CIF % o umbral de precio exige además `costs.update`. |
+| | `products.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🔁 corregido el typo `desactive`. |
+| | `products.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Solo si está intacto. ⚠️ hoy Admin puede, y **sin comprobar relaciones**. |
+| | `products.manage_variants` | [x] | [x] | [x] | [ ] | [ ] | [ ] | Presentaciones, dentro de la página del producto (no tendrán página propia). |
+| | `products.manage_documents` | [x] | [x] | [ ] | [ ] | [ ] | [x] | Subir y eliminar fichas técnicas y hojas de seguridad. |
+| | `products.download_documents` | [x] | [x] | [x] | [ ] | [x] | [x] | 🆕 Hoy lo hace cualquiera que vea el producto; se separa de `manage_documents`. |
+| **Costos** | `costs.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 alcance global (principio 1): sustituye a `products.view_costs`, `raw_materials.view_costs` y `production_orders.preview_costs`, y oculta el costo de remanentes. |
+| | `costs.update` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Márgenes, CIF % y umbral de precio (en la página de costos y en el formulario de producto). También el precio manual de las materias primas sin control de inventario y el interruptor «Controla inventario» (ver `raw_materials.edit`). |
+| **Fórmulas** | `formulas.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción ve, crea y edita fórmulas. Cambio intencional (§0). |
+| | `formulas.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ |
+| | `formulas.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ |
+| | `formulas.activate` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Activar y desactivar cada versión (varias activas por producto) y elegir la de referencia de precio («Usar para el precio»). |
+| | `formulas.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Solo si ninguna orden la usó. ⚠️ hoy Admin puede. |
+| **Materias primas** | `raw_materials.view` | [x] | [x] | [x] | [ ] | [ ] | [ ] | Sin costos salvo `costs.view`. |
+| | `raw_materials.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Crearla **sin control de inventario** exige además `costs.update`: su precio se escribe a mano y entra en los costos. |
+| | `raw_materials.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Cambiar «Controla inventario» (en cualquier sentido) o el precio manual exige además `costs.update`. Hoy los dos permisos van juntos en los roles del sistema; la regla aplica a roles personalizados. |
+| | `raw_materials.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 Se separa de `delete`. Se niega si hay lotes con stock. |
+| | `raw_materials.reactivate` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | |
+| | `raw_materials.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si no tiene lotes, movimientos, fórmulas ni órdenes. |
+| **Órdenes de producción** | `production_orders.view` | [x] | [x] | [x] | [x] | [ ] | [ ] | 🔁 Comercial `[ ]` (§7.3). Sin costos salvo `costs.view`. |
+| | `production_orders.create` | [x] | [x] | [x] | [ ] | [ ] | [ ] | También corrige el **color** de la orden mientras está abierta (pendiente, en curso o en revisión): quien lo escribe al crear puede corregirlo. Al completar se congela (3.4). |
+| | `production_orders.operate` | [x] | [x] | [x] | [x] | [ ] | [ ] | Iniciar, ajustes de línea, plan de empaque y saldos de PT a usar. Los saldos se agregan y se quitan con la orden pendiente o en curso; en revisión, solo quien puede revisarla, como los ajustes de línea (D-OPX1, §8.9). |
+| | `production_orders.submit_for_review` | [x] | [x] | [x] | [x] | [ ] | [ ] | ⚠️ hoy solo Operador puede enviar a revisión. |
+| | `production_orders.reject_review` | [x] | [x] | [x] | [ ] | [ ] | [ ] | |
+| | `production_orders.complete` | [x] | [x] | [x] | [ ] | [ ] | [ ] | Descuenta inventario FIFO. |
+| | `production_orders.cancel` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Botón «Cancelar orden» del detalle (D-OPX2): solo con la orden pendiente o en curso (`ProductionOrderStatus::cancellable()`), con motivo obligatorio de 10 a 1.000 caracteres. Los saldos planeados en la orden no se habían descontado (se descuentan al completar), así que no hay nada que devolver; solo los descontados antes de que los saldos se planearan quedan escritos en la nota de cancelación. **Una orden no se elimina** (principio 4). |
+| | `production_orders.export` | [x] | [x] | [x] | [x] | [ ] | [ ] | PDF + Excel juntos. Los costos del archivo dependen de `costs.view`. |
+| | `production_orders.print_labels` | [x] | [x] | [x] | [ ] | [ ] | [ ] | Estampita de lote (DYMO) de una presentación del plan de envasado, en cualquier estado menos cancelada; las copias se eligen al imprimir. La primera impresión crea el QR de la orden; no reactiva un QR desactivado. |
+| **Remanentes** | `production_remnants.view` | [x] | [x] | [x] | [x] | [ ] | [ ] | El costo por galón solo con `costs.view`. ⚠️ hoy se envía a todos (`RemnantController:47`). |
+| **Termoencogido** | `shrink_wraps.view` | [x] | [x] | [x] | [x] | [ ] | [ ] | 🆕 (3.8) Listado y detalle de los registros de termoencogido. El costo (gasto general) solo con `costs.view`. |
+| | `shrink_wraps.create` | [x] | [x] | [x] | [x] | [ ] | [ ] | 🆕 (3.8) Registrar un termoencogido: OP completada, tipo y aplicaciones; descuenta el empaque secundario de la bodega de la OP. Inmutable: no existen `edit` ni `delete` (un error se corrige con un movimiento opuesto). |
+| | `shrink_wrap_types.manage` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 (3.8) Crear, editar, desactivar y eliminar los tipos de termoencogido y su receta, en Configuración → Catálogos (la pestaña se ve con `catalogs.view`, del que depende). No es reservado: a diferencia de `catalogs.*`, también lo tiene Admin. |
+| **Movimientos MP** | `inventory_movements.view` | [x] | [x] | [x] | [x] | [ ] | [ ] | ⚠️ hoy Operador no los ve. |
+| | `inventory_movements.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede crear. Inmutables: no existen `edit` ni `delete` (principio 5). |
+| **Inventario PT** | `finished_inventory.view` | [x] | [x] | [x] | [x] | [x] | [x] | ⚠️ hoy Operador no lo ve. La vista no muestra costos ni precios. |
+| | `finished_inventory_movements.view` | [x] | [x] | [x] | [ ] | [ ] | [x] | 🔁 key renombrada (`finished_inventory.movements.view` → dos segmentos, como el resto). |
+| | `finished_inventory_movements.create` | [x] | [x] | [x] | [ ] | [ ] | [x] | Inmutables (ya lo son hoy). |
+| **Cotizaciones** | `quotations.view_own` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo las propias (`created_by`). |
+| | `quotations.view_all` | [x] | [x] | [ ] | [ ] | [ ] | [x] | |
+| | `quotations.create` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `quotations.edit` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo en borrador. |
+| | `quotations.update_status` | [x] | [x] | [ ] | [ ] | [x] | [x] | Se bloquea una vez convertida en pedido. |
+| | `quotations.convert_to_order` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo si está aceptada y no se convirtió antes. |
+| | `quotations.export_pdf` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| **Pedidos de venta** | `sales_orders.view_own` | [x] | [x] | [x] | [ ] | [x] | [x] | Solo los propios (`created_by`). |
+| | `sales_orders.view_all` | [x] | [x] | [x] | [ ] | [ ] | [x] | |
+| | `sales_orders.create` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `sales_orders.edit` | [x] | [x] | [ ] | [ ] | [ ] | [x] | Contacto, dirección, prioridad, fecha y notas. **Solo mientras no arranca: «Por aprobar», «Retenido» o «Pendiente»** (así quien aprueba corrige la dirección o la prioridad antes de aprobar); en cuanto arranca queda congelado. |
+| | `sales_orders.update_status` | [x] | [x] | [x] | [ ] | [ ] | [x] | 🔁 Producción `[x]` (confirmado): es quien sabe cuándo el pedido pasa a `in_progress`/`ready` (hoy ya lo hace). Un pedido «Por aprobar» no tiene transiciones (solo sale aprobándolo o reteniéndolo); uno «Retenido» solo se cancela. |
+| | `sales_orders.approve` | [x] | [x] | [ ] | [ ] | [ ] | [x] | 🆕 Aprobar (total, o parcial con nota obligatoria) un pedido «Por aprobar» o «Retenido», y retener con motivo uno «Por aprobar». Depende de `view_all`: decide sobre pedidos ajenos. |
+| | `sales_orders.receive_approval_requests` | [x] | [ ] | [ ] | [ ] | [ ] | [x] | 🆕 Recibe el aviso «por aprobar» de cada pedido nuevo. **Solo elige destinatarios**: no abre ninguna pantalla ni permite ninguna acción (§8.10). SuperAdmin lo tiene por regla. Depende de `view_all`: sin él, el enlace del aviso daría 403. |
+| **Clientes** | `clients.view` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `clients.create` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `clients.edit` | [x] | [x] | [ ] | [ ] | [ ] | [x] | |
+| | `clients.deactivate` | [x] | [x] | [ ] | [ ] | [ ] | [x] | 🆕 Casilla "Cliente activo" al editar (`POLITICA_ELIMINACION.md`). Un cliente inactivo no aparece en cotizaciones ni pedidos nuevos; los abiertos siguen su curso. |
+| | `clients.delete` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Borrado físico solo si no tiene cotizaciones ni pedidos (`POLITICA_ELIMINACION.md`). |
+| **Listas de precios** | `price_lists.view` | [x] | [x] | [ ] | [ ] | [x] | [x] | Comercial ve precios; los costos solo con `costs.view`. |
+| **Desarrollo de pinturas** | `paint_development_requests.view_own` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo las propias (`created_by`). ⚠️ hoy Producción las ve todas; se retira: solo la jefa recibe y revisa estas solicitudes. |
+| | `paint_development_requests.view_all` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ |
+| | `paint_development_requests.create` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `paint_development_requests.edit` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo en borrador. |
+| | `paint_development_requests.submit` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| | `paint_development_requests.update_status` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | En revisión → aprobada/rechazada. ⚠️ hoy lo hace Producción; pasa a solo Admin. |
+| | `paint_development_requests.export_pdf` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
+| **Alertas** | `alerts.view` | [x] | [x] | [x] | [ ] | [ ] | [x] | Incluye la campana de notificaciones de la cabecera. |
+| | `alerts.resolve` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede resolver. |
+| **Códigos QR** | `qr_codes.view` | [x] | [x] | [x] | [ ] | [x] | [x] | ⚠️ hoy Comercial no los ve. La landing pública `/c/{token}` no requiere sesión. |
+| | `qr_codes.update` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede editar. |
+| | `qr_codes.manage_documents` | [x] | [x] | [x] | [ ] | [ ] | [ ] | 🆕 Subir el certificado de calidad de una orden completada y eliminar sus versiones. |
+| **Bodegas** | `warehouses.view` | [x] | [x] | [x] | [ ] | [x] | [x] | Solo las bodegas asignadas. |
+| | `warehouses.view_all` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Todas las bodegas, también en el selector de bodega de la cabecera. |
+| | `warehouses.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | |
+| | `warehouses.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Incluye activar/desactivar. |
+| | `warehouses.assign_users` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | |
+| | `warehouses.delete` | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Solo si está intacta. ⚠️ hoy Admin puede. |
 
-**Total: 91 permisos en 22 módulos.** Por rol: SuperAdmin 91 · Admin 78 · Producción 27 · Operador 10 · Comercial 22.
+**Total: 93 permisos en 22 módulos.** Por rol: SuperAdmin 93 · Admin 79 · Producción 27 · Operador 10 · Comercial 22 ·
+Coordinación comercial 34.
 (La v1 tenía 83. Entran 6: los 4 de catálogos, `products.download_documents` y `raw_materials.deactivate`.
 Salen 5: ver §6. `products.desactive` solo se renombra, igual que los `view` de módulos con dueño → `view_own`.)
 (3.8, termoencogido: entran `shrink_wrap_types.manage`, `shrink_wraps.view` y `shrink_wraps.create`, módulo Termoencogido.)
 (Proveedores: entra `suppliers.manage`, módulo Catálogos.)
+(Aprobación de pedidos: entran `sales_orders.approve` y `sales_orders.receive_approval_requests`, módulo Pedidos, y el
+rol del sistema «Coordinación comercial» (`commercial-coordination`): los 22 de Comercial, 10 más y los 2 nuevos. Para
+registrar movimientos de PT necesita bodegas asignadas: al crear su usuario se le asigna su bodega.)
 
 ---
 
@@ -180,7 +187,10 @@ Viven en las policies/Actions junto al permiso, nunca en la matriz. Se listan aq
 | Orden en `pending_review`: **solo quien puede revisar** (`complete`) sigue operando | Hoy: `hasRole('operador')` → se reescribe sin rol |
 | Orden: agregar o quitar un saldo de PT en `pending` o `in_progress`; en `pending_review`, solo quien puede revisar (§8.9) | `ProductionOrderPolicy::planRemnant` |
 | Orden: toda escritura en una orden abierta bloquea la fila y vuelve a evaluar la habilidad con el estado bloqueado (el estado pudo cambiar mientras esperaba) | `ProductionOrderLock` |
-| Pedido: `edit` solo en `pending`; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` | `UpdateSalesOrderRequest` |
+| Pedido: todo pedido nace «Por aprobar» (`pending_approval`), también el que viene de una cotización | `SalesOrderController::store`, `QuotationService::convertToOrder` |
+| Pedido: `edit` en «Por aprobar», «Retenido» o «Pendiente»; las transiciones de estado siguen `SalesOrderStatus::nextTransitions()` («Por aprobar» no tiene ninguna; «Retenido» solo pasa a cancelado) | `SalesOrderPolicy::update`, `UpdateSalesOrderStatusRequest` |
+| Pedido: aprobar en «Por aprobar» o «Retenido»; retener solo en «Por aprobar» (con motivo). Aprobar un retenido conserva los datos de la retención | `SalesOrderPolicy::approve/hold` |
+| Pedido: aprobar y retener bloquean la fila y vuelven a evaluar la habilidad con el estado bloqueado; si cambió, error «El pedido ya cambió de estado» | `SalesOrderDecisionLock` |
 | Movimiento MP generado por una orden (`production_order_id`) no se toca | `InventoryMovementPolicy` |
 | Desactivar materia prima: se niega si hay lotes con stock | `RawMaterialController::destroy` |
 
@@ -201,6 +211,11 @@ Viven en las policies/Actions junto al permiso, nunca en la matriz. Se listan aq
   permitió editar ni borrar**, pero el backend lo aceptaba por petición directa y podía reescribir el costo de un lote.
   Un error se corrige con un movimiento compensatorio manual (salida o entrada sobre el mismo lote) y una nota. Se
   descartó (2026-09-21) añadir motivo y una acción "Revertir movimiento": la corrección manual basta.
+- **Avisos personales (campana):** todo usuario autenticado ve y marca leídos los suyos, sin permiso (rutas
+  `notifications.read` y `notifications.read-all`). Hoy son los de pedidos: «por aprobar» a quien tiene
+  `sales_orders.receive_approval_requests`; «aprobado» a quien tiene `production_orders.create`; «retenido» y
+  «liberado» (un retenido que se aprueba) a quien creó el pedido. Siempre a usuarios activos y nunca a quien hizo la
+  acción. Las alertas siguen bajo `alerts.view`, en la misma campana.
 - **Variantes:** siguen dentro de la página del producto. **Esto cambia la tarea 3.3** (ya no tendrán index ni
   páginas propias).
 
@@ -231,7 +246,9 @@ Para comunicar a los usuarios antes de desplegar.
 
 **Permisos que propuse en el plan y descarté tras tus notas:** `users.deactivate` y `users.manage_signatures`
 (se quedan en `users.edit`), `roles.assign_permissions` (redundante: roles es 100 % SuperAdmin),
-`alerts.receive_notifications` (la campana usa `alerts.view`), `finished_inventory.view_costs` (la vista no muestra
+`alerts.receive_notifications` (sigue descartado: la campana se muestra a todos y sus avisos personales no dependen de
+permisos; `alerts.view` solo decide si se ven las alertas; `sales_orders.receive_approval_requests` **elige
+destinatarios** de un aviso, no da visibilidad), `finished_inventory.view_costs` (la vista no muestra
 costos), `quotations.view_costs` (quien ve cotizaciones ya puede ver precios), `profile.delete_own` (se elimina la
 función), `inventory_movements.edit/delete` (inmutables), `production_orders.delete` (no existe).
 
@@ -270,3 +287,4 @@ el código necesita saber vive aquí.
 | 8.7 | **`visibleTo()` sin usuario no devuelve nada.** Con `view_all` ve todo; con `view_own`, solo lo propio; sin usuario, ningún registro (antes se trataba como admin sin restricción) | `Quotation`, `SalesOrder`, `PaintDevelopmentRequest` |
 | 8.8 | **Los permisos se agrupan por módulo** para la pantalla de roles, desde el propio enum | `PermissionCatalogService`, `PermissionModule` |
 | 8.9 | **Saldos de PT planeados (reemplaza D-OPX1, «solo en curso»).** Usar un saldo es una línea planeada de la orden: se agrega y se quita con `production_orders.operate` desde que la orden está pendiente (sale en el PDF que se imprime para planta), y en revisión solo con `production_orders.complete`. El inventario del saldo se mueve al completar; mientras tanto la línea reserva sus kilos para que otra orden abierta no los planee | `ProductionOrderPolicy::planRemnant`, `PlanRemnantConsumptionAction`, `AvailableRemnantsService` |
+| 8.10 | **Permisos que solo eligen destinatarios.** `sales_orders.receive_approval_requests` no da acceso a nada: decide a quién le llega el aviso «por aprobar». La regla contra la escalada (§8.4) no lo cuenta, así Admin asigna el rol «Coordinación comercial» y edita o desactiva a ese usuario sin recibir él esos avisos. Es una lista explícita y sin `default`: cada permiso nuevo decide si es de este tipo | `Permission::isRecipientOnly()`, `User::holdsAllPermissions` |

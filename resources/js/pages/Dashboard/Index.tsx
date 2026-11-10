@@ -6,6 +6,7 @@ import {
     Boxes,
     Building2,
     CheckCircle2,
+    ClipboardCheck,
     ClipboardList,
     Factory,
     FileText,
@@ -436,6 +437,17 @@ export default function Dashboard({
                                 label="Pedidos pendientes"
                                 value={stats.pending_orders}
                                 iconClassName="bg-amber-100 text-amber-600"
+                            />
+                            <StatCard
+                                icon={ClipboardCheck}
+                                label="Por aprobar"
+                                value={stats.pending_approval_orders}
+                                iconClassName="bg-warning/15 text-warning-text"
+                                href={
+                                    salesOrdersIndex({
+                                        query: { status: 'pending_approval' },
+                                    }).url
+                                }
                             />
                             <StatCard
                                 icon={Users}

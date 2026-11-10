@@ -30,7 +30,10 @@ final class RoleRouteMatrix
             SystemRole::Production->value => true,
             SystemRole::Operator->value => true,
             SystemRole::Commercial->value => true,
+            SystemRole::CommercialCoordination->value => true,
         ];
+        // Comercial y la coordinación comercial, que tiene todo lo de Comercial.
+        $sales = [SystemRole::Commercial, SystemRole::CommercialCoordination];
 
         return [
             // Módulo => [rol => abre]
@@ -44,7 +47,7 @@ final class RoleRouteMatrix
             'audit-logs.index' => self::only(SystemRole::SuperAdmin),
 
             // Productos, costos y fórmulas: la fórmula es secreto industrial.
-            'products.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Commercial),
+            'products.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, ...$sales),
             'products.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
             'admin.costs.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
             'formulas.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
@@ -55,7 +58,8 @@ final class RoleRouteMatrix
             'raw-materials.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
             'inventory-movements.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Operator),
             'finished-inventory.index' => $all,
-            'finished-inventory-movements.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production),
+            // La coordinación comercial también registra despachos.
+            'finished-inventory-movements.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::CommercialCoordination),
 
             // Producción: Comercial no entra en la planta (§7.3).
             'production-orders.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Operator),
@@ -64,18 +68,18 @@ final class RoleRouteMatrix
             // Termoencogido (3.8): lo registra quien lo hace en planta.
             'production.shrink-wraps.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Operator),
             'production.shrink-wraps.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Operator),
-            'alerts.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production),
+            'alerts.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::CommercialCoordination),
 
             // Comercial: cotizaciones, pedidos, clientes y precios.
-            'quotations.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'quotations.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'sales-orders.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Commercial),
-            'sales-orders.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'clients.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'clients.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'prices.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'paint-development-requests.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
-            'paint-development-requests.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Commercial),
+            'quotations.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'quotations.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'sales-orders.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, ...$sales),
+            'sales-orders.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'clients.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'clients.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'prices.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'paint-development-requests.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
+            'paint-development-requests.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, ...$sales),
 
             // Catálogos, en Configuración (§3): Admin los consulta; solo SuperAdmin los gestiona.
             'catalogs.units-of-measure.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
@@ -92,9 +96,9 @@ final class RoleRouteMatrix
             'catalogs.suppliers.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
 
             // Bodegas y QR.
-            'warehouses.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Commercial),
+            'warehouses.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, ...$sales),
             'warehouses.create' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
-            'qr-codes.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, SystemRole::Commercial),
+            'qr-codes.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin, SystemRole::Production, ...$sales),
         ];
     }
 

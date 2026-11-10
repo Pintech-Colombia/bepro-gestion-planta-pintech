@@ -19,6 +19,20 @@ export type NewAlert = {
     type_label: string;
 };
 
+/** Aviso personal sin leer de la campana (notificación de Laravel, canal `database`). */
+export type UserNotification = {
+    id: string;
+    message: string;
+    sales_order_id: number | null;
+    created_at: string | null;
+};
+
+/** Avisos personales del usuario: cuántos sin leer y los diez más recientes. */
+export type UserNotifications = {
+    unread_count: number;
+    items: UserNotification[];
+};
+
 /** Alerta sin resolver de la campana de la cabecera. */
 export type RecentAlert = {
     id: number;

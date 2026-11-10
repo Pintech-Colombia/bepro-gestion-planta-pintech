@@ -47,7 +47,7 @@ type Props = {
     order: SalesOrderMeta;
     statusTransitions: StatusTransition[];
     can: {
-        /** Editar datos del pedido (solo mientras está pendiente). */
+        /** Editar datos del pedido: mientras no arranca («Por aprobar», «Retenido» o «Pendiente»). */
         update: boolean;
         /** Cambiar el estado del pedido. */
         updateStatus: boolean;

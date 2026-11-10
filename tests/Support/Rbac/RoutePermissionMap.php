@@ -58,6 +58,9 @@ final class RoutePermissionMap
             'profile.update' => self::AUTHENTICATED,
             'appearance.edit' => self::AUTHENTICATED,
             'warehouses.set-current' => self::AUTHENTICATED,
+            // Avisos personales de la campana: cada usuario marca solo los suyos.
+            'notifications.read' => self::AUTHENTICATED,
+            'notifications.read-all' => self::AUTHENTICATED,
 
             // Usuarios, roles y auditoría
             'users.index' => Permission::UsersView,
@@ -177,6 +180,8 @@ final class RoutePermissionMap
             'sales-orders.store' => Permission::SalesOrdersCreate,
             'sales-orders.update' => Permission::SalesOrdersEdit,
             'sales-orders.update-status' => Permission::SalesOrdersUpdateStatus,
+            'sales-orders.approve' => Permission::SalesOrdersApprove,
+            'sales-orders.hold' => Permission::SalesOrdersApprove,
 
             // Clientes
             'clients.index' => Permission::ClientsView,
@@ -293,6 +298,8 @@ final class RoutePermissionMap
             'sales-orders.show' => 'can:view,sales_order',
             'sales-orders.update' => 'can:update,sales_order',
             'sales-orders.update-status' => 'can:updateStatus,sales_order',
+            'sales-orders.approve' => 'can:approve,sales_order',
+            'sales-orders.hold' => 'can:hold,sales_order',
 
             'paint-development-requests.index' => 'can:viewAny,'.PaintDevelopmentRequest::class,
             'paint-development-requests.show' => 'can:view,paintDevelopmentRequest',
@@ -323,6 +330,7 @@ final class RoutePermissionMap
             Permission::ClientsDeactivate->value => 'Casilla "Cliente activo" dentro de clients.update.',
             Permission::RawMaterialsDelete->value => 'Se aplica dentro de raw-materials.destroy; endpoint propio en la tarea 2.7.',
             Permission::WarehousesViewAll->value => 'Alcance de datos: bodegas visibles y selector de bodega.',
+            Permission::SalesOrdersReceiveApprovalRequests->value => 'Solo elige a quién le llega el aviso de pedido por aprobar.',
         ];
     }
 }

@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\SalesOrders\ApproveSalesOrderAction;
+use App\Actions\SalesOrders\HoldSalesOrderAction;
 use App\Enums\Permission;
 use App\Enums\SalesOrderPriority;
 use App\Enums\SalesOrderStatus;
 use App\Filters\SalesOrderFilter;
+use App\Http\Requests\SalesOrders\ApproveSalesOrderRequest;
+use App\Http\Requests\SalesOrders\HoldSalesOrderRequest;
 use App\Http\Requests\SalesOrders\IndexSalesOrderRequest;
 use App\Http\Requests\SalesOrders\StoreSalesOrderRequest;
 use App\Http\Requests\SalesOrders\UpdateSalesOrderRequest;
@@ -15,6 +19,7 @@ use App\Http\Requests\SalesOrders\UpdateSalesOrderStatusRequest;
 use App\Models\Client;
 use App\Models\Product;
 use App\Models\SalesOrder;
+use App\Services\SalesOrders\SalesOrderNotifier;
 use App\Support\EnumOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +29,12 @@ use Inertia\Response;
 
 class SalesOrderController extends Controller
 {
+    public function __construct(
+        private readonly ApproveSalesOrderAction $approveSalesOrder,
+        private readonly HoldSalesOrderAction $holdSalesOrder,
+        private readonly SalesOrderNotifier $notifier,
+    ) {}
+
     public function index(IndexSalesOrderRequest $request): Response
     {
         $user = $request->user();
@@ -50,6 +61,7 @@ class SalesOrderController extends Controller
                 'creator' => $canManage && $order->creator ? ['name' => $order->creator->name] : null,
                 'status' => $order->status->value,
                 'status_label' => $order->status->label(),
+                'is_partial_approval' => $order->is_partial_approval,
                 'priority' => $order->priority->value,
                 'priority_label' => $order->priority->label(),
                 'required_date' => $order->required_date?->format('Y-m-d'),
@@ -113,7 +125,8 @@ class SalesOrderController extends Controller
         $order = DB::transaction(function () use ($validated, $user): SalesOrder {
             $order = SalesOrder::create([
                 'client_id' => $validated['client_id'],
-                'status' => SalesOrderStatus::Pending,
+                // Todo pedido nace por aprobar: la planta lo ve cuando se aprueba.
+                'status' => SalesOrderStatus::PendingApproval,
                 'priority' => $validated['priority'],
                 'required_date' => $validated['required_date'],
                 'notes' => $validated['notes'] ?? null,
@@ -134,10 +147,12 @@ class SalesOrderController extends Controller
                 ]);
             }
 
+            $this->notifier->awaitingApproval($order, $user);
+
             return $order;
         });
 
-        Inertia::flash('success', 'Pedido creado con éxito.');
+        Inertia::flash('success', 'Pedido creado. Queda por aprobar.');
 
         return redirect()->route('sales-orders.show', $order);
     }
@@ -147,7 +162,7 @@ class SalesOrderController extends Controller
         $this->authorize('view', $salesOrder);
         $user = $request->user();
 
-        $salesOrder->load(['creator', 'items.product', 'items.productVariant', 'quotation']);
+        $salesOrder->load(['creator', 'approver', 'holder', 'items.product', 'items.productVariant', 'quotation']);
 
         $statusTransitions = $salesOrder->status->nextTransitions();
         $canViewQuotation = $salesOrder->quotation !== null && ($user?->can('view', $salesOrder->quotation) ?? false);
@@ -161,6 +176,8 @@ class SalesOrderController extends Controller
             'can' => [
                 'update' => $user?->can('update', $salesOrder) ?? false,
                 'updateStatus' => $user?->can('updateStatus', $salesOrder) ?? false,
+                'approve' => $user?->can('approve', $salesOrder) ?? false,
+                'hold' => $user?->can('hold', $salesOrder) ?? false,
                 'viewQuotation' => $canViewQuotation,
             ],
         ]);
@@ -180,6 +197,26 @@ class SalesOrderController extends Controller
         $salesOrder->update(['status' => $request->validated('status')]);
 
         Inertia::flash('success', 'Estado del pedido actualizado con éxito.');
+
+        return redirect()->route('sales-orders.show', $salesOrder);
+    }
+
+    public function approve(ApproveSalesOrderRequest $request, SalesOrder $salesOrder): RedirectResponse
+    {
+        $isPartial = $request->boolean('is_partial');
+
+        $this->approveSalesOrder->execute($salesOrder, $request->user(), $isPartial, $request->validated('note'));
+
+        Inertia::flash('success', $isPartial ? 'Pedido aprobado como parcial.' : 'Pedido aprobado.');
+
+        return redirect()->route('sales-orders.show', $salesOrder);
+    }
+
+    public function hold(HoldSalesOrderRequest $request, SalesOrder $salesOrder): RedirectResponse
+    {
+        $this->holdSalesOrder->execute($salesOrder, $request->user(), $request->validated('reason'));
+
+        Inertia::flash('success', 'Pedido retenido.');
 
         return redirect()->route('sales-orders.show', $salesOrder);
     }
@@ -228,6 +265,16 @@ class SalesOrderController extends Controller
             // Límite inferior de la fecha estimada de entrega (D-PV3), el mismo que valida UpdateSalesOrderRequest.
             'created_on' => $salesOrder->createdOnPlantDay(),
             'creator' => $salesOrder->creator ? ['name' => $salesOrder->creator->name] : null,
+            // La decisión: retenido (y por quién) y/o aprobado. Al aprobar un retenido se ven las dos.
+            'approval' => [
+                'is_partial' => $salesOrder->is_partial_approval,
+                'approved_by' => $salesOrder->approver?->name,
+                'approved_at' => $salesOrder->approved_at?->toIso8601String(),
+                'note' => $salesOrder->approval_note,
+                'held_by' => $salesOrder->holder?->name,
+                'held_at' => $salesOrder->held_at?->toIso8601String(),
+                'hold_reason' => $salesOrder->hold_reason,
+            ],
         ];
     }
 }

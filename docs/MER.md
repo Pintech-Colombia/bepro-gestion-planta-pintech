@@ -727,13 +727,16 @@ Cotizaciones (COT-YYYY-XXXX). Se cancelan por estado, nunca se eliminan.
 
 ### 2.8.4 `sales_orders`
 
-Pedidos de venta. Se cancelan por estado, nunca se eliminan.
+Pedidos de venta. Se cancelan por estado, nunca se eliminan. Todo pedido nace «Por aprobar» (`pending_approval`):
+quien tiene `sales_orders.approve` lo aprueba (pasa a `pending`) o lo retiene (`on_hold`, con motivo); un retenido se
+aprueba después o se cancela. La decisión queda en las columnas `approved_*` y `held_*`: al aprobar un retenido, los
+datos de la retención se conservan.
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `client_id` | BIGINT |  | FK → `clients` (RESTRICT) |
-| `status` | VARCHAR(255) |  | default `pending` |
+| `status` | VARCHAR(255) |  | default `pending_approval`; CHECK `sales_orders_status_check` con los valores de `SalesOrderStatus` |
 | `required_date` | DATE | sí | fecha requerida por el cliente; al crear o convertir, no antes de hoy en planta (`PlantDate`) |
 | `estimated_delivery_date` | DATE | sí | no antes del día de planta en que se creó el pedido (`PlantDate`); la ya guardada se conserva |
 | `notes` | TEXT | sí |  |
@@ -747,6 +750,13 @@ Pedidos de venta. Se cancelan por estado, nunca se eliminan.
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
 | `quotation_id` | BIGINT | sí | FK → `quotations` (RESTRICT); UNIQUE |
+| `approved_by` | BIGINT | sí | FK → `users` (RESTRICT); quién aprobó |
+| `approved_at` | TIMESTAMP | sí |  |
+| `approval_note` | TEXT | sí | nota de la aprobación; obligatoria si es parcial |
+| `is_partial_approval` | BOOLEAN |  | default `false`; parcial no cambia líneas ni cantidades: la nota dice qué se aprobó |
+| `held_by` | BIGINT | sí | FK → `users` (RESTRICT); quién lo retuvo |
+| `held_at` | TIMESTAMP | sí |  |
+| `hold_reason` | TEXT | sí | motivo de la retención |
 
 ### 2.8.5 `sales_order_items`
 
@@ -961,6 +971,23 @@ Restricciones: `UNIQUE (name, guard_name)`
 | `permission_id` | BIGINT |  | FK → `permissions` (CASCADE) |
 | `role_id` | BIGINT |  | FK → `roles` (CASCADE) |
 
+### 3.14 `notifications`
+
+Avisos personales de la campana (notificaciones de Laravel, canal `database`). Hoy, los de pedidos: por aprobar,
+aprobado, retenido y liberado. Cada usuario ve y marca leídos solo los suyos. Crece sin límite: se limpiarán los leídos
+antiguos cuando haga falta.
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | UUID |  | PK |
+| `type` | VARCHAR(255) |  | clase del aviso (`App\Notifications\SalesOrders\…`) |
+| `notifiable_type` | VARCHAR(255) |  | siempre `App\Models\User` |
+| `notifiable_id` | BIGINT |  | índice con `notifiable_type`; sin FK (relación polimórfica) |
+| `data` | TEXT |  | JSON: `sales_order_id`, `kind` y `message` ya armado en español |
+| `read_at` | TIMESTAMP | sí | null = sin leer |
+| `created_at` | TIMESTAMP | sí |  |
+| `updated_at` | TIMESTAMP | sí |  |
+
 ## 4. Enums PHP (`app/Enums/`)
 
 Las columnas de estado y tipo se guardan como `VARCHAR` y el modelo las castea a su enum (con `label()` en español).
@@ -981,12 +1008,13 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 | `QuotationValidity` | `quotations.validity_days` | 30, 45, 60 |
 | `QuotationItemType` | `quotation_items.type` | primer, self_priming, topcoat, intermediate_coat, reducer |
 | `PaymentMethod` | `quotations.payment_method` | cash, credit |
-| `SalesOrderStatus` | `sales_orders.status` | pending, in_progress, ready, delivered, cancelled |
+| `SalesOrderStatus` | `sales_orders.status` | pending_approval, on_hold, pending, in_progress, ready, delivered, cancelled |
 | `SalesOrderPriority` | `sales_orders.priority` | low, medium, high |
 | `PaintDevelopmentRequestStatus` | `paint_development_requests.status` | draft, submitted, in_review, approved, rejected |
 
 Enums sin columna propia: `SystemRole` (nombres de `roles.name` de los roles del sistema), `Permission` y
-`PermissionModule` (catálogo de `permissions.name`, ver `MATRIZ_RBAC.md`) y `DashboardProfile` (vista del dashboard).
+`PermissionModule` (catálogo de `permissions.name`, ver `MATRIZ_RBAC.md`), `DashboardProfile` (vista del dashboard) y
+`SalesOrderApproval` (total o parcial, derivado de `sales_orders.is_partial_approval` para la etiqueta «Parcial»).
 
 ## 5. Notas de implementación
 

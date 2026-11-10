@@ -42,6 +42,8 @@ export type DashboardStats = {
     total_products?: number;
     total_warehouses?: number;
     pending_orders?: number;
+    /** Pedidos «Por aprobar»: solo con `sales_orders.approve` (dashboard comercial). */
+    pending_approval_orders?: number;
     active_orders?: number;
     completed_today?: number;
     low_stock_materials?: number;

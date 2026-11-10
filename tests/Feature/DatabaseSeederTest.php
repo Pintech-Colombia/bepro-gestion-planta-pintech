@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\RawMaterialType;
+use App\Enums\SalesOrderStatus;
 use App\Enums\SystemRole;
 use App\Models\Formula;
 use App\Models\FormulaDetail;
@@ -203,6 +204,27 @@ test('en staging siembra los datos de demostración sin sembrar usuarios', funct
         ->and(FormulaDetail::query()->exists())->toBeTrue()
         ->and(SalesOrder::query()->exists())->toBeTrue()
         ->and(SalesOrder::query()->where('created_by', '!=', $admin->id)->exists())->toBeFalse();
+});
+
+test('siembra un pedido por aprobar y uno retenido, también en una base que ya tenía pedidos', function () {
+    $this->seed(DatabaseSeeder::class);
+
+    expect(SalesOrder::query()->where('status', SalesOrderStatus::PendingApproval->value)->count())->toBe(1)
+        ->and(SalesOrder::query()->where('status', SalesOrderStatus::OnHold->value)->whereNotNull('hold_reason')->count())->toBe(1);
+
+    // Una base sembrada antes de la aprobación: los dos llegan al sembrar de nuevo, sin repetir los pedidos base.
+    SalesOrder::query()->whereIn('status', [SalesOrderStatus::PendingApproval->value, SalesOrderStatus::OnHold->value])
+        ->get()
+        ->each(function (SalesOrder $order): void {
+            $order->items()->delete();
+            $order->delete();
+        });
+    $base = SalesOrder::query()->count();
+
+    $this->seed(SalesOrderSeeder::class);
+
+    expect(SalesOrder::query()->count())->toBe($base + 2)
+        ->and(SalesOrder::query()->where('status', SalesOrderStatus::PendingApproval->value)->count())->toBe(1);
 });
 
 test('los pedidos de demostración no se siembran en producción', function () {

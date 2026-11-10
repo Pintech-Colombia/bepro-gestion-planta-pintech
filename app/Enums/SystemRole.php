@@ -23,6 +23,7 @@ enum SystemRole: string
     case Production = 'production';
     case Operator = 'operator';
     case Commercial = 'commercial';
+    case CommercialCoordination = 'commercial-coordination';
 
     public function label(): string
     {
@@ -32,6 +33,7 @@ enum SystemRole: string
             self::Production => __('Producción'),
             self::Operator => __('Operador'),
             self::Commercial => __('Comercial'),
+            self::CommercialCoordination => __('Coordinación comercial'),
         };
     }
 

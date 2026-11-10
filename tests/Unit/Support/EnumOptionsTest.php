@@ -56,7 +56,7 @@ it('returns empty array for empty input', function () {
 it('adds the tone of enums that implement HasTone', function () {
     $result = EnumOptions::for(SalesOrderStatus::cases());
 
-    expect($result[0])->toBe(['value' => 'pending', 'label' => 'Pendiente', 'tone' => 'warning'])
+    expect($result[0])->toBe(['value' => 'pending_approval', 'label' => 'Por aprobar', 'tone' => 'warning'])
         ->and(array_column($result, 'tone'))->toHaveCount(count(SalesOrderStatus::cases()));
 });
 

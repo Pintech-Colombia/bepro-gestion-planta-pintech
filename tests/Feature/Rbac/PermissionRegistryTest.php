@@ -6,11 +6,11 @@ use App\Enums\Permission;
 use App\Enums\PermissionModule;
 use App\Enums\SystemRole;
 
-it('declara los 91 permisos de la matriz con keys únicas en formato modulo.accion', function () {
+it('declara los 93 permisos de la matriz con keys únicas en formato modulo.accion', function () {
     $values = array_map(fn (Permission $permission) => $permission->value, Permission::cases());
 
-    expect($values)->toHaveCount(91)
-        ->and(array_unique($values))->toHaveCount(91);
+    expect($values)->toHaveCount(93)
+        ->and(array_unique($values))->toHaveCount(93);
 
     foreach ($values as $value) {
         expect($value)->toMatch('/^[a-z_]+\.[a-z_]+$/');
@@ -58,18 +58,57 @@ it('asigna a SuperAdmin todos los permisos', function () {
 it('asigna a cada rol el número de permisos de la matriz', function (SystemRole $role, int $expected) {
     expect($role->defaultPermissions())->toHaveCount($expected);
 })->with([
-    'admin' => [SystemRole::Admin, 78],
+    'admin' => [SystemRole::Admin, 79],
     'producción' => [SystemRole::Production, 27],
     'operador' => [SystemRole::Operator, 10],
     'comercial' => [SystemRole::Commercial, 22],
+    'coordinación comercial' => [SystemRole::CommercialCoordination, 34],
 ]);
+
+it('da a la coordinación comercial lo de Comercial, diez permisos más y los dos de la aprobación', function () {
+    $commercial = SystemRole::Commercial->defaultPermissions();
+    $coordination = SystemRole::CommercialCoordination->defaultPermissions();
+
+    $extra = array_values(array_udiff($coordination, $commercial, fn (Permission $a, Permission $b): int => strcmp($a->value, $b->value)));
+
+    expect(array_udiff($commercial, $coordination, fn (Permission $a, Permission $b): int => strcmp($a->value, $b->value)))->toBe([])
+        ->and(array_map(fn (Permission $permission): string => $permission->value, $extra))->toEqualCanonicalizing([
+            'quotations.view_all',
+            'sales_orders.view_all',
+            'sales_orders.edit',
+            'sales_orders.update_status',
+            'clients.edit',
+            'clients.deactivate',
+            'finished_inventory_movements.view',
+            'finished_inventory_movements.create',
+            'products.manage_documents',
+            'alerts.view',
+            'sales_orders.approve',
+            'sales_orders.receive_approval_requests',
+        ]);
+});
+
+it('da «Aprobar pedidos» a Admin y a la coordinación, y los avisos por aprobar solo a la coordinación', function () {
+    expect(Permission::SalesOrdersApprove->defaultRoles())->toEqualCanonicalizing([SystemRole::Admin, SystemRole::CommercialCoordination])
+        ->and(Permission::SalesOrdersReceiveApprovalRequests->defaultRoles())->toBe([SystemRole::CommercialCoordination])
+        ->and(Permission::SalesOrdersApprove->dependencies())->toContain(Permission::SalesOrdersViewAll)
+        ->and(Permission::SalesOrdersReceiveApprovalRequests->dependencies())->toContain(Permission::SalesOrdersViewAll);
+});
+
+it('marca como solo de aviso únicamente el permiso que elige a quién le llegan los pedidos por aprobar', function () {
+    $recipientOnly = array_values(array_filter(Permission::cases(), fn (Permission $permission) => $permission->isRecipientOnly()));
+
+    expect($recipientOnly)->toBe([Permission::SalesOrdersReceiveApprovalRequests])
+        ->and(Permission::SalesOrdersReceiveApprovalRequests->isReserved())->toBeFalse();
+});
 
 it('nombra los roles del sistema en inglés', function () {
     expect(SystemRole::SuperAdmin->value)->toBe('super-admin')
         ->and(SystemRole::Admin->value)->toBe('admin')
         ->and(SystemRole::Production->value)->toBe('production')
         ->and(SystemRole::Operator->value)->toBe('operator')
-        ->and(SystemRole::Commercial->value)->toBe('commercial');
+        ->and(SystemRole::Commercial->value)->toBe('commercial')
+        ->and(SystemRole::CommercialCoordination->value)->toBe('commercial-coordination');
 });
 
 it('usa view_own y view_all en los módulos con dueño, nunca view a secas', function (PermissionModule $module) {
@@ -112,8 +151,12 @@ it('reserva para los roles personalizados exactamente los permisos que solo tien
 
 it('da a Admin todos los permisos que no están reservados', function () {
     // UserPolicy deja gestionar a un usuario solo a quien tiene todos sus permisos. Como un rol personalizado no puede
-    // tener permisos reservados, esto garantiza que Admin gestiona a cualquier usuario salvo a los SuperAdmin.
-    $assignable = array_filter(Permission::cases(), fn (Permission $permission) => ! $permission->isReserved());
+    // tener permisos reservados, esto garantiza que Admin gestiona a cualquier usuario salvo a los SuperAdmin. Los de
+    // solo aviso no cuentan para esa regla (User::holdsAllPermissions): Admin no los necesita.
+    $assignable = array_filter(
+        Permission::cases(),
+        fn (Permission $permission) => ! $permission->isReserved() && ! $permission->isRecipientOnly(),
+    );
 
     expect(array_values(array_diff(
         array_map(fn (Permission $permission) => $permission->value, $assignable),

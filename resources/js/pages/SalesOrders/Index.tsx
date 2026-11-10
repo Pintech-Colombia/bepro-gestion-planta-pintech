@@ -9,6 +9,7 @@ import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
 import { PriorityBadge } from '@/components/priority-badge';
+import { PartialApprovalBadge } from '@/components/sales-orders/partial-approval-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
@@ -25,6 +26,7 @@ interface SalesOrderRow {
     creator?: { name: string } | null;
     status: string;
     status_label: string;
+    is_partial_approval: boolean;
     priority: string;
     priority_label: string;
     required_date: string | null;
@@ -127,7 +129,11 @@ export default function SalesOrdersIndex({
             key: 'status',
             header: 'Estado',
             cell: (order) => (
-                <StatusBadge enum="SalesOrderStatus" value={order.status} />
+                // «Parcial» junto al estado, también en la tarjeta del celular.
+                <span className="inline-flex flex-wrap items-center gap-1">
+                    <StatusBadge enum="SalesOrderStatus" value={order.status} />
+                    {order.is_partial_approval && <PartialApprovalBadge />}
+                </span>
             ),
             mobile: 'status',
         },

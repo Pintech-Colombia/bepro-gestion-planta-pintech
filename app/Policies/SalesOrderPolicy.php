@@ -30,12 +30,33 @@ class SalesOrderPolicy
     }
 
     /**
-     * Datos del pedido (contacto, dirección, prioridad, fechas, notas): solo mientras está pendiente.
+     * Datos del pedido (contacto, dirección, prioridad, fechas, notas): mientras no ha arrancado («Por aprobar»,
+     * «Retenido» o «Pendiente»). Así quien aprueba corrige la dirección o la prioridad antes de aprobar.
      */
     public function update(User $user, SalesOrder $salesOrder): bool
     {
-        return $salesOrder->status === SalesOrderStatus::Pending
+        return in_array($salesOrder->status, [SalesOrderStatus::PendingApproval, SalesOrderStatus::OnHold, SalesOrderStatus::Pending], true)
             && $user->can(Permission::SalesOrdersEdit->value)
+            && $this->canAccess($user, $salesOrder);
+    }
+
+    /**
+     * Aprobar: un pedido «Por aprobar», o uno «Retenido» cuando el cliente se pone al día.
+     */
+    public function approve(User $user, SalesOrder $salesOrder): bool
+    {
+        return in_array($salesOrder->status, [SalesOrderStatus::PendingApproval, SalesOrderStatus::OnHold], true)
+            && $user->can(Permission::SalesOrdersApprove->value)
+            && $this->canAccess($user, $salesOrder);
+    }
+
+    /**
+     * Retener: solo un pedido «Por aprobar». Uno retenido ya está en espera.
+     */
+    public function hold(User $user, SalesOrder $salesOrder): bool
+    {
+        return $salesOrder->status === SalesOrderStatus::PendingApproval
+            && $user->can(Permission::SalesOrdersApprove->value)
             && $this->canAccess($user, $salesOrder);
     }
 

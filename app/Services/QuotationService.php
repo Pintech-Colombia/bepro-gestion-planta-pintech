@@ -306,7 +306,8 @@ class QuotationService
 
             $order = SalesOrder::create([
                 'client_id' => $lockedQuotation->client_id,
-                'status' => SalesOrderStatus::Pending,
+                // Todo pedido nace por aprobar, también el que viene de una cotización.
+                'status' => SalesOrderStatus::PendingApproval,
                 'priority' => $data['priority'],
                 'required_date' => $data['required_date'],
                 'notes' => $data['notes'] ?? null,

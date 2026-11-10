@@ -21,6 +21,7 @@ use App\Models\Client;
 use App\Models\Quotation;
 use App\Models\User;
 use App\Services\QuotationService;
+use App\Services\SalesOrders\SalesOrderNotifier;
 use App\Support\EnumOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +34,7 @@ class QuotationController extends Controller
     public function __construct(
         private readonly QuotationService $quotationService,
         private readonly RenderQuotationPdfAction $renderQuotationPdf,
+        private readonly SalesOrderNotifier $notifier,
     ) {}
 
     public function index(IndexQuotationRequest $request): Response
@@ -195,7 +197,9 @@ class QuotationController extends Controller
             $request->validated()
         );
 
-        Inertia::flash('success', __('Cotización convertida en pedido exitosamente.'));
+        $this->notifier->awaitingApproval($order, $request->user());
+
+        Inertia::flash('success', __('Cotización convertida en pedido. Queda por aprobar.'));
 
         return redirect()->route('sales-orders.show', $order);
     }

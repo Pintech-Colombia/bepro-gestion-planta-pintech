@@ -36,11 +36,20 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string|null $client_phone
  * @property int|null $quotation_id
  * @property int $created_by
+ * @property int|null $approved_by
+ * @property Carbon|null $approved_at
+ * @property string|null $approval_note
+ * @property bool $is_partial_approval
+ * @property int|null $held_by
+ * @property Carbon|null $held_at
+ * @property string|null $hold_reason
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Client $client
  * @property-read Quotation|null $quotation
  * @property-read User $creator
+ * @property-read User|null $approver
+ * @property-read User|null $holder
  * @property-read Collection|SalesOrderItem[] $items
  */
 #[Fillable([
@@ -57,6 +66,13 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'priority',
     'quotation_id',
     'created_by',
+    'approved_by',
+    'approved_at',
+    'approval_note',
+    'is_partial_approval',
+    'held_by',
+    'held_at',
+    'hold_reason',
 ])]
 class SalesOrder extends Model
 {
@@ -72,7 +88,7 @@ class SalesOrder extends Model
         return LogOptions::defaults()
             ->useLogName('pedidos')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['client_id', 'status', 'required_date', 'estimated_delivery_date', 'notes', 'shipping_address', 'client_business_name', 'client_nit', 'client_contact_name', 'client_phone', 'priority', 'quotation_id'])
+            ->logOnly(['client_id', 'status', 'required_date', 'estimated_delivery_date', 'notes', 'shipping_address', 'client_business_name', 'client_nit', 'client_contact_name', 'client_phone', 'priority', 'quotation_id', 'approved_by', 'approved_at', 'approval_note', 'is_partial_approval', 'held_by', 'held_at', 'hold_reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -84,6 +100,9 @@ class SalesOrder extends Model
             'priority' => SalesOrderPriority::class,
             'required_date' => 'date:Y-m-d',
             'estimated_delivery_date' => 'date:Y-m-d',
+            'approved_at' => 'datetime',
+            'held_at' => 'datetime',
+            'is_partial_approval' => 'boolean',
         ];
     }
 
@@ -124,6 +143,16 @@ class SalesOrder extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function holder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'held_by');
     }
 
     public function quotation(): BelongsTo
