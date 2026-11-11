@@ -57,7 +57,7 @@ beforeEach(function (): void {
     $this->variantA = ProductVariant::factory()->create([
         'product_id' => $this->productA->id,
         'code' => 'VAR-VINIL-GALON',
-        'name' => 'Galón Vinilo Blanco',
+        'presentation_label' => 'Galón',
         'unit_of_measure_id' => $this->uom->id,
     ]);
 
@@ -70,7 +70,7 @@ beforeEach(function (): void {
     $this->variantB = ProductVariant::factory()->create([
         'product_id' => $this->productB->id,
         'code' => 'VAR-ESMALTE-CUBETA',
-        'name' => 'Cubeta Esmalte Gris',
+        'presentation_label' => 'Cubeta',
         'unit_of_measure_id' => $this->uom->id,
     ]);
 
@@ -134,6 +134,22 @@ it('filters by product variant code', function (): void {
             ->component('Inventory/FinishedMovements/Index')
             ->has('movements.data', 1)
             ->where('movements.data.0.id', $this->movementB->id)
+    );
+});
+
+it('filters by presentation', function (): void {
+    actingAs($this->admin);
+
+    $response = get(route('finished-inventory-movements.index', ['search' => 'cubeta']));
+
+    $response->assertOk();
+    $response->assertInertia(
+        fn ($page) => $page
+            ->component('Inventory/FinishedMovements/Index')
+            ->has('movements.data', 1)
+            ->where('movements.data.0.id', $this->movementB->id)
+            ->where('movements.data.0.product_variant.presentation_label', 'Cubeta')
+            ->missing('movements.data.0.product_variant.name')
     );
 });
 

@@ -254,17 +254,18 @@ Productos terminados.
 
 ### 2.4.2 `product_variants`
 
-Presentaciones (SKU) de cada producto.
+Presentaciones (SKU) de cada producto. La variante se identifica por su presentación dentro del producto; donde no
+se ve el producto, se nombra «Producto · Presentación» (`ProductVariant::display_name`).
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
 | `code` | VARCHAR(80) |  | UNIQUE. En mayúsculas (`TextFormat::Code`) |
-| `name` | VARCHAR(100) |  |  |
+| `name` | VARCHAR(100) | sí | Sin uso: se borra en una migración posterior |
 | `unit_of_measure_id` | BIGINT |  | FK → `unit_of_measures` (RESTRICT) |
 | `presentation_value` | DECIMAL(12,4) | sí |  |
-| `presentation_label` | VARCHAR(50) | sí |  |
+| `presentation_label` | VARCHAR(50) |  | UNIQUE por producto sin distinguir mayúsculas, contando las inactivas (`product_variants_product_presentation_lower_unique` sobre `(product_id, LOWER(presentation_label))`) |
 | `current_cost` | DECIMAL(16,4) | sí |  |
 | `current_price` | DECIMAL(16,4) | sí |  |
 | `package_raw_material_id` | BIGINT | sí | FK → `raw_materials` (RESTRICT) |

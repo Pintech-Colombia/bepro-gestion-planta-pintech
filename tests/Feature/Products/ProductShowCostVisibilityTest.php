@@ -39,7 +39,6 @@ beforeEach(function (): void {
     $this->variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-SHOW-001',
-        'name' => 'Galón',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'GAL',
@@ -57,7 +56,7 @@ it('hides every cost attribute, including sales_margin and the internal price, f
         ->assertInertia(fn (Assert $page) => $page
             ->where('can.viewCosts', false)
             ->where('product.name', 'PRODUCTO SHOW')
-            ->where('product.variants.0.name', 'Galón')
+            ->where('product.variants.0.presentation_label', 'GAL')
             ->missing('product.current_cost')
             ->missing('product.current_price')
             ->missing('product.cif_percentage')
@@ -148,7 +147,7 @@ it('sends only an explicit list of product and variant fields to users without c
                 'quality_solids_lower', 'quality_solids_upper', 'variants', 'product_documents',
             ])->sort()->values()->all())
             ->where('product.variants.0', fn ($variant) => collect($variant)->keys()->sort()->values()->all() === collect([
-                'id', 'code', 'name', 'unit_of_measure_id', 'presentation_value', 'presentation_label',
+                'id', 'code', 'unit_of_measure_id', 'presentation_value', 'presentation_label',
                 'package_raw_material_id', 'label_raw_material_id', 'is_active', 'unit_of_measure',
             ])->sort()->values()->all()));
 });

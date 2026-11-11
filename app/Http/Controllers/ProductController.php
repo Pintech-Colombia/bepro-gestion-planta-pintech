@@ -322,7 +322,6 @@ class ProductController extends Controller
             'variants' => $product->variants->map(fn (ProductVariant $variant): array => [
                 'id' => $variant->id,
                 'code' => $variant->code,
-                'name' => $variant->name,
                 'unit_of_measure_id' => $variant->unit_of_measure_id,
                 'presentation_value' => $variant->presentation_value,
                 'presentation_label' => $variant->presentation_label,

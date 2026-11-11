@@ -68,7 +68,6 @@ beforeEach(function () {
     $variant = ProductVariant::factory()->create([
         'product_id' => $product->id,
         'code' => 'P-COST-GAL',
-        'name' => 'Pintura Cost Test - Galón',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',

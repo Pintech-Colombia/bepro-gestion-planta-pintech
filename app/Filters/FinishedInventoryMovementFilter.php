@@ -25,7 +25,7 @@ class FinishedInventoryMovementFilter extends QueryFilter
             $this->applySearchNested($query, [
                 'product.name',
                 'productVariant.code',
-                'productVariant.name',
+                'productVariant.presentation_label',
                 'batch.productionOrder.order_number',
                 'batch.productionOrder.color',
             ], $value, exactIntegerColumns: ['batch.productionOrder.lot_number']);

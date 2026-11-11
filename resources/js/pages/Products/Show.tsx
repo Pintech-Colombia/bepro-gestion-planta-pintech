@@ -89,8 +89,7 @@ type FinishedInventoryRow = {
     variant: {
         id: number;
         code: string | null;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
         presentation_value: number | null;
         unit_symbol: string | null;
     } | null;
@@ -131,10 +130,9 @@ type Props = {
         variants?: Array<{
             id: number;
             code: string;
-            name: string;
             unit_of_measure_id: number;
             presentation_value: number | null;
-            presentation_label: string | null;
+            presentation_label: string;
             current_cost?: number | null;
             current_price?: string | null;
             package_raw_material_id: number | null;
@@ -252,7 +250,6 @@ export default function ProductsShow({
 
     const form = useForm({
         code: '',
-        name: '',
         unit_of_measure_id: '',
         presentation_value: '',
         presentation_label: '',
@@ -284,7 +281,7 @@ export default function ProductsShow({
     ) => {
         if (
             !(await confirm({
-                title: `¿Eliminar la variante «${variant.name}»?`,
+                title: `¿Eliminar la presentación «${variant.presentation_label}»?`,
                 confirmLabel: 'Eliminar',
                 destructive: true,
             }))
@@ -337,13 +334,12 @@ export default function ProductsShow({
     ) => {
         form.setData({
             code: variant.code,
-            name: variant.name,
             unit_of_measure_id: String(variant.unit_of_measure_id),
             presentation_value:
                 variant.presentation_value != null
                     ? String(variant.presentation_value)
                     : '',
-            presentation_label: variant.presentation_label ?? '',
+            presentation_label: variant.presentation_label,
             package_raw_material_id:
                 variant.package_raw_material_id != null
                     ? String(variant.package_raw_material_id)
@@ -859,23 +855,9 @@ export default function ProductsShow({
                         columns={[
                             {
                                 key: 'variant',
-                                header: 'Variante',
+                                header: 'Presentación',
                                 cell: (row) =>
-                                    row.variant ? (
-                                        <>
-                                            {row.variant.name}
-                                            {row.variant.presentation_label && (
-                                                <span className="ml-1 text-xs font-normal text-muted-foreground">
-                                                    (
-                                                    {
-                                                        row.variant
-                                                            .presentation_label
-                                                    }
-                                                    )
-                                                </span>
-                                            )}
-                                        </>
-                                    ) : null,
+                                    row.variant?.presentation_label ?? null,
                             },
                             {
                                 key: 'warehouse',
@@ -952,25 +934,35 @@ export default function ProductsShow({
                                     >
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <Label htmlFor="name">
-                                                    Nombre
+                                                <Label htmlFor="presentation_label">
+                                                    Presentación
                                                 </Label>
                                                 <Input
-                                                    id="name"
-                                                    value={form.data.name}
+                                                    id="presentation_label"
+                                                    value={
+                                                        form.data
+                                                            .presentation_label
+                                                    }
                                                     onChange={(e) =>
                                                         form.setData(
-                                                            'name',
+                                                            'presentation_label',
                                                             e.target.value,
                                                         )
                                                     }
-                                                    placeholder="Ej: Vinil Base - Galón"
+                                                    maxLength={50}
+                                                    aria-required
+                                                    aria-invalid={
+                                                        !!form.errors
+                                                            .presentation_label
+                                                    }
+                                                    placeholder="Ej: Galón, Cuñete 5G"
                                                 />
-                                                {form.errors.name && (
-                                                    <p className="text-xs text-destructive">
-                                                        {form.errors.name}
-                                                    </p>
-                                                )}
+                                                <InputError
+                                                    message={
+                                                        form.errors
+                                                            .presentation_label
+                                                    }
+                                                />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label htmlFor="code">
@@ -1040,9 +1032,6 @@ export default function ProductsShow({
                                                     </p>
                                                 )}
                                             </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <Label htmlFor="presentation_value">
                                                     Valor Presentación (en
@@ -1073,25 +1062,6 @@ export default function ProductsShow({
                                                         form.errors
                                                             .presentation_value
                                                     }
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="presentation_label">
-                                                    Nombre Presentación
-                                                </Label>
-                                                <Input
-                                                    id="presentation_label"
-                                                    value={
-                                                        form.data
-                                                            .presentation_label
-                                                    }
-                                                    onChange={(e) =>
-                                                        form.setData(
-                                                            'presentation_label',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="Ej: Galón 3.785L, Bidón 5 Gal"
                                                 />
                                             </div>
                                         </div>
@@ -1320,9 +1290,18 @@ export default function ProductsShow({
                         caption="Variantes"
                         columns={[
                             {
-                                key: 'name',
-                                header: 'Nombre',
-                                cell: (variant) => variant.name,
+                                key: 'presentation',
+                                header: 'Presentación',
+                                cell: (variant) => (
+                                    <>
+                                        {variant.presentation_label}
+                                        {variant.unit_of_measure && (
+                                            <span className="text-muted-foreground">
+                                                {` (${variant.unit_of_measure.symbol})`}
+                                            </span>
+                                        )}
+                                    </>
+                                ),
                             },
                             {
                                 key: 'code',
@@ -1330,20 +1309,6 @@ export default function ProductsShow({
                                 cell: (variant) => variant.code,
                                 className:
                                     'font-mono whitespace-nowrap text-muted-foreground',
-                            },
-                            {
-                                key: 'presentation',
-                                header: 'Presentación',
-                                cell: (variant) =>
-                                    variant.presentation_label ||
-                                    variant.unit_of_measure ? (
-                                        <>
-                                            {variant.presentation_label}
-                                            {variant.unit_of_measure &&
-                                                ` (${variant.unit_of_measure.symbol})`}
-                                        </>
-                                    ) : null,
-                                className: 'text-muted-foreground',
                             },
                             ...(can.viewCosts
                                 ? [

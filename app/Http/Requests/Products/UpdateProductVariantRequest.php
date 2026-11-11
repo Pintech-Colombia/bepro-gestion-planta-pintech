@@ -4,73 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Products;
 
-use App\Enums\NumberType;
-use App\Enums\RawMaterialType;
-use App\Enums\TextFormat;
-use App\Http\Requests\Concerns\CatalogSelectionRules;
-use App\Http\Requests\Concerns\NormalizesText;
-use App\Models\Product;
-use App\Models\ProductVariant;
-use App\Rules\RawMaterialOfType;
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
-
-class UpdateProductVariantRequest extends FormRequest
-{
-    use CatalogSelectionRules;
-    use NormalizesText;
-
-    public function authorize(): bool
-    {
-        $product = $this->route('product');
-
-        return $product instanceof Product
-            && ($this->user()?->can('manageVariants', $product) ?? false);
-    }
-
-    public function rules(): array
-    {
-        $variant = $this->route('variant');
-        $variantId = is_object($variant) ? $variant->id : $variant;
-
-        return [
-            'code' => ['bail', 'required', 'string', 'max:80', ...TextFormat::Code->rules(), Rule::unique('product_variants', 'code')->ignore($variantId)],
-            'name' => ['bail', 'required', 'string', 'max:100'],
-            'unit_of_measure_id' => $this->activeOrCurrentRules('unit_of_measures', 'unit_of_measure_id', $this->route('variant')?->unit_of_measure_id),
-            'presentation_value' => ['bail', 'nullable', ...NumberType::Quantity->rules(ProductVariant::MAX_PRESENTATION_VALUE), 'gt:0'],
-            'presentation_label' => ['nullable', 'string', 'max:50'],
-            'package_raw_material_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('raw_materials', 'id')->when(
-                    $this->package_raw_material_id && (int) $this->package_raw_material_id !== (int) ($this->route('variant')?->package_raw_material_id),
-                    fn ($rule) => $rule->where('is_active', true)
-                ),
-                // B40: el envase debe ser una materia prima de tipo Envase.
-                new RawMaterialOfType(RawMaterialType::Container),
-            ],
-            // 3.7: etiqueta de tipo Etiqueta. Si está inactiva, solo la conserva la presentación que ya la tiene.
-            'label_raw_material_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('raw_materials', 'id')->when(
-                    $this->label_raw_material_id && (int) $this->label_raw_material_id !== (int) ($this->route('variant')?->label_raw_material_id),
-                    fn ($rule) => $rule->where('is_active', true)
-                ),
-                new RawMaterialOfType(RawMaterialType::Label),
-            ],
-            'is_active' => ['sometimes', 'boolean'],
-        ];
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $this->merge($this->normalizedText(['code' => TextFormat::Code]));
-
-        foreach (['presentation_value', 'package_raw_material_id', 'label_raw_material_id'] as $key) {
-            if ($this->has($key) && ($this->input($key) === '' || $this->input($key) === null)) {
-                $this->merge([$key => null]);
-            }
-        }
-    }
-}
+/**
+ * Editar valida igual que crear: la variante actual sale de la ruta (`currentVariant`).
+ */
+class UpdateProductVariantRequest extends StoreProductVariantRequest {}

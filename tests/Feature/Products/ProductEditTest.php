@@ -95,7 +95,6 @@ test('product variant update ignores manual current_cost and current_price sent 
     $variant = ProductVariant::factory()->create([
         'product_id' => $this->product->id,
         'code' => 'VAR-01',
-        'name' => 'Variante Original',
         'unit_of_measure_id' => $this->uom->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -107,10 +106,9 @@ test('product variant update ignores manual current_cost and current_price sent 
     actingAs($this->admin)
         ->patch(route('products.variants.update', [$this->product, $variant]), [
             'code' => 'VAR-01',
-            'name' => 'Variante Actualizada',
             'unit_of_measure_id' => $this->uom->id,
             'presentation_value' => 1,
-            'presentation_label' => 'Galón',
+            'presentation_label' => 'Galón actualizado',
             'current_cost' => 555.55,
             'current_price' => 999.99,
             'is_active' => true,
@@ -119,7 +117,7 @@ test('product variant update ignores manual current_cost and current_price sent 
 
     // Ni 555,55 ni 999,99: se recalcula con el granel del producto (10 × 1 galón, sin envase) y su CIF del 25 %.
     $variant->refresh();
-    expect($variant->name)->toBe('Variante Actualizada');
+    expect($variant->presentation_label)->toBe('Galón actualizado');
     expect((float) $variant->current_cost)->toBe(10.0);
     expect((float) $variant->current_price)->toBe(12.5);
 });

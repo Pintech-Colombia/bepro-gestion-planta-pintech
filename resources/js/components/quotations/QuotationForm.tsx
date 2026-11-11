@@ -46,8 +46,7 @@ export type ClientOption = {
 
 export type VariantOption = {
     id: number;
-    name: string;
-    presentation_label: string | null;
+    presentation_label: string;
     presentation_value: number | null;
     sales_price: number | null;
 };
@@ -602,7 +601,7 @@ export default function QuotationForm({
                                         ? selectedProduct.variants.map(
                                               (variant) => ({
                                                   id: String(variant.id),
-                                                  label: `${variant.name}${variant.presentation_label ? ` (${variant.presentation_label})` : ''}`,
+                                                  label: variant.presentation_label,
                                               }),
                                           )
                                         : [];

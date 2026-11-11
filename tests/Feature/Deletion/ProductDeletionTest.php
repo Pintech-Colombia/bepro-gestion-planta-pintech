@@ -63,7 +63,6 @@ function variantUpdatePayload(ProductVariant $variant, bool $isActive): array
 {
     return [
         'code' => $variant->code,
-        'name' => $variant->name,
         'unit_of_measure_id' => $variant->unit_of_measure_id,
         'presentation_value' => $variant->presentation_value,
         'presentation_label' => $variant->presentation_label,
@@ -225,11 +224,11 @@ it('ofrece el envase inactivo solo junto a la presentación que ya lo usa, y la 
 
     $this->patch(route('products.variants.update', [$product, $variant]), [
         ...variantUpdatePayload($variant, true),
-        'name' => 'Nombre nuevo',
+        'presentation_label' => 'Presentación nueva',
     ])->assertSessionHasNoErrors();
 
     expect($variant->fresh())
-        ->name->toBe('Nombre nuevo')
+        ->presentation_label->toBe('Presentación nueva')
         ->package_raw_material_id->toBe($kept->id);
 });
 

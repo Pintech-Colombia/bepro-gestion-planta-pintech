@@ -20,7 +20,7 @@ class FinishedInventoryFilter extends QueryFilter
             $this->applySearchNested($query, [
                 'product.name',
                 'productVariant.code',
-                'productVariant.name',
+                'productVariant.presentation_label',
                 'warehouse.name',
             ], $value);
         });

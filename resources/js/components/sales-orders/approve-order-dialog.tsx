@@ -27,7 +27,7 @@ const NOTE_MAX_LENGTH = 2000;
 export type ApproveOrderItem = {
     id: number;
     product: { name: string };
-    product_variant: { name: string; presentation_label: string | null } | null;
+    product_variant: { presentation_label: string } | null;
     quantity: number;
     color: string | null;
 };
@@ -163,8 +163,6 @@ export function ApproveOrderDialog({
                                                     {[
                                                         item.product_variant
                                                             ?.presentation_label ??
-                                                            item.product_variant
-                                                                ?.name ??
                                                             'Base',
                                                         item.color,
                                                     ]

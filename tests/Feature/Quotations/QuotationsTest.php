@@ -56,7 +56,6 @@ beforeEach(function (): void {
     $this->variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-COT-001',
-        'name' => 'GRIS RAL 7001 GAL',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'GAL',

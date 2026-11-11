@@ -53,7 +53,7 @@ beforeEach(function (): void {
         'cif_percentage' => 15, 'price_threshold' => 3, 'is_active' => true,
     ]);
     $this->variant = ProductVariant::create([
-        'product_id' => $this->product->id, 'code' => 'V-FECHA-1', 'name' => 'GAL', 'unit_of_measure_id' => $unit->id,
+        'product_id' => $this->product->id, 'code' => 'V-FECHA-1', 'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1, 'presentation_label' => 'GAL', 'current_price' => 1000, 'is_active' => true,
     ]);
     $this->client = Client::factory()->create();

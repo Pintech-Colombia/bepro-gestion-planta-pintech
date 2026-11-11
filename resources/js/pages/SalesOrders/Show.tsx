@@ -27,8 +27,7 @@ type ProductItem = {
     product: { id: number; name: string };
     product_variant: {
         id: number;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
     } | null;
     quantity: number;
     color: string | null;
@@ -349,9 +348,7 @@ export default function SalesOrdersShow({
                                         header: 'Presentación',
                                         cell: (item) =>
                                             item.product_variant
-                                                ?.presentation_label ??
-                                            item.product_variant?.name ??
-                                            'Base',
+                                                ?.presentation_label ?? 'Base',
                                         className: 'text-muted-foreground',
                                     },
                                     {

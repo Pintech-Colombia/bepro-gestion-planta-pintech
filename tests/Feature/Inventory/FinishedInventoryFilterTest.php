@@ -47,7 +47,6 @@ beforeEach(function (): void {
     $this->variantA = ProductVariant::create([
         'product_id' => $this->productA->id,
         'code' => 'VAR-BARNIZ-1GL',
-        'name' => 'Galón Barniz',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -64,7 +63,6 @@ beforeEach(function (): void {
     $this->variantB = ProductVariant::create([
         'product_id' => $this->productB->id,
         'code' => 'VAR-ANTICORR-5GL',
-        'name' => 'Cubeta Anticorrosivo',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5,
         'presentation_label' => 'Cubeta',
@@ -103,7 +101,23 @@ it('filters by product name in search', function (): void {
     );
 });
 
-it('filters by variant name or code in search', function (): void {
+it('filters by presentation in search', function (): void {
+    actingAs($this->admin);
+
+    $response = get(route('finished-inventory.index', ['search' => 'cubeta']));
+
+    $response->assertOk();
+    $response->assertInertia(
+        fn ($page) => $page
+            ->component('Inventory/FinishedInventory/Index')
+            ->has('inventory.data', 1)
+            ->where('inventory.data.0.id', $this->inventoryB->id)
+            ->where('inventory.data.0.variant.presentation_label', 'Cubeta')
+            ->missing('inventory.data.0.variant.name')
+    );
+});
+
+it('filters by variant code in search', function (): void {
     actingAs($this->admin);
 
     $response = get(route('finished-inventory.index', ['search' => 'ANTICORR-5GL']));

@@ -18,7 +18,6 @@ export type StockShortage = {
 
 export type VariantOption = {
     id: number;
-    name: string;
     presentation_label: string;
     presentation_value: number;
 };
@@ -54,7 +53,7 @@ export type ProductionOrderDetail = {
 };
 
 export type ProductionOrderProductVariant = {
-    presentation_label?: string | null;
+    presentation_label: string;
     presentation_value?: number | null;
 };
 

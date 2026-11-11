@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/hooks/use-confirm';
+import { variantPresentationLabel } from '@/lib/variant-label';
 import {
     destroy as warehousesDestroy,
     edit as warehousesEdit,
@@ -35,8 +36,7 @@ type FinishedInventoryItem = {
     product_variant: {
         id: number;
         code: string | null;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
         presentation_value: number | null;
     } | null;
 };
@@ -192,24 +192,13 @@ export default function WarehousesShow({ warehouse, can }: Props) {
                                 },
                                 {
                                     key: 'variant',
-                                    header: 'Variante',
+                                    header: 'Presentación',
                                     cell: (item) =>
-                                        item.product_variant ? (
-                                            <>
-                                                {item.product_variant.name}
-                                                {item.product_variant
-                                                    .presentation_label && (
-                                                    <span className="ml-1 text-xs">
-                                                        (
-                                                        {
-                                                            item.product_variant
-                                                                .presentation_label
-                                                        }
-                                                        )
-                                                    </span>
-                                                )}
-                                            </>
-                                        ) : null,
+                                        item.product_variant
+                                            ? variantPresentationLabel(
+                                                  item.product_variant,
+                                              )
+                                            : null,
                                     className: 'text-muted-foreground',
                                 },
                                 {

@@ -68,7 +68,6 @@ beforeEach(function (): void {
     $this->variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-001',
-        'name' => 'Cubeta 5 Galones',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5.00,
         'presentation_label' => 'Cubeta',
@@ -92,7 +91,8 @@ it('allows admin to view price list with variants and sales prices', function ()
             ->where('products.data.0.sales_price', 122.6667)
             ->has('products.data.0.variants', 1)
             ->where('products.data.0.variants.0.id', $this->variant->id)
-            ->where('products.data.0.variants.0.name', 'Cubeta 5 Galones')
+            ->where('products.data.0.variants.0.presentation_label', 'Cubeta')
+            ->missing('products.data.0.variants.0.name')
             ->where('products.data.0.variants.0.sales_price', 613.3333)
             ->where('can.view_costs', true)
             ->where('can.view_prices', true)

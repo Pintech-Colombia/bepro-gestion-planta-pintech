@@ -55,7 +55,7 @@ function approvalTestVariant(): ProductVariant
     return ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'APR-001',
-        'name' => 'Galón',
+        'presentation_label' => 'Galón',
         'unit_of_measure_id' => $unit->id,
         'is_active' => true,
     ]);

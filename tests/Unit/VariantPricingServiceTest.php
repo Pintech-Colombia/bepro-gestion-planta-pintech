@@ -29,7 +29,6 @@ test('it updates variant cost and refreshes price when threshold is met', functi
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-01',
-        'name' => 'Producto Pricing - Galón',
         'unit_of_measure_id' => $unit->id,
         'presentation_label' => 'Galón',
         'presentation_value' => 2,
@@ -71,7 +70,6 @@ test('it updates variant cost without changing price when auto refresh is disabl
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-02',
-        'name' => 'Producto Pricing 2 - Cuarto',
         'unit_of_measure_id' => $unit->id,
         'presentation_label' => 'Cuarto',
         'presentation_value' => 1,
@@ -113,7 +111,7 @@ test('it refreshes price when previous cost and current price are zero', functio
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-ZERO-01',
-        'name' => 'Producto Costo Cero',
+        'presentation_label' => 'Producto Costo Cero',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'current_cost' => 0,
@@ -154,7 +152,7 @@ test('it refreshes price when previous cost is zero and current price exists', f
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-ZERO-02',
-        'name' => 'Producto Sin Historial',
+        'presentation_label' => 'Producto Sin Historial',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'current_cost' => 0,
@@ -195,7 +193,7 @@ test('it refreshes price when current price is zero even below threshold', funct
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-ZERO-03',
-        'name' => 'Producto Precio Cero',
+        'presentation_label' => 'Producto Precio Cero',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'current_cost' => 10,
@@ -236,7 +234,7 @@ test('it keeps valid price when cost variation is below threshold', function () 
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-PRICE-THRESHOLD-01',
-        'name' => 'Producto Umbral',
+        'presentation_label' => 'Producto Umbral',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'current_cost' => 10,

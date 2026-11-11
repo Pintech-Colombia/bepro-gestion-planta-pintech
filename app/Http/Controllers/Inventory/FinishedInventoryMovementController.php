@@ -48,7 +48,7 @@ class FinishedInventoryMovementController extends Controller
             ->apply(
                 FinishedInventoryMovement::query()->with([
                     'product:id,name',
-                    'productVariant:id,code,name,presentation_label',
+                    'productVariant:id,code,presentation_label',
                     'batch:id,product_id,production_order_id,entry_date',
                     // El lote de PT se identifica con el número de lote de su OP, no con su id (B55).
                     'batch.productionOrder:id,lot_number,color',
@@ -71,7 +71,7 @@ class FinishedInventoryMovementController extends Controller
             'batches' => Inertia::optional(fn () => FinishedProductBatch::query()
                 ->with([
                     'product:id,name',
-                    'productVariant:id,code,name,presentation_label',
+                    'productVariant:id,code,presentation_label',
                     'productionOrder:id,lot_number,color',
                     'stocks',
                 ])
@@ -81,7 +81,7 @@ class FinishedInventoryMovementController extends Controller
                 ->map(fn (FinishedProductBatch $batch) => [
                     'id' => $batch->id,
                     'product' => $batch->product ? ['id' => $batch->product->id, 'name' => $batch->product->name] : null,
-                    'variant' => $batch->productVariant ? ['id' => $batch->productVariant->id, 'code' => $batch->productVariant->code, 'name' => $batch->productVariant->name, 'presentation_label' => $batch->productVariant->presentation_label] : null,
+                    'variant' => $batch->productVariant ? ['id' => $batch->productVariant->id, 'code' => $batch->productVariant->code, 'presentation_label' => $batch->productVariant->presentation_label] : null,
                     // Número de lote de la OP: con la presentación identifica el lote, porque una OP no repite presentación (B55).
                     'lot_number' => $batch->productionOrder->lot_number,
                     // El color de la OP junto al lote (3.4): el sobrante de un RAL 3020 no se despacha como el producto base.
@@ -164,7 +164,7 @@ class FinishedInventoryMovementController extends Controller
 
         $finishedInventoryMovement->load([
             'product:id,name',
-            'productVariant:id,code,name,presentation_label',
+            'productVariant:id,code,presentation_label',
             'batch:id,production_order_id,entry_date,initial_quantity',
             'batch.productionOrder:id,lot_number,color',
             'warehouse:id,name,city',

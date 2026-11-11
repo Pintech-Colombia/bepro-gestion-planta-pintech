@@ -245,7 +245,7 @@ return [
         'reason' => 'motivo',
         'reference' => 'referencia',
         'package_raw_material_id' => 'material de empaque',
-        'presentation_label' => 'etiqueta de presentación',
+        'presentation_label' => 'presentación',
         'presentation_value' => 'contenido de presentación',
         'document' => 'documento',
         'document_type' => 'tipo de documento',

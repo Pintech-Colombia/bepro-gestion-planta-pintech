@@ -208,7 +208,6 @@ test('rejects a repeated presentation when creating an order, with the error on 
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'TEST-001-GAL',
-        'name' => 'Test Product - Galón',
         'unit_of_measure_id' => $product->unit_of_measure_id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',

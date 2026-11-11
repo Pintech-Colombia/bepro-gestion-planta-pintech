@@ -36,7 +36,7 @@ beforeEach(function (): void {
         'unit_of_measure_id' => $unit->id, 'sales_margin' => 25, 'cif_percentage' => 15, 'price_threshold' => 3,
         'current_price' => 1000, 'is_active' => true]);
     $this->variant = ProductVariant::create(['product_id' => $this->product->id, 'code' => 'VAR-UNI',
-        'name' => 'Cuarto', 'unit_of_measure_id' => $unit->id, 'presentation_value' => '0.25', 'current_price' => 1000,
+        'presentation_label' => 'Cuarto', 'unit_of_measure_id' => $unit->id, 'presentation_value' => '0.25', 'current_price' => 1000,
         'is_active' => true]);
     $this->client = Client::factory()->create();
 });

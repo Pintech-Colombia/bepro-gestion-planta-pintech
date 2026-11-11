@@ -220,10 +220,12 @@ test('las fechas salen en hora de planta, como el certificado', function () {
 });
 
 test('sin etiqueta de presentación muestra solo el código', function () {
-    $this->variant->update(['presentation_label' => null]);
+    // La base ya no admite una presentación vacía: el caso se arma en memoria, sin guardar.
+    $plan = $this->plan->refresh()->load('productVariant');
+    $plan->productVariant->presentation_label = null;
 
     $label = app(PrintProductionLabelsAction::class)
-        ->buildLabel($this->order, $this->plan->refresh(), LabelFormat::Dymo57x32, QrCode::factory()->create(['production_order_id' => $this->order->id]), app(Dompdf::class)->getFontMetrics());
+        ->buildLabel($this->order, $plan, LabelFormat::Dymo57x32, QrCode::factory()->create(['production_order_id' => $this->order->id]), app(Dompdf::class)->getFontMetrics());
 
     expect($label['presentation_lines'])->toBe(['12345678']);
 });

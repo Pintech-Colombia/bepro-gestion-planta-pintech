@@ -40,13 +40,12 @@ class PriceListService
                         'id',
                         'product_id',
                         'code',
-                        'name',
                         'presentation_label',
                         'presentation_value',
                         'current_price',
                     ])
                         ->where('is_active', true)
-                        ->orderBy('presentation_value', 'asc');
+                        ->orderedByPresentation();
                 },
             ]);
 
@@ -93,7 +92,6 @@ class PriceListService
                 $variantData = [
                     'id' => $variant->id,
                     'code' => $variant->code,
-                    'name' => $variant->name,
                     'presentation_label' => $variant->presentation_label,
                     'presentation_value' => $variant->presentation_value,
                     'sales_price' => $variantSalesPrice,

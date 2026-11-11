@@ -187,7 +187,7 @@ it('no deja quitar el control de inventario con saldo en bodega, pero sí sin sa
 it('exige que la etiqueta habitual de una presentación sea de tipo Etiqueta y activa, y conserva la inactiva que ya tiene', function () {
     $payload = fn (?RawMaterial $label, string $code) => [
         'code' => $code,
-        'name' => 'Galón',
+        'presentation_label' => "Galón {$code}",
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'label_raw_material_id' => $label?->id,
@@ -204,6 +204,26 @@ it('exige que la etiqueta habitual de una presentación sea de tipo Etiqueta y a
         ->assertSessionHasErrors('label_raw_material_id');
     $this->patch(route('products.variants.update', [$this->product, $this->variant]), $payload($this->label, $this->variant->code))
         ->assertSessionHasNoErrors();
+});
+
+it('exige un envase activo al crear o al cambiarlo, y conserva el inactivo que la presentación ya tiene', function () {
+    $payload = fn (RawMaterial $container, string $code) => [
+        'code' => $code,
+        'presentation_label' => "Galón {$code}",
+        'unit_of_measure_id' => $this->unit->id,
+        'presentation_value' => 1,
+        'package_raw_material_id' => $container->id,
+    ];
+    $otherInactive = RawMaterial::factory()->inactive()->create(['category_id' => $this->container->category_id]);
+
+    $this->container->update(['is_active' => false]);
+
+    $this->post(route('products.variants.store', $this->product), $payload($this->container, '44444444'))
+        ->assertSessionHasErrors('package_raw_material_id');
+    $this->patch(route('products.variants.update', [$this->product, $this->variant]), $payload($this->container, $this->variant->code))
+        ->assertSessionHasNoErrors();
+    $this->patch(route('products.variants.update', [$this->product, $this->variant]), $payload($otherInactive, $this->variant->code))
+        ->assertSessionHasErrors('package_raw_material_id');
 });
 
 it('no deja pasar a otro tipo una etiqueta que usa alguna presentación', function () {
@@ -253,7 +273,7 @@ it('costea la presentación con su envase y su etiqueta al guardarla, sin tocar 
 
     $this->post(route('products.variants.store', $this->product), [
         'code' => '44444444',
-        'name' => 'Cuñete',
+        'presentation_label' => 'Cuñete',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5,
         'package_raw_material_id' => $this->container->id,
@@ -307,7 +327,7 @@ it('no recalcula las presentaciones de un producto sin costo de granel', functio
 
     $this->patch(route('products.variants.update', [$this->product, $this->variant]), [
         'code' => $this->variant->code,
-        'name' => 'Galón corregido',
+        'presentation_label' => 'Galón corregido',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'package_raw_material_id' => $this->container->id,
@@ -318,7 +338,7 @@ it('no recalcula las presentaciones de un producto sin costo de granel', functio
     app(ProductionCostRecalculationService::class)->recalculateForRawMaterial($this->container->id);
 
     expect($this->variant->fresh())
-        ->name->toBe('Galón corregido')
+        ->presentation_label->toBe('Galón corregido')
         ->current_cost->toBe('15000.0000')
         ->current_price->toBe('16500.0000');
 });

@@ -234,7 +234,6 @@ function completeTargetOrder(object $test): TestResponse
     $variant = ProductVariant::create([
         'product_id' => $test->targetProduct->id,
         'code' => 'VAR-'.uniqid(),
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -727,7 +726,6 @@ it('preview costs include the estimated cost of planned remnants', function () {
     $variant = ProductVariant::create([
         'product_id' => $this->targetProduct->id,
         'code' => 'VAR-TARGET',
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',

@@ -11,6 +11,7 @@ import Pagination from '@/components/pagination';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import { withReturnTo } from '@/lib/navigation';
+import { variantPresentationLabel } from '@/lib/variant-label';
 import { index as finishedInventoryIndex } from '@/routes/finished-inventory';
 import { show as productsShow } from '@/routes/products';
 import type { Paginated } from '@/types/ui';
@@ -26,8 +27,7 @@ type InventoryRow = {
     variant: {
         id: number;
         code: string | null;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
         presentation_value: number | null;
     } | null;
     warehouse: {
@@ -102,27 +102,9 @@ export default function FinishedInventoryIndex({
         },
         {
             key: 'variant',
-            header: 'Variante',
+            header: 'Presentación',
             cell: (row) =>
-                row.variant ? (
-                    <>
-                        <div className="text-foreground">
-                            {row.variant.name}
-                        </div>
-                        {(row.variant.presentation_label ||
-                            row.variant.presentation_value != null) && (
-                            <div className="text-xs">
-                                {[
-                                    row.variant.presentation_label,
-                                    row.variant.presentation_value != null &&
-                                        `(${row.variant.presentation_value})`,
-                                ]
-                                    .filter(Boolean)
-                                    .join(' ')}
-                            </div>
-                        )}
-                    </>
-                ) : null,
+                row.variant ? variantPresentationLabel(row.variant) : null,
             mobile: 'subtitle',
             className: 'text-muted-foreground',
         },
