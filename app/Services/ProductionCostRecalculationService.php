@@ -18,8 +18,11 @@ use Illuminate\Support\Facades\Log;
 
 class ProductionCostRecalculationService
 {
-    /** Columnas que necesita el cálculo de cada presentación. */
-    private const VARIANT_COLUMNS = ['id', 'presentation_value', 'package_raw_material_id', 'label_raw_material_id', 'current_cost', 'current_price'];
+    /**
+     * Columnas que necesita el cálculo de cada presentación, más `product_id` y `presentation_label`: con ellas (y el
+     * producto ya puesto) la auditoría nombra la presentación «Producto · Galón» sin una consulta por variante.
+     */
+    private const VARIANT_COLUMNS = ['id', 'product_id', 'presentation_label', 'presentation_value', 'package_raw_material_id', 'label_raw_material_id', 'current_cost', 'current_price'];
 
     public function __construct(
         private readonly VariantPricingService $variantPricingService,
@@ -36,7 +39,7 @@ class ProductionCostRecalculationService
     {
         return DB::transaction(function () use ($productId, $forcePriceRefresh): ?ProductionCost {
             $product = Product::query()
-                ->select('id', 'current_price', 'cif_percentage', 'price_threshold')
+                ->select('id', 'name', 'current_price', 'cif_percentage', 'price_threshold')
                 ->whereKey($productId)
                 ->lockForUpdate()
                 ->first();
@@ -114,7 +117,7 @@ class ProductionCostRecalculationService
             $product->update($productUpdates);
 
             $this->repriceVariants(
-                variants: ProductVariant::query()->where('product_id', $productId)->get(self::VARIANT_COLUMNS),
+                variants: $this->variantsOf($product),
                 bulkCost: $calculatedCost,
                 cifPercentage: $productCifPercentage,
                 priceThreshold: $priceThreshold,
@@ -221,11 +224,11 @@ class ProductionCostRecalculationService
                 ->where('package_raw_material_id', $rawMaterialId)
                 ->orWhere('label_raw_material_id', $rawMaterialId))
             ->whereNotIn('product_id', $exceptProductIds)
-            ->get([...self::VARIANT_COLUMNS, 'product_id']);
+            ->get(self::VARIANT_COLUMNS);
 
         $products = Product::query()
             ->whereIn('id', $variants->pluck('product_id')->unique()->all())
-            ->get(['id', 'current_cost', 'cif_percentage', 'price_threshold'])
+            ->get(['id', 'name', 'current_cost', 'cif_percentage', 'price_threshold'])
             ->keyBy('id');
 
         // Una sola consulta de precios para todas: un envase puede estar en cientos de productos.
@@ -241,7 +244,7 @@ class ProductionCostRecalculationService
             }
 
             DB::transaction(fn () => $this->repriceVariants(
-                variants: $productVariants,
+                variants: $productVariants->each(fn (ProductVariant $variant) => $variant->setRelation('product', $product)),
                 bulkCost: (string) $product->current_cost,
                 cifPercentage: $product->cif_percentage !== null ? (string) $product->cif_percentage : null,
                 priceThreshold: (string) ($product->price_threshold ?? '0'),
@@ -284,12 +287,25 @@ class ProductionCostRecalculationService
         }
 
         $this->repriceVariants(
-            variants: ProductVariant::query()->where('product_id', $product->id)->get(self::VARIANT_COLUMNS),
+            variants: $this->variantsOf($product),
             bulkCost: (string) $product->current_cost,
             cifPercentage: $product->cif_percentage !== null ? (string) $product->cif_percentage : null,
             priceThreshold: (string) ($product->price_threshold ?? '0'),
             forcePriceRefresh: $forcePriceRefresh,
         );
+    }
+
+    /**
+     * Las presentaciones del producto con su producto ya puesto, para que la auditoría no lo consulte por cada una.
+     *
+     * @return Collection<int, ProductVariant>
+     */
+    private function variantsOf(Product $product): Collection
+    {
+        return ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->get(self::VARIANT_COLUMNS)
+            ->each(fn (ProductVariant $variant) => $variant->setRelation('product', $product));
     }
 
     /**

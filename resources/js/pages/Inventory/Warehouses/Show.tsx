@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/hooks/use-confirm';
+import { variantPresentationLabel } from '@/lib/variant-label';
 import {
     destroy as warehousesDestroy,
     edit as warehousesEdit,
@@ -193,31 +194,11 @@ export default function WarehousesShow({ warehouse, can }: Props) {
                                     key: 'variant',
                                     header: 'Presentación',
                                     cell: (item) =>
-                                        item.product_variant ? (
-                                            <>
-                                                <div className="text-foreground">
-                                                    {
-                                                        item.product_variant
-                                                            .presentation_label
-                                                    }
-                                                </div>
-                                                {item.product_variant
-                                                    .presentation_value !=
-                                                    null && (
-                                                    <div className="text-xs">
-                                                        <FormattedNumber
-                                                            value={
-                                                                item
-                                                                    .product_variant
-                                                                    .presentation_value
-                                                            }
-                                                            kind="quantity"
-                                                        />{' '}
-                                                        gal
-                                                    </div>
-                                                )}
-                                            </>
-                                        ) : null,
+                                        item.product_variant
+                                            ? variantPresentationLabel(
+                                                  item.product_variant,
+                                              )
+                                            : null,
                                     className: 'text-muted-foreground',
                                 },
                                 {

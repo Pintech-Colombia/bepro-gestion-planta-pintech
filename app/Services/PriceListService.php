@@ -40,13 +40,12 @@ class PriceListService
                         'id',
                         'product_id',
                         'code',
-                        'name',
                         'presentation_label',
                         'presentation_value',
                         'current_price',
                     ])
                         ->where('is_active', true)
-                        ->orderBy('presentation_value', 'asc');
+                        ->orderedByPresentation();
                 },
             ]);
 

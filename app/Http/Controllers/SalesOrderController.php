@@ -92,7 +92,7 @@ class SalesOrderController extends Controller
 
         $products = Product::query()
             ->with([
-                'variants' => fn ($q) => $q->where('is_active', true)->orderBy('presentation_value')->orderBy('presentation_label'),
+                'variants' => fn ($q) => $q->where('is_active', true)->orderedByPresentation(),
             ])
             ->where('is_active', true)
             ->orderBy('name')

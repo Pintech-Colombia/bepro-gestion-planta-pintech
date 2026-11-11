@@ -206,6 +206,26 @@ it('exige que la etiqueta habitual de una presentación sea de tipo Etiqueta y a
         ->assertSessionHasNoErrors();
 });
 
+it('exige un envase activo al crear o al cambiarlo, y conserva el inactivo que la presentación ya tiene', function () {
+    $payload = fn (RawMaterial $container, string $code) => [
+        'code' => $code,
+        'presentation_label' => "Galón {$code}",
+        'unit_of_measure_id' => $this->unit->id,
+        'presentation_value' => 1,
+        'package_raw_material_id' => $container->id,
+    ];
+    $otherInactive = RawMaterial::factory()->inactive()->create(['category_id' => $this->container->category_id]);
+
+    $this->container->update(['is_active' => false]);
+
+    $this->post(route('products.variants.store', $this->product), $payload($this->container, '44444444'))
+        ->assertSessionHasErrors('package_raw_material_id');
+    $this->patch(route('products.variants.update', [$this->product, $this->variant]), $payload($this->container, $this->variant->code))
+        ->assertSessionHasNoErrors();
+    $this->patch(route('products.variants.update', [$this->product, $this->variant]), $payload($otherInactive, $this->variant->code))
+        ->assertSessionHasErrors('package_raw_material_id');
+});
+
 it('no deja pasar a otro tipo una etiqueta que usa alguna presentación', function () {
     $chemicals = RawMaterialCategory::factory()->create(['type' => RawMaterialType::Chemical]);
 

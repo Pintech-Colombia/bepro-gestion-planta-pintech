@@ -126,6 +126,15 @@ class ProductVariant extends Model
         $query->where('is_active', true);
     }
 
+    /**
+     * Orden en que se ofrecen las presentaciones de un producto: por contenido (galones) y, a igual contenido, por la
+     * presentación, que es única dentro del producto.
+     */
+    public function scopeOrderedByPresentation(Builder $query): void
+    {
+        $query->orderBy('presentation_value')->orderBy('presentation_label');
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'product_id');

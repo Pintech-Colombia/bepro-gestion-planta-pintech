@@ -11,6 +11,7 @@ import Pagination from '@/components/pagination';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import { withReturnTo } from '@/lib/navigation';
+import { variantPresentationLabel } from '@/lib/variant-label';
 import { index as finishedInventoryIndex } from '@/routes/finished-inventory';
 import { show as productsShow } from '@/routes/products';
 import type { Paginated } from '@/types/ui';
@@ -103,22 +104,7 @@ export default function FinishedInventoryIndex({
             key: 'variant',
             header: 'Presentación',
             cell: (row) =>
-                row.variant ? (
-                    <>
-                        <div className="text-foreground">
-                            {row.variant.presentation_label}
-                        </div>
-                        {row.variant.presentation_value != null && (
-                            <div className="text-xs">
-                                <FormattedNumber
-                                    value={row.variant.presentation_value}
-                                    kind="quantity"
-                                />{' '}
-                                gal
-                            </div>
-                        )}
-                    </>
-                ) : null,
+                row.variant ? variantPresentationLabel(row.variant) : null,
             mobile: 'subtitle',
             className: 'text-muted-foreground',
         },

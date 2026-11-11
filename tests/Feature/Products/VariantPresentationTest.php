@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 use App\Enums\SystemRole;
 use App\Models\Client;
+use App\Models\FinishedInventory;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
+use App\Models\RawMaterial;
+use App\Models\RawMaterialCategory;
 use App\Models\UnitOfMeasure;
+use App\Models\Warehouse;
+use App\Services\ProductionCostRecalculationService;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Activitylog\Models\Activity;
 
@@ -191,3 +198,83 @@ test('las pantallas reciben la presentación de la variante, sin nombre y ordena
     'pedido' => ['sales-orders.create', 'variants'],
     'orden de producción' => ['production-orders.create', 'variants'],
 ]);
+
+test('sin la columna name, las pantallas y formularios de variantes siguen funcionando', function (): void {
+    // Red para la migración que borrará la columna: si alguna consulta todavía la pide, aquí falla.
+    $warehouse = Warehouse::factory()->create();
+    FinishedInventory::factory()->create(['product_variant_id' => $this->galon->id, 'warehouse_id' => $warehouse->id, 'quantity' => 10]);
+
+    Schema::table('product_variants', function (Blueprint $table): void {
+        $table->dropIndex(['name']);
+        $table->dropColumn('name');
+    });
+
+    foreach ([
+        route('prices.index', ['search' => 'Galón']),
+        route('quotations.create'),
+        route('sales-orders.create'),
+        route('production-orders.create'),
+        route('products.show', $this->product),
+        route('finished-inventory.index', ['search' => 'Galón']),
+        route('finished-inventory-movements.index', ['search' => 'Galón']),
+        route('warehouses.show', $warehouse),
+    ] as $url) {
+        $this->get($url)->assertOk();
+    }
+
+    $this->post(route('products.variants.store', $this->product), variantPresentationPayload($this))
+        ->assertSessionHasNoErrors();
+    $this->patch(route('products.variants.update', [$this->product, $this->galon]), variantPresentationPayload($this, [
+        'code' => $this->galon->code,
+        'presentation_label' => 'Galón 3,78 L',
+        'presentation_value' => '1',
+    ]))->assertSessionHasNoErrors();
+
+    expect($this->galon->fresh()->presentation_label)->toBe('Galón 3,78 L');
+})->skip(fn (): bool => DB::connection()->getDriverName() === 'sqlite', 'SQLite no da error por una columna inexistente entre comillas: se prueba en PostgreSQL.');
+
+test('recalcular por un envase no consulta el producto de cada presentación y la auditoría la nombra', function (): void {
+    $container = RawMaterial::factory()->create([
+        'category_id' => RawMaterialCategory::factory()->container()->create()->id,
+        'current_price' => '2000',
+    ]);
+
+    $variants = collect(range(1, 4))->map(function (int $i) use ($container): ProductVariant {
+        $product = Product::factory()->create(['name' => "BP PRODUCTO {$i}", 'current_cost' => '10000',
+            'cif_percentage' => '10', 'price_threshold' => '0']);
+
+        return ProductVariant::factory()->create(['product_id' => $product->id, 'presentation_label' => 'Galón',
+            'presentation_value' => 1, 'package_raw_material_id' => $container->id, 'label_raw_material_id' => null,
+            'current_cost' => null, 'current_price' => null]);
+    });
+
+    Activity::query()->delete();
+    DB::enableQueryLog();
+
+    $repriced = app(ProductionCostRecalculationService::class)->repriceVariantsUsingPackagingMaterial($container->id);
+
+    $productQueries = collect(DB::getQueryLog())
+        ->filter(fn (array $query): bool => preg_match('/from\s+"products"/i', $query['query']) === 1);
+    DB::disableQueryLog();
+
+    expect($repriced)->toBe(4)
+        // Una sola consulta de productos para las cuatro presentaciones, no una por cada una.
+        ->and($productQueries)->toHaveCount(1)
+        ->and(Activity::query()->where('subject_type', ProductVariant::class)->pluck('description')->sort()->values()->all())
+        ->toBe($variants->map(fn (ProductVariant $v): string => "Variante de producto \"{$v->product->name} · Galón\" actualizada")->sort()->values()->all());
+});
+
+test('las presentaciones de la lista de precios van ordenadas por contenido', function (): void {
+    $this->galon->update(['current_price' => '100']);
+    ProductVariant::factory()->create(['product_id' => $this->product->id, 'presentation_label' => 'Cuarto',
+        'presentation_value' => '0.25', 'unit_of_measure_id' => $this->unit->id, 'package_raw_material_id' => null,
+        'current_price' => '30']);
+
+    $this->get(route('prices.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('products.data', function ($products): bool {
+            $variants = collect(collect($products)->firstWhere('id', $this->product->id)['variants'] ?? []);
+
+            return $variants->pluck('presentation_label')->all() === ['Cuarto', 'Galón'];
+        }));
+});

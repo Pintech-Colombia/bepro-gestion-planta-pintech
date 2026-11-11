@@ -377,8 +377,7 @@ class QuotationService
             ->with([
                 'variants' => fn ($query) => $query
                     ->where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $keptVariantIds))
-                    ->orderBy('presentation_value')
-                    ->orderBy('presentation_label'),
+                    ->orderedByPresentation(),
             ])
             ->where(fn ($query) => $query->where('is_active', true)->orWhereIn('id', $keptProductIds))
             ->orderBy('name')
