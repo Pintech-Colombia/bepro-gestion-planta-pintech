@@ -179,15 +179,15 @@ class PaintDevelopmentRequest extends Model
     ];
 
     /**
-     * Campos descriptivos o de selección múltiple que ocupan el ancho completo de la fila en el PDF.
+     * Campos descriptivos (TextArea) que ocupan el ancho completo de la fila en el PDF.
      *
      * @var array<string, list<string>>
      */
     public const FULL_WIDTH_PAYLOAD_FIELDS = [
-        'context_payload' => ['sistema_existente', 'preparacion', 'exposicion', 'quimicos'],
-        'performance_payload' => ['funcion', 'pruebas', 'criterios_tecnicos', 'indispensable', 'negociable', 'acabado_ref'],
-        'application_payload' => ['metodo', 'equipo_detalle', 'otra_tecnologia', 'restricciones', 'sistema_capas'],
-        'specifications_payload' => ['secados', 'estabilidad', 'presentacion', 'almacenamiento', 'kit_ab', 'criterios_aprobacion', 'observaciones'],
+        'context_payload' => ['quimicos'],
+        'performance_payload' => ['criterios_tecnicos', 'indispensable', 'negociable', 'acabado_ref'],
+        'application_payload' => ['equipo_detalle', 'sistema_capas'],
+        'specifications_payload' => ['secados', 'estabilidad', 'almacenamiento', 'kit_ab', 'criterios_aprobacion', 'observaciones'],
     ];
 
     /** Una respuesta como se lee en el PDF: el 0 es un dato, y un texto en un campo numérico sigue como texto. */
@@ -228,12 +228,13 @@ class PaintDevelopmentRequest extends Model
     }
 
     /**
-     * Organiza un bloque del payload en filas para una tabla de 2 columnas (`th | td | th | td`).
+     * Organiza un bloque del payload en filas sobre una grilla base de 12 columnas (hasta 4 campos cortos por fila).
      *
      * @param  array<string, mixed>  $payloadData
-     * @return list<list<array{key: string, label: string, value: string, full_width: bool}>>
+     * @param  int  $maxColumnsPerRow  Máximo de campos cortos por fila (3 o 4).
+     * @return list<list<array{key: string, label: string, value: string, full_width: bool, colspan: int}>>
      */
-    public static function pdfPayloadRows(string $payload, array $payloadData): array
+    public static function pdfPayloadRows(string $payload, array $payloadData, int $maxColumnsPerRow = 4): array
     {
         $definedKeys = array_keys(self::PAYLOAD_FIELD_LABELS[$payload] ?? []);
         $extraKeys = array_values(array_diff(array_keys($payloadData), $definedKeys));
@@ -259,33 +260,78 @@ class PaintDevelopmentRequest extends Model
         }
 
         $rows = [];
-        $pendingPairItem = null;
+        $buffer = [];
+        $wideBuffer = [];
+
+        $emitRow = static function (array $chunk) use (&$rows): void {
+            $count = count($chunk);
+            if ($count === 0) {
+                return;
+            }
+
+            $colspan = intdiv(12, $count);
+            $rows[] = array_map(
+                static fn (array $item): array => [...$item, 'colspan' => $colspan],
+                $chunk
+            );
+        };
+
+        $flushWideBuffer = static function () use (&$wideBuffer, $emitRow): void {
+            $total = count($wideBuffer);
+            if ($total === 0) {
+                return;
+            }
+
+            for ($i = 0; $i < $total; $i += 2) {
+                $emitRow(array_slice($wideBuffer, $i, 2));
+            }
+
+            $wideBuffer = [];
+        };
+
+        $flushBuffer = static function () use (&$buffer, $maxColumnsPerRow, $emitRow): void {
+            $total = count($buffer);
+            if ($total === 0) {
+                return;
+            }
+
+            $index = 0;
+            while ($total - $index > 0) {
+                $remaining = $total - $index;
+
+                if ($remaining <= $maxColumnsPerRow) {
+                    $emitRow(array_slice($buffer, $index, $remaining));
+                    break;
+                }
+
+                // Evita dejar 1 campo suelto en la última fila (p. ej. 5 → 3+2, 6 → 3+3, 9 → 3+3+3, 10 → 4+3+3).
+                if ($remaining === 5 || $remaining === 6 || $remaining === 9) {
+                    $take = 3;
+                } else {
+                    $take = $maxColumnsPerRow;
+                }
+
+                $emitRow(array_slice($buffer, $index, $take));
+                $index += $take;
+            }
+
+            $buffer = [];
+        };
 
         foreach ($items as $item) {
             if ($item['full_width']) {
-                if ($pendingPairItem !== null) {
-                    $rows[] = [$pendingPairItem];
-                    $pendingPairItem = null;
-                }
-
-                $rows[] = [$item];
+                $flushBuffer();
+                $wideBuffer[] = $item;
 
                 continue;
             }
 
-            if ($pendingPairItem === null) {
-                $pendingPairItem = $item;
-
-                continue;
-            }
-
-            $rows[] = [$pendingPairItem, $item];
-            $pendingPairItem = null;
+            $flushWideBuffer();
+            $buffer[] = $item;
         }
 
-        if ($pendingPairItem !== null) {
-            $rows[] = [$pendingPairItem];
-        }
+        $flushBuffer();
+        $flushWideBuffer();
 
         return $rows;
     }
