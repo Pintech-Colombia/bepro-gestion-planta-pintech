@@ -13,7 +13,6 @@ use App\Enums\PaintDevelopmentRequestStatus;
 use App\Enums\ProductionOrderStatus;
 use App\Enums\QuotationStatus;
 use App\Enums\RemnantStatus;
-use App\Enums\SalesOrderApproval;
 use App\Enums\SalesOrderPriority;
 use App\Enums\SalesOrderStatus;
 use App\Enums\WarehouseType;
@@ -37,7 +36,6 @@ final class ToneEnums
         ProductionOrderStatus::class,
         QuotationStatus::class,
         RemnantStatus::class,
-        SalesOrderApproval::class,
         SalesOrderPriority::class,
         SalesOrderStatus::class,
         WarehouseType::class,

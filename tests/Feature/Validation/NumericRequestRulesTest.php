@@ -100,6 +100,10 @@ function numericRequestFields(): array
         'StoreSalesOrderRequest' => [
             'items.*.quantity' => 'sales_order_items.quantity',
         ],
+        // Lo que se aprueba de una línea queda como su nueva cantidad (aprobación parcial).
+        'ApproveSalesOrderRequest' => [
+            'items.*.approved_quantity' => 'sales_order_items.quantity',
+        ],
         'StoreFinishedInventoryMovementRequest' => [
             'quantity' => 'finished_inventory_movements.quantity',
         ],

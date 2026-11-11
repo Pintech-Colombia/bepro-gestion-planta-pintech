@@ -61,7 +61,6 @@ class SalesOrderController extends Controller
                 'creator' => $canManage && $order->creator ? ['name' => $order->creator->name] : null,
                 'status' => $order->status->value,
                 'status_label' => $order->status->label(),
-                'is_partial_approval' => $order->is_partial_approval,
                 'priority' => $order->priority->value,
                 'priority_label' => $order->priority->label(),
                 'required_date' => $order->required_date?->format('Y-m-d'),
@@ -162,10 +161,19 @@ class SalesOrderController extends Controller
         $this->authorize('view', $salesOrder);
         $user = $request->user();
 
-        $salesOrder->load(['creator', 'approver', 'holder', 'items.product', 'items.productVariant', 'quotation']);
+        $salesOrder->load([
+            'creator',
+            'approver',
+            'holder',
+            'items.product',
+            'items.productVariant',
+            'quotation',
+            'remainder:id,parent_sales_order_id',
+        ]);
 
         $statusTransitions = $salesOrder->status->nextTransitions();
         $canViewQuotation = $salesOrder->quotation !== null && ($user?->can('view', $salesOrder->quotation) ?? false);
+        $canApprove = $user?->can('approve', $salesOrder) ?? false;
 
         return Inertia::render('SalesOrders/Show', [
             'order' => $this->buildOrderData($salesOrder, $canViewQuotation),
@@ -176,7 +184,8 @@ class SalesOrderController extends Controller
             'can' => [
                 'update' => $user?->can('update', $salesOrder) ?? false,
                 'updateStatus' => $user?->can('updateStatus', $salesOrder) ?? false,
-                'approve' => $user?->can('approve', $salesOrder) ?? false,
+                'approve' => $canApprove,
+                'approvePartially' => $canApprove && $salesOrder->canBeSplit(),
                 'hold' => $user?->can('hold', $salesOrder) ?? false,
                 'viewQuotation' => $canViewQuotation,
             ],
@@ -205,7 +214,13 @@ class SalesOrderController extends Controller
     {
         $isPartial = $request->boolean('is_partial');
 
-        $this->approveSalesOrder->execute($salesOrder, $request->user(), $isPartial, $request->validated('note'));
+        $this->approveSalesOrder->execute(
+            $salesOrder,
+            $request->user(),
+            $isPartial,
+            $request->validated('note'),
+            $request->approvedQuantities(),
+        );
 
         Inertia::flash('success', $isPartial ? 'Pedido aprobado como parcial.' : 'Pedido aprobado.');
 
@@ -266,8 +281,11 @@ class SalesOrderController extends Controller
             'created_on' => $salesOrder->createdOnPlantDay(),
             'creator' => $salesOrder->creator ? ['name' => $salesOrder->creator->name] : null,
             // La decisión: retenido (y por quién) y/o aprobado. Al aprobar un retenido se ven las dos.
+            // Los enlaces de una aprobación parcial: el pedido del que salió este resto y el pedido con lo que no se
+            // aprobó de este. Comparten creador, así que quien abre uno puede abrir el otro.
             'approval' => [
-                'is_partial' => $salesOrder->is_partial_approval,
+                'parent_id' => $salesOrder->parent_sales_order_id,
+                'remainder_id' => $salesOrder->remainder?->id,
                 'approved_by' => $salesOrder->approver?->name,
                 'approved_at' => $salesOrder->approved_at?->toIso8601String(),
                 'note' => $salesOrder->approval_note,

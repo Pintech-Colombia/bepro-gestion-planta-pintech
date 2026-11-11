@@ -11,7 +11,6 @@ use App\Models\ProductionOrderPackagingPlan;
 use App\Models\QrCode;
 use App\Models\QuotationItem;
 use App\Models\RemnantConsumption;
-use App\Models\SalesOrderItem;
 use App\Models\ShrinkWrapItem;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -26,7 +25,6 @@ const AUDIT_EXEMPT_MODELS = [
     QrCode::class => 'Código QR de una OP',
     QuotationItem::class => 'Línea de una cotización',
     RemnantConsumption::class => 'Consumo de un saldo en una OP',
-    SalesOrderItem::class => 'Línea de un pedido',
     ShrinkWrapItem::class => 'Gasto de un termoencogido',
 ];
 

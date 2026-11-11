@@ -15,7 +15,13 @@ use Illuminate\Notifications\Notification;
  */
 abstract class SalesOrderNotification extends Notification
 {
-    public function __construct(protected readonly SalesOrder $order) {}
+    /**
+     * @param  SalesOrder|null  $remainder  En una aprobación parcial, el pedido nuevo con lo no aprobado.
+     */
+    public function __construct(
+        protected readonly SalesOrder $order,
+        protected readonly ?SalesOrder $remainder = null,
+    ) {}
 
     /**
      * Tipo del aviso, guardado en `data.kind`.
@@ -52,14 +58,25 @@ abstract class SalesOrderNotification extends Notification
         $client = $this->order->client_business_name ?? $this->order->client?->business_name;
         $subject = $client !== null && $client !== '' ? "Pedido #{$this->order->id} de {$client}" : "Pedido #{$this->order->id}";
 
+        // El resto de una aprobación parcial dice de qué pedido salió: «Pedido #21 de X (resto del #20) retenido».
+        if ($this->order->parent_sales_order_id !== null) {
+            $subject .= " (resto del #{$this->order->parent_sales_order_id})";
+        }
+
         return "{$subject} {$this->outcome()}";
     }
 
     /**
-     * «parcial: {nota}» de una aprobación parcial, para los avisos de aprobado y liberado.
+     * «parcial (resto en el #N): {nota}» de una aprobación parcial, para los avisos de aprobado y liberado.
      */
     protected function partialSuffix(): string
     {
-        return $this->order->is_partial_approval ? " parcial: {$this->order->approval_note}" : '';
+        if (! $this->order->is_partial_approval) {
+            return '';
+        }
+
+        $where = $this->remainder !== null ? " (resto en el #{$this->remainder->id})" : '';
+
+        return " parcial{$where}: {$this->order->approval_note}";
     }
 }

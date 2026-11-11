@@ -8,10 +8,10 @@ import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import { PriorityBadge } from '@/components/priority-badge';
+import { RecordLink } from '@/components/record-link';
 import AdminOrderSidebar from '@/components/sales-orders/AdminOrderSidebar';
 import { ApproveOrderDialog } from '@/components/sales-orders/approve-order-dialog';
 import { HoldOrderDialog } from '@/components/sales-orders/hold-order-dialog';
-import { PartialApprovalBadge } from '@/components/sales-orders/partial-approval-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,7 +58,10 @@ type SalesOrderDetail = {
     creator: { name: string } | null;
     /** La decisión: retenido y/o aprobado. Al aprobar un retenido se conservan los datos de la retención. */
     approval: {
-        is_partial: boolean;
+        /** Pedido del que salió este como resto de una aprobación parcial. */
+        parent_id: number | null;
+        /** Pedido con lo que no se aprobó de este (aprobación parcial); a lo sumo uno. */
+        remainder_id: number | null;
         approved_by: string | null;
         approved_at: string | null;
         note: string | null;
@@ -81,6 +84,8 @@ type Props = {
         updateStatus: boolean;
         /** Aprobar: en «Por aprobar» o «Retenido», con `sales_orders.approve`. */
         approve: boolean;
+        /** Aprobar parcial: además, el pedido suma al menos 2 unidades (`SalesOrder::canBeSplit`). */
+        approvePartially: boolean;
         /** Retener: solo en «Por aprobar». */
         hold: boolean;
         viewQuotation: boolean;
@@ -106,9 +111,6 @@ export default function SalesOrdersShow({
                                 enum="SalesOrderStatus"
                                 value={order.status}
                             />
-                            {order.approval.is_partial && (
-                                <PartialApprovalBadge />
-                            )}
                         </div>
                     }
                     actions={
@@ -118,7 +120,13 @@ export default function SalesOrdersShow({
                                     <HoldOrderDialog orderId={order.id} />
                                 )}
                                 {can.approve && (
-                                    <ApproveOrderDialog orderId={order.id} />
+                                    <ApproveOrderDialog
+                                        orderId={order.id}
+                                        items={order.items}
+                                        canApprovePartially={
+                                            can.approvePartially
+                                        }
+                                    />
                                 )}
                             </div>
                         )
@@ -271,6 +279,49 @@ export default function SalesOrdersShow({
                                                     valueClassName="whitespace-pre-wrap"
                                                 />
                                             </>
+                                        )}
+                                        {order.approval.remainder_id !==
+                                            null && (
+                                            <DetailItem
+                                                label="Lo no aprobado"
+                                                value={
+                                                    <RecordLink
+                                                        href={
+                                                            salesOrdersShow(
+                                                                order.approval
+                                                                    .remainder_id,
+                                                            ).url
+                                                        }
+                                                    >
+                                                        Resto en el pedido #
+                                                        {
+                                                            order.approval
+                                                                .remainder_id
+                                                        }
+                                                    </RecordLink>
+                                                }
+                                            />
+                                        )}
+                                        {order.approval.parent_id !== null && (
+                                            <DetailItem
+                                                label="Pedido de origen"
+                                                value={
+                                                    <RecordLink
+                                                        href={
+                                                            salesOrdersShow(
+                                                                order.approval
+                                                                    .parent_id,
+                                                            ).url
+                                                        }
+                                                    >
+                                                        Resto del pedido #
+                                                        {
+                                                            order.approval
+                                                                .parent_id
+                                                        }
+                                                    </RecordLink>
+                                                }
+                                            />
                                         )}
                                     </DetailList>
                                 </CardContent>

@@ -33,9 +33,10 @@ enum SalesOrderStatus: string implements HasTone
     public function tone(): Tone
     {
         return match ($this) {
-            // Los dos esperan una decisión: no terminaron.
+            // Espera la decisión de quien aprueba.
             self::PendingApproval => Tone::Warning,
-            self::OnHold => Tone::Warning,
+            // Gris: espera al cliente, nadie de la empresa tiene que hacer nada.
+            self::OnHold => Tone::Neutral,
             self::Pending => Tone::Warning,
             self::InProgress => Tone::Info,
             self::Ready => Tone::Success,

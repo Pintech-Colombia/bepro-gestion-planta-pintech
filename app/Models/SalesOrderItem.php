@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\WholeUnits;
+use App\Models\Concerns\HasAuditDescription;
 use Database\Factories\SalesOrderItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -35,13 +39,49 @@ use Illuminate\Support\Carbon;
 class SalesOrderItem extends Model
 {
     /** @use HasFactory<SalesOrderItemFactory> */
-    use HasFactory;
+    use HasAuditDescription, HasFactory, LogsActivity;
+
+    protected string $auditLabel = 'Línea de pedido';
+
+    protected string $auditIdentifierAttribute = 'audit_identifier';
+
+    protected bool $auditFeminine = true;
+
+    /**
+     * Solo se auditan las modificaciones: una línea solo cambia al aprobar parcial, cuando se reduce (cantidad) o pasa
+     * al pedido con el resto (pedido). Crear las líneas de cada pedido no se registra: el pedido ya deja su propia
+     * entrada, y una por línea solo llenaría la auditoría.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = ['updated'];
+
+    /**
+     * La auditoría guarda qué cantidad tenía cada línea y a qué pedido pasó.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('pedidos')
+            ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            ->logOnly(['sales_order_id', 'quantity'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
     protected function casts(): array
     {
         return [
             'quantity' => WholeUnits::class,
         ];
+    }
+
+    /**
+     * Cómo se nombra la línea en la auditoría: «Pedido #20 · Esmalte blanco». El id solo no dice de qué es.
+     */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(fn (): string => "Pedido #{$this->sales_order_id} · ".($this->product?->name ?? '?'));
     }
 
     public function salesOrder(): BelongsTo
