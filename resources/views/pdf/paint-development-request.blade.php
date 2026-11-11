@@ -40,7 +40,7 @@
         .header-table td,
         .header-table th {
             vertical-align: middle;
-            border: 0.75pt solid #333333;
+            border: 0.75pt solid #d0d4dc;
         }
 
         .logo-cell {
@@ -58,7 +58,7 @@
             font-size: 13pt;
             font-weight: bold;
             letter-spacing: 0.5pt;
-            color: #111111;
+            color: #202532;
         }
 
         .title-cell {
@@ -71,20 +71,20 @@
             font-size: 11pt;
             font-weight: bold;
             text-transform: uppercase;
-            color: #111111;
+            color: #202532;
             letter-spacing: 0.3pt;
         }
 
         .doc-subtitle {
             font-size: 8pt;
-            color: #444444;
+            color: #606e80;
             margin-top: 2pt;
         }
 
         .meta-label {
             width: 12%;
-            background-color: #efefef;
-            color: #222222;
+            background-color: #e7e9ee;
+            color: #202532;
             font-weight: bold;
             font-size: 7pt;
             text-transform: uppercase;
@@ -94,7 +94,7 @@
         .meta-value {
             width: 18%;
             font-size: 8pt;
-            color: #111111;
+            color: #202532;
             padding: 2.5pt 4pt;
         }
 
