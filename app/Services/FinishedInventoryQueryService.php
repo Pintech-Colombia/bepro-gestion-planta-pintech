@@ -75,7 +75,7 @@ class FinishedInventoryQueryService
             ->with([
                 'product:id,name,category_id',
                 'product.category:id,name',
-                'productVariant:id,code,name,presentation_label,presentation_value',
+                'productVariant:id,code,presentation_label,presentation_value',
                 'warehouse:id,name,city,type',
             ])
             ->latest('id');
@@ -99,7 +99,6 @@ class FinishedInventoryQueryService
                 'variant' => $row->productVariant ? [
                     'id' => $row->productVariant->id,
                     'code' => $row->productVariant->code,
-                    'name' => $row->productVariant->name,
                     'presentation_label' => $row->productVariant->presentation_label,
                     'presentation_value' => $row->productVariant->presentation_value,
                 ] : null,
@@ -150,7 +149,7 @@ class FinishedInventoryQueryService
             ->where('quantity', '>', 0)
             ->with([
                 'warehouse:id,name,city,type',
-                'productVariant:id,code,name,presentation_label,presentation_value',
+                'productVariant:id,code,presentation_label,presentation_value',
                 'productVariant.unitOfMeasure:id,symbol',
             ])
             ->orderBy('warehouse_id')
@@ -168,7 +167,6 @@ class FinishedInventoryQueryService
                 'variant' => $row->productVariant ? [
                     'id' => $row->productVariant->id,
                     'code' => $row->productVariant->code,
-                    'name' => $row->productVariant->name,
                     'presentation_label' => $row->productVariant->presentation_label,
                     'presentation_value' => $row->productVariant->presentation_value,
                     'unit_symbol' => $row->productVariant->unitOfMeasure?->symbol,

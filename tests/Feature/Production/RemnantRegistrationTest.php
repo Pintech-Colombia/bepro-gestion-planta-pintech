@@ -150,7 +150,6 @@ it('does not create a remnant when no surplus gallons reported', function () {
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-GALON',
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -230,7 +229,6 @@ it('distributes bulk cost across packaging and remnant', function () {
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-GALON',
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -296,7 +294,6 @@ it('preview costs distributes correctly when remnant is present', function () {
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-GALON',
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -366,7 +363,6 @@ function gallonPackagingPlan(object $test): ProductionOrderPackagingPlan
     $variant = ProductVariant::create([
         'product_id' => $test->product->id,
         'code' => 'VAR-KILOS-'.uniqid(),
-        'name' => 'Galón',
         'unit_of_measure_id' => UnitOfMeasure::first()->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',

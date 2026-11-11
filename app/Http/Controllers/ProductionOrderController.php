@@ -144,10 +144,11 @@ class ProductionOrderController extends Controller
             ->where('product_id', $productionOrder->product_id)
             ->where('is_active', true)
             ->whereNotIn('id', $productionOrder->packagingPlans()->select('product_variant_id'))
-            ->get(['id', 'name', 'presentation_label', 'presentation_value'])
+            ->orderBy('presentation_value')
+            ->orderBy('presentation_label')
+            ->get(['id', 'presentation_label', 'presentation_value'])
             ->map(fn (ProductVariant $v) => [
                 'id' => $v->id,
-                'name' => $v->name,
                 'presentation_label' => $v->presentation_label,
                 'presentation_value' => (float) $v->presentation_value,
             ]);
@@ -252,7 +253,7 @@ class ProductionOrderController extends Controller
             ->with([
                 // Todas las activas: planta produce con la que elija (D-FOR1). La de referencia de precio va primero.
                 'formulas' => fn ($q) => $q->where('is_active', true)->orderByDesc('is_price_reference')->orderBy('version'),
-                'variants' => fn ($q) => $q->where('is_active', true),
+                'variants' => fn ($q) => $q->where('is_active', true)->orderBy('presentation_value')->orderBy('presentation_label'),
             ])
             ->where('is_active', true)
             ->get()
@@ -267,7 +268,6 @@ class ProductionOrderController extends Controller
                 ]),
                 'variants' => $p->variants->map(fn ($v) => [
                     'id' => $v->id,
-                    'name' => $v->name,
                     'presentation_label' => $v->presentation_label,
                     'presentation_value' => $v->presentation_value,
                 ]),

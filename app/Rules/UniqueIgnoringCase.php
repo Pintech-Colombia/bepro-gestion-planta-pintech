@@ -14,13 +14,20 @@ use Illuminate\Support\Facades\DB;
  *
  * El `LOWER()` de SQLite solo cambia las letras sin tilde: «ÉPOXICOS» contra «époxicos» se detecta en PostgreSQL,
  * no en las pruebas en memoria.
+ *
+ * `$where` acota la búsqueda con igualdades exactas: la presentación de una variante es única dentro de su producto
+ * (`['product_id' => 3]`), no en toda la tabla.
  */
 final class UniqueIgnoringCase implements ValidationRule
 {
+    /**
+     * @param  array<string, int|string>  $where
+     */
     public function __construct(
         private readonly string $table,
         private readonly string $column,
         private readonly ?int $ignoreId = null,
+        private readonly array $where = [],
     ) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
@@ -35,6 +42,7 @@ final class UniqueIgnoringCase implements ValidationRule
         $taken = $query
             ->whereRaw("LOWER({$column}) = ?", [mb_strtolower($value)])
             ->when($this->ignoreId !== null, fn ($query) => $query->where('id', '!=', $this->ignoreId))
+            ->when($this->where !== [], fn ($query) => $query->where($this->where))
             ->exists();
 
         if ($taken) {

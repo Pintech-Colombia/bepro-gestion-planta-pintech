@@ -95,9 +95,7 @@ export default function FinishedMovementsShow({ movement, can }: Props) {
                             <DetailItem
                                 label="Presentación"
                                 value={
-                                    movement.product_variant
-                                        ?.presentation_label ??
-                                    movement.product_variant?.name
+                                    movement.product_variant?.presentation_label
                                 }
                             />
                             <DetailItem

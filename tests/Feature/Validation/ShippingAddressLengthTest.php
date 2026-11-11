@@ -33,7 +33,7 @@ beforeEach(function (): void {
     $this->product = Product::create(['name' => 'Producto dirección', 'category_id' => $category->id,
         'unit_of_measure_id' => $unit->id, 'is_active' => true]);
     $this->variant = ProductVariant::create(['product_id' => $this->product->id, 'code' => 'VAR-DIR',
-        'name' => 'Galón', 'unit_of_measure_id' => $unit->id, 'presentation_value' => 1, 'current_price' => 1000,
+        'presentation_label' => 'Galón', 'unit_of_measure_id' => $unit->id, 'presentation_value' => 1, 'current_price' => 1000,
         'is_active' => true]);
     $this->client = Client::factory()->create();
 });

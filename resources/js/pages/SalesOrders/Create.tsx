@@ -39,8 +39,7 @@ type ClientOption = {
 
 type VariantOption = {
     id: number;
-    name: string;
-    presentation_label: string | null;
+    presentation_label: string;
     presentation_value: number | null;
 };
 
@@ -376,7 +375,7 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
                                             ? selectedProduct.variants.map(
                                                   (v) => ({
                                                       id: String(v.id),
-                                                      label: v.name,
+                                                      label: v.presentation_label,
                                                   }),
                                               )
                                             : [];

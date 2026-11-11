@@ -56,8 +56,6 @@ function variantLabelFor(batch: FinishedBatchOption): string {
     return (
         batch.product_variant?.presentation_label ??
         batch.variant?.presentation_label ??
-        batch.product_variant?.name ??
-        batch.variant?.name ??
         'Presentación'
     );
 }

@@ -187,7 +187,7 @@ it('no deja quitar el control de inventario con saldo en bodega, pero sí sin sa
 it('exige que la etiqueta habitual de una presentación sea de tipo Etiqueta y activa, y conserva la inactiva que ya tiene', function () {
     $payload = fn (?RawMaterial $label, string $code) => [
         'code' => $code,
-        'name' => 'Galón',
+        'presentation_label' => "Galón {$code}",
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'label_raw_material_id' => $label?->id,
@@ -253,7 +253,7 @@ it('costea la presentación con su envase y su etiqueta al guardarla, sin tocar 
 
     $this->post(route('products.variants.store', $this->product), [
         'code' => '44444444',
-        'name' => 'Cuñete',
+        'presentation_label' => 'Cuñete',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5,
         'package_raw_material_id' => $this->container->id,
@@ -307,7 +307,7 @@ it('no recalcula las presentaciones de un producto sin costo de granel', functio
 
     $this->patch(route('products.variants.update', [$this->product, $this->variant]), [
         'code' => $this->variant->code,
-        'name' => 'Galón corregido',
+        'presentation_label' => 'Galón corregido',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'package_raw_material_id' => $this->container->id,
@@ -318,7 +318,7 @@ it('no recalcula las presentaciones de un producto sin costo de granel', functio
     app(ProductionCostRecalculationService::class)->recalculateForRawMaterial($this->container->id);
 
     expect($this->variant->fresh())
-        ->name->toBe('Galón corregido')
+        ->presentation_label->toBe('Galón corregido')
         ->current_cost->toBe('15000.0000')
         ->current_price->toBe('16500.0000');
 });

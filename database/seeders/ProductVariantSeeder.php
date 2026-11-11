@@ -52,7 +52,6 @@ class ProductVariantSeeder extends Seeder
                         // desarrollo y la imagen del servidor no la trae, y estos datos de demostración también se siembran
                         // en staging.
                         'code' => sprintf('99%08d%06d', $product->id, $presentation['value']),
-                        'name' => "{$product->name} - {$presentation['label']}",
                         'unit_of_measure_id' => $unitGl?->id ?? 1,
                         'presentation_value' => $presentation['value'],
                         'package_raw_material_id' => $packagingMaterials->isNotEmpty()

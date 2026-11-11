@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useConfirm } from '@/hooks/use-confirm';
+import { packagingVariantLabel } from '@/lib/variant-label';
 import type {
     LabelMaterialOption,
     ProductionOrderFormData,
@@ -396,7 +397,7 @@ function PackagingPlanForm({
 
     const comboboxOptions = availableVariants.map((variant) => ({
         id: variant.id,
-        label: `${variant.name} — ${variant.presentation_label} (${variant.presentation_value} gal)`,
+        label: packagingVariantLabel(variant),
     }));
 
     const handleAdd = () => {

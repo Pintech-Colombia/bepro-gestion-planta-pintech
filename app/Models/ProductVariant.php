@@ -9,6 +9,7 @@ use App\Models\Concerns\HasAuditDescription;
 use Database\Factories\ProductVariantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,10 +23,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $id
  * @property int $product_id
  * @property string $code
- * @property string $name
+ * @property string|null $name Columna sin uso: la variante se identifica por su presentación. Se borra en una migración posterior.
  * @property int $unit_of_measure_id
  * @property string|null $presentation_value
- * @property string|null $presentation_label
+ * @property string $presentation_label
  * @property string|null $current_cost
  * @property string|null $current_price
  * @property int|null $package_raw_material_id
@@ -33,6 +34,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read string $display_name
  * @property-read Product $product
  * @property-read UnitOfMeasure $unitOfMeasure
  * @property-read Collection|FinishedInventory[] $finishedInventories
@@ -42,7 +44,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
 #[Fillable([
     'product_id',
     'code',
-    'name',
     'unit_of_measure_id',
     'presentation_value',
     'presentation_label',
@@ -66,7 +67,7 @@ class ProductVariant extends Model
      */
     public const MAX_PRESENTATION_VALUE = '1000';
 
-    protected string $auditIdentifierAttribute = 'name';
+    protected string $auditIdentifierAttribute = 'display_name';
 
     protected bool $auditFeminine = true;
 
@@ -78,7 +79,6 @@ class ProductVariant extends Model
             ->logOnly([
                 'product_id',
                 'code',
-                'name',
                 'presentation_value',
                 'presentation_label',
                 'current_cost',
@@ -95,11 +95,27 @@ class ProductVariant extends Model
     {
         return [
             'code' => TextFormat::Code->cast(),
+            'presentation_label' => TextFormat::Name->cast(),
             'presentation_value' => 'decimal:4',
             'current_cost' => 'decimal:4',
             'current_price' => 'decimal:4',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * «BP AJUSTADOR IA-500 · Galón»: la variante donde no se ve su producto (auditoría, mensajes del servidor). En
+     * pantalla basta la presentación, porque el producto siempre está al lado.
+     */
+    protected function displayName(): Attribute
+    {
+        return Attribute::get(function (): string {
+            $this->loadMissing('product');
+
+            return collect([$this->product?->name, $this->presentation_label])
+                ->filter(fn (?string $part) => $part !== null && $part !== '')
+                ->implode(' · ');
+        });
     }
 
     /**

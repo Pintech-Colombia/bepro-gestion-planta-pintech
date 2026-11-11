@@ -98,7 +98,6 @@ beforeEach(function () {
     $this->variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'VAR-UOM-001',
-        'name' => 'Producto UoM - Galón',
         'unit_of_measure_id' => $this->liter->id,
         'presentation_label' => 'Galón',
         'presentation_value' => 1,
@@ -421,7 +420,6 @@ function startedOrderInMaterialKilos(string $quantityPerGallon, UnitOfMeasure $f
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-UOM-GRAM',
-        'name' => 'Pintura en gramos - Galón',
         'unit_of_measure_id' => test()->liter->id,
         'presentation_label' => 'Galón',
         'presentation_value' => 1,

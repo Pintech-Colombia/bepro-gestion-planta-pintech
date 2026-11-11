@@ -14,8 +14,7 @@ import type { Paginated } from '@/types/ui';
 type VariantRow = {
     id: number;
     code: string | null;
-    name: string;
-    presentation_label: string | null;
+    presentation_label: string;
     presentation_value: number | null;
     current_price?: number | null;
     sales_price: number | null;
@@ -74,7 +73,7 @@ export default function PricesIndex({
         {
             key: 'presentation',
             header: 'Presentación',
-            cell: (variant) => variant.presentation_label ?? variant.name,
+            cell: (variant) => variant.presentation_label,
             mobile: 'title',
         },
         {

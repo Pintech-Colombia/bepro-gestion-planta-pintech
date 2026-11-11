@@ -35,8 +35,7 @@ type FinishedInventoryItem = {
     product_variant: {
         id: number;
         code: string | null;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
         presentation_value: number | null;
     } | null;
 };
@@ -192,21 +191,30 @@ export default function WarehousesShow({ warehouse, can }: Props) {
                                 },
                                 {
                                     key: 'variant',
-                                    header: 'Variante',
+                                    header: 'Presentación',
                                     cell: (item) =>
                                         item.product_variant ? (
                                             <>
-                                                {item.product_variant.name}
+                                                <div className="text-foreground">
+                                                    {
+                                                        item.product_variant
+                                                            .presentation_label
+                                                    }
+                                                </div>
                                                 {item.product_variant
-                                                    .presentation_label && (
-                                                    <span className="ml-1 text-xs">
-                                                        (
-                                                        {
-                                                            item.product_variant
-                                                                .presentation_label
-                                                        }
-                                                        )
-                                                    </span>
+                                                    .presentation_value !=
+                                                    null && (
+                                                    <div className="text-xs">
+                                                        <FormattedNumber
+                                                            value={
+                                                                item
+                                                                    .product_variant
+                                                                    .presentation_value
+                                                            }
+                                                            kind="quantity"
+                                                        />{' '}
+                                                        gal
+                                                    </div>
                                                 )}
                                             </>
                                         ) : null,

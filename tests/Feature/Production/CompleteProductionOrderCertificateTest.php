@@ -185,7 +185,6 @@ test('completing an order at night in the plant stores the plant date, not the U
     $variant = ProductVariant::create([
         'product_id' => $order->product_id,
         'code' => 'PNT-CERT-01-GAL',
-        'name' => 'Pintura Certificada - Galón',
         'unit_of_measure_id' => $order->product->unit_of_measure_id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',

@@ -270,7 +270,6 @@ class QuotationController extends Controller
                 ],
                 'product_variant' => $item->productVariant ? [
                     'id' => $item->productVariant->id,
-                    'name' => $item->productVariant->name,
                     'presentation_label' => $item->productVariant->presentation_label,
                 ] : null,
                 'type' => $item->type?->value,

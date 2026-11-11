@@ -56,8 +56,7 @@ type QuotationItem = {
     product: { id: number; name: string };
     product_variant: {
         id: number;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
     };
     description: string | null;
     color: string | null;
@@ -578,7 +577,10 @@ export default function QuotationsShow({
                                 <>
                                     <div>{item.product.name}</div>
                                     <div className="text-xs font-normal text-muted-foreground">
-                                        {item.product_variant.name}
+                                        {
+                                            item.product_variant
+                                                .presentation_label
+                                        }
                                     </div>
                                 </>
                             ),

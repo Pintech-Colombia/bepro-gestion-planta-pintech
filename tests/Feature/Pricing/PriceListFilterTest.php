@@ -71,7 +71,6 @@ beforeEach(function (): void {
     $this->variantA = ProductVariant::create([
         'product_id' => $this->productA->id,
         'code' => 'VAR-EPOXY-GALON',
-        'name' => 'Galón Epóxico',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -95,7 +94,6 @@ beforeEach(function (): void {
     $this->variantB = ProductVariant::create([
         'product_id' => $this->productB->id,
         'code' => 'VAR-ACRYLIC-CUBETA',
-        'name' => 'Cubeta Acrílica',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5,
         'presentation_label' => 'Cubeta',
@@ -109,7 +107,8 @@ beforeEach(function (): void {
 it('filters by product name', function (): void {
     actingAs($this->admin);
 
-    $response = get(route('prices.index', ['search' => 'Epóxico']));
+    // Sin tildes: el nombre del producto se guarda en mayúsculas y el LOWER() de SQLite no cambia la «Ó».
+    $response = get(route('prices.index', ['search' => 'Esmalte']));
 
     $response->assertOk();
     $response->assertInertia(
@@ -154,7 +153,7 @@ it('ignores unknown filter keys and strips whitespace', function (): void {
     actingAs($this->admin);
 
     $response = get(route('prices.index', [
-        'search' => '   Epóxico   ',
+        'search' => '   Esmalte   ',
         'other' => 'ignored',
     ]));
 

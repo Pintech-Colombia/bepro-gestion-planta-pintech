@@ -95,7 +95,7 @@ test('it recalculates and stores production cost when a formula is created', fun
     $variantOne = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => '12345678',
-        'name' => 'P-RECALC-01-1GL',
+        'presentation_label' => 'P-RECALC-01-1GL',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'current_cost' => null,
@@ -103,7 +103,7 @@ test('it recalculates and stores production cost when a formula is created', fun
     $variantFive = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => '123458789',
-        'name' => 'P-RECALC-01-5GL',
+        'presentation_label' => 'P-RECALC-01-5GL',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 5,
         'current_cost' => null,
@@ -207,7 +207,7 @@ test('it recalculates production costs when a raw material price changes', funct
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => '12345678',
-        'name' => 'P-RECALC-01-1GL-RAW-UP',
+        'presentation_label' => 'P-RECALC-01-1GL-RAW-UP',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'current_cost' => null,
@@ -260,7 +260,7 @@ test('it keeps current price when cost variation is below threshold', function (
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'P-RECALC-01-1GL-BELOW-THRESHOLD',
-        'name' => 'P-RECALC-01-1GL-BELOW-THRESHOLD',
+        'presentation_label' => 'P-RECALC-01-1GL-BELOW-THRESHOLD',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'current_cost' => null,
@@ -306,7 +306,7 @@ test('it includes package cost in variant cost and auto price on recalculation',
     ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'P-RECALC-01-ENV',
-        'name' => 'P-RECALC-01-ENV',
+        'presentation_label' => 'P-RECALC-01-ENV',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'package_raw_material_id' => $this->packagingMaterial->id,
@@ -343,7 +343,7 @@ test('it refreshes product and variant prices when profit margin is updated', fu
     $variant = ProductVariant::create([
         'product_id' => $this->product->id,
         'code' => 'P-RECALC-01-1GL-MARGIN-UPD',
-        'name' => 'P-RECALC-01-1GL-MARGIN-UPD',
+        'presentation_label' => 'P-RECALC-01-1GL-MARGIN-UPD',
         'unit_of_measure_id' => $this->unit->id,
         'presentation_value' => 1,
         'current_cost' => null,

@@ -26,8 +26,7 @@ export type FinishedProductOption = {
 export type FinishedVariantOption = {
     id: number;
     code: string | null;
-    name: string;
-    presentation_label: string | null;
+    presentation_label: string;
 };
 
 export type FinishedWarehouseOption = {

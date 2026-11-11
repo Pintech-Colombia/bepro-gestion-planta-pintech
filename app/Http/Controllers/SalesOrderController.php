@@ -92,7 +92,7 @@ class SalesOrderController extends Controller
 
         $products = Product::query()
             ->with([
-                'variants' => fn ($q) => $q->where('is_active', true)->orderBy('name'),
+                'variants' => fn ($q) => $q->where('is_active', true)->orderBy('presentation_value')->orderBy('presentation_label'),
             ])
             ->where('is_active', true)
             ->orderBy('name')
@@ -102,7 +102,6 @@ class SalesOrderController extends Controller
                 'name' => $p->name,
                 'variants' => $p->variants->map(fn ($v) => [
                     'id' => $v->id,
-                    'name' => $v->name,
                     'presentation_label' => $v->presentation_label,
                     'presentation_value' => $v->presentation_value,
                 ]),
@@ -270,7 +269,6 @@ class SalesOrderController extends Controller
                 ] : null,
                 'product_variant' => $item->productVariant ? [
                     'id' => $item->productVariant->id,
-                    'name' => $item->productVariant->name,
                     'presentation_label' => $item->productVariant->presentation_label,
                 ] : null,
                 'quantity' => $item->quantity,

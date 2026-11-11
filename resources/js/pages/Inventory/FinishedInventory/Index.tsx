@@ -26,8 +26,7 @@ type InventoryRow = {
     variant: {
         id: number;
         code: string | null;
-        name: string;
-        presentation_label: string | null;
+        presentation_label: string;
         presentation_value: number | null;
     } | null;
     warehouse: {
@@ -102,23 +101,20 @@ export default function FinishedInventoryIndex({
         },
         {
             key: 'variant',
-            header: 'Variante',
+            header: 'Presentación',
             cell: (row) =>
                 row.variant ? (
                     <>
                         <div className="text-foreground">
-                            {row.variant.name}
+                            {row.variant.presentation_label}
                         </div>
-                        {(row.variant.presentation_label ||
-                            row.variant.presentation_value != null) && (
+                        {row.variant.presentation_value != null && (
                             <div className="text-xs">
-                                {[
-                                    row.variant.presentation_label,
-                                    row.variant.presentation_value != null &&
-                                        `(${row.variant.presentation_value})`,
-                                ]
-                                    .filter(Boolean)
-                                    .join(' ')}
+                                <FormattedNumber
+                                    value={row.variant.presentation_value}
+                                    kind="quantity"
+                                />{' '}
+                                gal
                             </div>
                         )}
                     </>

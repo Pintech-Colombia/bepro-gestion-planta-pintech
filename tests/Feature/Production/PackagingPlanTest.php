@@ -64,7 +64,6 @@ beforeEach(function () {
     $this->variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'P-01-GAL',
-        'name' => 'Pintura - Galón',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 1,
         'presentation_label' => 'Galón',
@@ -74,7 +73,6 @@ beforeEach(function () {
     $this->variantCunete = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'P-01-CUN',
-        'name' => 'Pintura - Cuñete',
         'unit_of_measure_id' => $unit->id,
         'presentation_value' => 5,
         'presentation_label' => 'Cuñete',

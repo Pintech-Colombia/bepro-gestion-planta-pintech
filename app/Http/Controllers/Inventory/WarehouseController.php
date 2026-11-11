@@ -103,7 +103,7 @@ class WarehouseController extends Controller
                 ->select('id', 'warehouse_id', 'product_id', 'product_variant_id', 'quantity')
                 ->with([
                     'product:id,name',
-                    'productVariant:id,code,name,presentation_label,presentation_value',
+                    'productVariant:id,code,presentation_label,presentation_value',
                 ])
                 ->where('quantity', '>', 0)
                 ->orderByDesc('id'),

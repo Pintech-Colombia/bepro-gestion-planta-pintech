@@ -234,7 +234,6 @@ export default function FinishedMovementsIndex({
                     )}
                     <div className="text-xs text-muted-foreground">
                         {movement.product_variant?.presentation_label ??
-                            movement.product_variant?.name ??
                             'Sin presentación'}
                     </div>
                     {movement.batch && (

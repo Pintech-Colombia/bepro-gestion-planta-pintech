@@ -41,7 +41,7 @@ describe('fecha de cotización por defecto (COT-06, D-COT2)', function (): void 
             'price_threshold' => 3, 'is_active' => true,
         ]);
         $variant = ProductVariant::create([
-            'product_id' => $product->id, 'code' => 'V-COT-DEF', 'name' => 'GAL', 'unit_of_measure_id' => $unit->id,
+            'product_id' => $product->id, 'code' => 'V-COT-DEF', 'unit_of_measure_id' => $unit->id,
             'presentation_value' => 1, 'presentation_label' => 'GAL', 'current_price' => 1000, 'is_active' => true,
         ]);
         $this->payload = fn (array $o = []) => array_merge([

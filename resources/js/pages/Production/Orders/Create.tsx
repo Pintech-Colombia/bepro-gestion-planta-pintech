@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { clearListErrors } from '@/lib/form-errors';
 import { PRODUCTION_ORDER_QUANTITY_LIMITS } from '@/lib/number-types';
 import { parseDecimal, toDecimalPayload } from '@/lib/numeric-input';
+import { packagingVariantLabel } from '@/lib/variant-label';
 import {
     create as productionOrderCreate,
     index as productionOrderIndex,
@@ -89,7 +90,7 @@ export default function ProductionOrdersCreate({
 
     const variantOptions = availableVariants.map((v) => ({
         id: String(v.id),
-        label: `${v.name} — ${v.presentation_label} (${v.presentation_value} gal)`,
+        label: packagingVariantLabel(v),
     }));
 
     // Una presentación solo una vez por orden: cada fila ofrece las que no eligieron las demás.

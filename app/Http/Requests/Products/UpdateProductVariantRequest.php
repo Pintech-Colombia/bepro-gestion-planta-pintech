@@ -9,6 +9,7 @@ use App\Enums\RawMaterialType;
 use App\Enums\TextFormat;
 use App\Http\Requests\Concerns\CatalogSelectionRules;
 use App\Http\Requests\Concerns\NormalizesText;
+use App\Http\Requests\Concerns\VariantPresentationRules;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Rules\RawMaterialOfType;
@@ -19,6 +20,7 @@ class UpdateProductVariantRequest extends FormRequest
 {
     use CatalogSelectionRules;
     use NormalizesText;
+    use VariantPresentationRules;
 
     public function authorize(): bool
     {
@@ -35,10 +37,9 @@ class UpdateProductVariantRequest extends FormRequest
 
         return [
             'code' => ['bail', 'required', 'string', 'max:80', ...TextFormat::Code->rules(), Rule::unique('product_variants', 'code')->ignore($variantId)],
-            'name' => ['bail', 'required', 'string', 'max:100'],
             'unit_of_measure_id' => $this->activeOrCurrentRules('unit_of_measures', 'unit_of_measure_id', $this->route('variant')?->unit_of_measure_id),
             'presentation_value' => ['bail', 'nullable', ...NumberType::Quantity->rules(ProductVariant::MAX_PRESENTATION_VALUE), 'gt:0'],
-            'presentation_label' => ['nullable', 'string', 'max:50'],
+            'presentation_label' => $this->presentationLabelRules($this->route('product'), $variantId !== null ? (int) $variantId : null),
             'package_raw_material_id' => [
                 'nullable',
                 'integer',
@@ -63,9 +64,17 @@ class UpdateProductVariantRequest extends FormRequest
         ];
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return $this->presentationLabelMessages();
+    }
+
     protected function prepareForValidation(): void
     {
-        $this->merge($this->normalizedText(['code' => TextFormat::Code]));
+        $this->merge($this->normalizedText(['code' => TextFormat::Code, 'presentation_label' => TextFormat::Name]));
 
         foreach (['presentation_value', 'package_raw_material_id', 'label_raw_material_id'] as $key) {
             if ($this->has($key) && ($this->input($key) === '' || $this->input($key) === null)) {

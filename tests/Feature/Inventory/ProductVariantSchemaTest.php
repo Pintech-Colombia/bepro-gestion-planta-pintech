@@ -14,15 +14,16 @@ test('el esquema incluye tabla de variantes de producto', function () {
         'id',
         'product_id',
         'code',
-        'name',
         'unit_of_measure_id',
         'presentation_value',
         'presentation_label',
     ]))->toBeTrue();
 
-    // Portable entre SQLite (tests) y PostgreSQL (dev y producción).
-    $nameColumn = collect(Schema::getColumns('product_variants'))->firstWhere('name', 'name');
-    expect($nameColumn['nullable'])->toBeFalse();
+    // Portable entre SQLite (tests) y PostgreSQL (dev y producción). La presentación identifica la variante; el nombre
+    // queda nulo hasta que una migración posterior borre la columna.
+    $columns = collect(Schema::getColumns('product_variants'))->keyBy('name');
+    expect($columns['presentation_label']['nullable'])->toBeFalse()
+        ->and($columns['name']['nullable'])->toBeTrue();
 });
 
 test('las tablas operativas incluyen product_variant_id para migracion gradual', function () {

@@ -34,7 +34,7 @@ beforeEach(function (): void {
         'unit_of_measure_id' => $unit->id, 'sales_margin' => 0, 'cif_percentage' => 15, 'price_threshold' => 3,
         'current_price' => 1000, 'is_active' => true]);
     $this->variant = ProductVariant::create(['product_id' => $this->product->id, 'code' => 'VAR-PESOS',
-        'name' => 'Galón', 'unit_of_measure_id' => $unit->id, 'presentation_value' => 1, 'current_price' => '1000.5',
+        'presentation_label' => 'Galón', 'unit_of_measure_id' => $unit->id, 'presentation_value' => 1, 'current_price' => '1000.5',
         'is_active' => true]);
     $this->client = Client::factory()->create();
 });
@@ -232,7 +232,7 @@ test('al editar, la vista previa acepta la presentación inactiva que la cotizac
         ->assertOk();
 
     $otherVariant = ProductVariant::create(['product_id' => $this->product->id, 'code' => 'VAR-PESOS-2',
-        'name' => 'Cuarto', 'unit_of_measure_id' => $this->variant->unit_of_measure_id, 'presentation_value' => 0.25,
+        'presentation_label' => 'Cuarto', 'unit_of_measure_id' => $this->variant->unit_of_measure_id, 'presentation_value' => 0.25,
         'current_price' => '300', 'is_active' => false]);
 
     $this->actingAs($this->commercial)

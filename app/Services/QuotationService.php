@@ -247,7 +247,7 @@ class QuotationService
             if ($listUnitPrice === null) {
                 throw ValidationException::withMessages([
                     'items' => __('El producto :name no tiene precio de venta configurado.', [
-                        'name' => $variant->product?->name ?? $variant->name,
+                        'name' => $variant->display_name,
                     ]),
                 ]);
             }
@@ -377,7 +377,8 @@ class QuotationService
             ->with([
                 'variants' => fn ($query) => $query
                     ->where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $keptVariantIds))
-                    ->orderBy('name'),
+                    ->orderBy('presentation_value')
+                    ->orderBy('presentation_label'),
             ])
             ->where(fn ($query) => $query->where('is_active', true)->orWhereIn('id', $keptProductIds))
             ->orderBy('name')
@@ -391,7 +392,6 @@ class QuotationService
 
                     return [
                         'id' => $variant->id,
-                        'name' => $variant->name,
                         'presentation_label' => $variant->presentation_label,
                         'presentation_value' => $variant->presentation_value,
                         'sales_price' => $listPrice !== null ? (float) $listPrice : null,

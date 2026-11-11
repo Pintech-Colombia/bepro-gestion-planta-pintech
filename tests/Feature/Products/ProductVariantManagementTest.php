@@ -43,7 +43,6 @@ test('admin can create a product variant', function () {
     actingAs($user)
         ->post(route('products.variants.store', $product), [
             'code' => '12345678',
-            'name' => 'Vinil Base - 1 Galón',
             'unit_of_measure_id' => $uom->id,
             'presentation_value' => 1,
             'presentation_label' => '1 gal',
@@ -54,7 +53,8 @@ test('admin can create a product variant', function () {
     $this->assertDatabaseHas('product_variants', [
         'product_id' => $product->id,
         'code' => '12345678',
-        'name' => 'Vinil Base - 1 Galón',
+        'presentation_label' => '1 gal',
+        'name' => null,
     ]);
 });
 
@@ -64,7 +64,6 @@ test('admin can update a product variant', function () {
     $variant = ProductVariant::factory()->create([
         'product_id' => $product->id,
         'code' => '12345678',
-        'name' => 'Vinil Base - 1 Galón',
         'unit_of_measure_id' => $uom->id,
         'presentation_value' => 1,
         'presentation_label' => '1 gal',
@@ -74,7 +73,6 @@ test('admin can update a product variant', function () {
     actingAs($user)
         ->patch(route('products.variants.update', [$product, $variant]), [
             'code' => '87654321',
-            'name' => 'Vinil Base - 1 Galón',
             'unit_of_measure_id' => $uom->id,
             'presentation_value' => 1,
             'presentation_label' => '1 gal',
@@ -93,7 +91,6 @@ test('admin can delete a product variant', function () {
     $variant = ProductVariant::factory()->create([
         'product_id' => $product->id,
         'code' => '12345678',
-        'name' => 'Vinil Base - 1 Galón',
         'unit_of_measure_id' => $uom->id,
         'presentation_value' => 1,
         'presentation_label' => '1 gal',
@@ -126,10 +123,10 @@ test('produccion can manage variants but comercial cannot', function () {
 test('the presentation size is capped at 1000 gallons', function (string $value, bool $valid) {
     [$user, $product, $uom] = setupVariantManagementDependencies();
     $existing = ProductVariant::factory()->create(['product_id' => $product->id, 'unit_of_measure_id' => $uom->id]);
-    $payload = ['name' => 'Presentación grande', 'unit_of_measure_id' => $uom->id, 'presentation_value' => $value];
+    $payload = ['unit_of_measure_id' => $uom->id, 'presentation_value' => $value];
 
-    $created = actingAs($user)->post(route('products.variants.store', $product), ['code' => 'GRANDE-1', ...$payload]);
-    $updated = actingAs($user)->put(route('products.variants.update', [$product, $existing]), ['code' => $existing->code, ...$payload]);
+    $created = actingAs($user)->post(route('products.variants.store', $product), ['code' => 'GRANDE-1', 'presentation_label' => 'Presentación grande', ...$payload]);
+    $updated = actingAs($user)->put(route('products.variants.update', [$product, $existing]), ['code' => $existing->code, 'presentation_label' => $existing->presentation_label, ...$payload]);
 
     foreach ([$created, $updated] as $response) {
         $valid ? $response->assertSessionHasNoErrors() : $response->assertSessionHasErrors('presentation_value');

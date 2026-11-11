@@ -36,7 +36,7 @@ function createTestProduct(): array
     $variant = ProductVariant::create([
         'product_id' => $product->id,
         'code' => 'VAR-001',
-        'name' => 'Test Variant',
+        'presentation_label' => 'Test Variant',
         'unit_of_measure_id' => $uom->id,
         'is_active' => true,
     ]);

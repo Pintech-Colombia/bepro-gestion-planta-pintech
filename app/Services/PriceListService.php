@@ -93,7 +93,6 @@ class PriceListService
                 $variantData = [
                     'id' => $variant->id,
                     'code' => $variant->code,
-                    'name' => $variant->name,
                     'presentation_label' => $variant->presentation_label,
                     'presentation_value' => $variant->presentation_value,
                     'sales_price' => $variantSalesPrice,

@@ -64,7 +64,7 @@ function textNormalizationCreate(string $module, array $overrides = []): array
             'cif_percentage' => '10', 'price_threshold' => '5',
         ]],
         'variant' => [route('products.variants.store', $test->product), [
-            'code' => 'VAR-NUEVA', 'name' => 'Galón', 'unit_of_measure_id' => $test->uom->id, 'presentation_value' => '1',
+            'code' => 'VAR-NUEVA', 'presentation_label' => 'Galón', 'unit_of_measure_id' => $test->uom->id, 'presentation_value' => '1',
         ]],
         'warehouse' => [route('warehouses.store'), ['name' => 'Bodega Pasto', 'city' => 'Pasto', 'type' => 'storage']],
         'product-category' => [route('catalogs.product-categories.store'), ['name' => 'Lacas']],
@@ -120,6 +120,7 @@ test('guarda el valor normalizado', function (string $module, string $field, str
     'código de MP' => ['raw-material', 'code', 'rm  200', 'RM 200', RawMaterial::class],
     'código con ñ' => ['raw-material', 'code', 'env-m-cuñ', 'ENV-M-CUÑ', RawMaterial::class],
     'código de presentación' => ['variant', 'code', 'gal-blanco', 'GAL-BLANCO', ProductVariant::class],
+    'presentación con espacios dobles conserva sus mayúsculas' => ['variant', 'presentation_label', '  Cuñete   5G ', 'Cuñete 5G', ProductVariant::class],
     'nombre de producto en mayúsculas (P8-3)' => ['product', 'name', 'Bp  Laca Poliuretánica', 'BP LACA POLIURETÁNICA', Product::class],
     'nombre de producto con tilde partida' => ['product', 'name', "bp primer epo\u{0301}xico", 'BP PRIMER EPÓXICO', Product::class],
     'bodega conserva sus mayúsculas' => ['warehouse', 'name', '  Bodega   Neiva ', 'Bodega Neiva', Warehouse::class],
