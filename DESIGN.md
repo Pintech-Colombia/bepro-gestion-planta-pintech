@@ -116,7 +116,7 @@ How it works:
 
 | Enum | Case → tone |
 | :-- | :-- |
-| `SalesOrderStatus` | pending_approval warning · on_hold warning · pending warning · in_progress info · ready success · delivered success · cancelled danger |
+| `SalesOrderStatus` | pending_approval warning · on_hold neutral · pending warning · in_progress info · ready success · delivered success · cancelled danger |
 | `SalesOrderPriority` | low neutral · medium neutral · high danger |
 | `QuotationStatus` | draft neutral · sent info · accepted success · rejected danger |
 | `ProductionOrderStatus` | pending warning · in_progress info · pending_review warning · completed success · cancelled danger |

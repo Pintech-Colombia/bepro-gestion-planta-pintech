@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -53,7 +54,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read User|null $holder
  * @property-read Collection|SalesOrderItem[] $items
  * @property-read SalesOrder|null $parent
- * @property-read Collection|SalesOrder[] $remainders
+ * @property-read SalesOrder|null $remainder
  */
 #[Fillable([
     'client_id',
@@ -173,9 +174,12 @@ class SalesOrder extends Model
         return $this->belongsTo(Quotation::class, 'quotation_id');
     }
 
+    /**
+     * Ordenadas por id: sin orden, PostgreSQL puede devolverlas distinto en cada carga.
+     */
     public function items(): HasMany
     {
-        return $this->hasMany(SalesOrderItem::class, 'sales_order_id');
+        return $this->hasMany(SalesOrderItem::class, 'sales_order_id')->orderBy('id');
     }
 
     /**
@@ -187,12 +191,22 @@ class SalesOrder extends Model
     }
 
     /**
-     * Pedidos con lo que no se aprobó de este (aprobación parcial). El resto de un resto cuelga del segundo, no del
-     * primero.
+     * Pedido con lo que no se aprobó de este (aprobación parcial). Hay a lo sumo uno: aprobado, el pedido queda
+     * «Pendiente» y no se vuelve a aprobar (índice único en `parent_sales_order_id`). El resto de un resto cuelga del
+     * segundo, no del primero.
      */
-    public function remainders(): HasMany
+    public function remainder(): HasOne
     {
-        return $this->hasMany(SalesOrder::class, 'parent_sales_order_id');
+        return $this->hasOne(SalesOrder::class, 'parent_sales_order_id');
+    }
+
+    /**
+     * Si se puede aprobar parcial: hace falta al menos una unidad que salga y una que pase al resto. La ventana de
+     * aprobar oculta la casilla si no; `SplitSalesOrderRemainder` lo vuelve a exigir con las líneas bloqueadas.
+     */
+    public function canBeSplit(): bool
+    {
+        return $this->items->sum(fn (SalesOrderItem $item): int => (int) $item->quantity) >= 2;
     }
 
     /**

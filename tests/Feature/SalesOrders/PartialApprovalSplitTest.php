@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Notifications\SalesOrders\SalesOrderApproved;
 use App\Notifications\SalesOrders\SalesOrderOnHold;
 use App\Notifications\SalesOrders\SalesOrderReleased;
+use Illuminate\Database\QueryException;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -303,7 +304,7 @@ it('aprueba el resto parcial otra vez: el tercero cuelga del segundo', function 
         ->and($third->hold_reason)->toBe('Abonó una parte')
         ->and($third->created_by)->toBe($this->commercial->id)
         ->and($third->items()->pluck('quantity')->all())->toBe([20])
-        ->and($order->remainders()->pluck('id')->all())->toBe([$second->id])
+        ->and($order->remainder()->value('id'))->toBe($second->id)
         ->and($this->commercial->notifications()->get()->filter(fn ($notification): bool => $notification->data['kind'] === 'released')->sole()->data['message'])
         ->toBe("Pedido #{$second->id} de Pinturas Andinas (resto del #{$order->id}) liberado parcial (resto en el #{$third->id}): Abonó una parte");
 });
@@ -349,10 +350,30 @@ it('deja en la auditoría la línea movida y la reducida', function () {
         ->and($changeOf($reduced)->properties['old'])->toBe(['quantity' => 100])
         ->and($changeOf($reduced)->properties['attributes'])->toBe(['quantity' => 40])
         ->and($changeOf($reduced)->description)->toBe("Línea de pedido \"Pedido #{$order->id} · {$reduced->product->name}\" actualizada")
-        // La diferencia de la línea reducida nace en el resto, y también queda.
-        ->and(Activity::query()->where('subject_type', SalesOrderItem::class)->where('event', 'created')
-            ->where('subject_id', $remainder->items()->whereKeyNot($moved->id)->sole()->id)->sole()->properties['attributes'])
-        ->toBe(['sales_order_id' => $remainder->id, 'quantity' => 60]);
+        // Crear líneas no se audita (tampoco la diferencia que nace en el resto): solo sus cambios.
+        ->and(Activity::query()->where('subject_type', SalesOrderItem::class)->where('event', 'created')->count())->toBe(0);
+});
+
+it('ofrece aprobar parcial solo si el pedido suma al menos dos unidades', function (array $quantities, bool $canSplit) {
+    $order = splitOrder($this->commercial, $quantities);
+
+    $this->actingAs($this->coordinator)
+        ->get(route('sales-orders.show', $order))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('can.approve', true)
+            ->where('can.approvePartially', $canSplit));
+})->with([
+    'una unidad' => [[1], false],
+    'dos unidades en una línea' => [[2], true],
+    'dos líneas de una unidad' => [[1, 1], true],
+]);
+
+it('no deja que un pedido tenga dos restos: lo impide la base', function () {
+    $order = splitOrder($this->commercial, [10, 20]);
+    $this->actingAs($this->coordinator)->post(route('sales-orders.approve', $order), splitPayload($order, [10, 0]));
+
+    expect(fn () => SalesOrder::factory()->create(['parent_sales_order_id' => $order->id]))
+        ->toThrow(QueryException::class);
 });
 
 it('enlaza el original con su resto en el detalle', function () {
@@ -363,7 +384,7 @@ it('enlaza el original con su resto en el detalle', function () {
     $this->actingAs($this->commercial)
         ->get(route('sales-orders.show', $order))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('order.approval.remainder_ids', [$remainder->id])
+            ->where('order.approval.remainder_id', $remainder->id)
             ->where('order.approval.parent_id', null)
             ->has('order.items', 1));
 
@@ -372,7 +393,7 @@ it('enlaza el original con su resto en el detalle', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->where('order.status', SalesOrderStatus::OnHold->value)
             ->where('order.approval.parent_id', $order->id)
-            ->where('order.approval.remainder_ids', [])
+            ->where('order.approval.remainder_id', null)
             ->where('order.approval.hold_reason', 'Falta cupo; abonar $2 M')
             ->has('order.items', 1));
 });

@@ -168,11 +168,12 @@ class SalesOrderController extends Controller
             'items.product',
             'items.productVariant',
             'quotation',
-            'remainders' => fn ($query) => $query->orderBy('id')->select(['id', 'parent_sales_order_id']),
+            'remainder:id,parent_sales_order_id',
         ]);
 
         $statusTransitions = $salesOrder->status->nextTransitions();
         $canViewQuotation = $salesOrder->quotation !== null && ($user?->can('view', $salesOrder->quotation) ?? false);
+        $canApprove = $user?->can('approve', $salesOrder) ?? false;
 
         return Inertia::render('SalesOrders/Show', [
             'order' => $this->buildOrderData($salesOrder, $canViewQuotation),
@@ -183,7 +184,8 @@ class SalesOrderController extends Controller
             'can' => [
                 'update' => $user?->can('update', $salesOrder) ?? false,
                 'updateStatus' => $user?->can('updateStatus', $salesOrder) ?? false,
-                'approve' => $user?->can('approve', $salesOrder) ?? false,
+                'approve' => $canApprove,
+                'approvePartially' => $canApprove && $salesOrder->canBeSplit(),
                 'hold' => $user?->can('hold', $salesOrder) ?? false,
                 'viewQuotation' => $canViewQuotation,
             ],
@@ -279,11 +281,11 @@ class SalesOrderController extends Controller
             'created_on' => $salesOrder->createdOnPlantDay(),
             'creator' => $salesOrder->creator ? ['name' => $salesOrder->creator->name] : null,
             // La decisión: retenido (y por quién) y/o aprobado. Al aprobar un retenido se ven las dos.
-            // Los enlaces de una aprobación parcial: el pedido del que salió este resto y los pedidos con lo que no se
-            // aprobó de este. Comparten creador, así que quien abre uno puede abrir los otros.
+            // Los enlaces de una aprobación parcial: el pedido del que salió este resto y el pedido con lo que no se
+            // aprobó de este. Comparten creador, así que quien abre uno puede abrir el otro.
             'approval' => [
                 'parent_id' => $salesOrder->parent_sales_order_id,
-                'remainder_ids' => $salesOrder->remainders->pluck('id')->all(),
+                'remainder_id' => $salesOrder->remainder?->id,
                 'approved_by' => $salesOrder->approver?->name,
                 'approved_at' => $salesOrder->approved_at?->toIso8601String(),
                 'note' => $salesOrder->approval_note,

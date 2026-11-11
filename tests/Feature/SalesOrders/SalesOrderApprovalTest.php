@@ -441,7 +441,7 @@ it('muestra los botones y la ficha de la decisión en el detalle', function () {
             ->where('order.approval.hold_reason', 'Cartera vencida')
             ->where('order.approval.approved_at', null)
             ->where('order.approval.parent_id', null)
-            ->where('order.approval.remainder_ids', [])
+            ->where('order.approval.remainder_id', null)
             ->missing('order.approval.is_partial'));
 
     $this->actingAs($this->commercial)

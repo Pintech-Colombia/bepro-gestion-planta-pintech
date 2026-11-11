@@ -22,7 +22,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sales_orders', function (Blueprint $table): void {
-            $table->foreignId('parent_sales_order_id')->nullable()->index()->constrained('sales_orders')->restrictOnDelete();
+            // Único: un pedido tiene a lo sumo un resto (aprobado, queda «Pendiente» y no se vuelve a aprobar).
+            $table->foreignId('parent_sales_order_id')->nullable()->unique()->constrained('sales_orders')->restrictOnDelete();
         });
 
         $this->restoreSqliteStatusCheck();
@@ -32,7 +33,7 @@ return new class extends Migration
     {
         Schema::table('sales_orders', function (Blueprint $table): void {
             $table->dropForeign(['parent_sales_order_id']);
-            $table->dropIndex(['parent_sales_order_id']);
+            $table->dropUnique(['parent_sales_order_id']);
             $table->dropColumn('parent_sales_order_id');
         });
 

@@ -35,6 +35,8 @@ export type ApproveOrderItem = {
 type ApproveOrderDialogProps = {
     orderId: number;
     items: ApproveOrderItem[];
+    /** Si se puede aprobar parcial (`can.approvePartially`): sin al menos 2 unidades, la casilla no aparece. */
+    canApprovePartially: boolean;
 };
 
 type ApprovedLine = { id: number; approved_quantity: string };
@@ -58,8 +60,12 @@ const leftOver = (item: ApproveOrderItem, approved: string): number =>
 export function ApproveOrderDialog({
     orderId,
     items,
+    canApprovePartially,
 }: ApproveOrderDialogProps) {
     const [open, setOpen] = useState(false);
+    // Las líneas tal como estaban al abrir: las filas y las cantidades salen de la misma copia, así una recarga de la
+    // página (por ejemplo, tras un error) nunca pone un producto junto a la cantidad de otro.
+    const [lines, setLines] = useState<ApproveOrderItem[]>(items);
     const { data, setData, post, transform, processing, errors, clearErrors } =
         useForm({
             is_partial: false,
@@ -70,6 +76,7 @@ export function ApproveOrderDialog({
 
     const openDialog = () => {
         // Con las líneas de ahora: el pedido pudo cambiar desde que se montó la página.
+        setLines(items);
         setData({ is_partial: false, note: '', items: initialLines(items) });
         clearErrors();
         setOpen(true);
@@ -83,7 +90,7 @@ export function ApproveOrderDialog({
             ),
         );
 
-    const remainderCount = items.filter((item, index) =>
+    const remainderCount = lines.filter((item, index) =>
         leftOver(item, data.items[index]?.approved_quantity ?? ''),
     ).length;
 
@@ -126,20 +133,22 @@ export function ApproveOrderDialog({
                         </DialogHeader>
 
                         <DialogBody className="space-y-4">
-                            <FormCheckbox
-                                id="is_partial"
-                                label="Aprobación parcial"
-                                help="Indica cuánto sale ahora de cada producto."
-                                checked={data.is_partial}
-                                onCheckedChange={(checked) =>
-                                    setData('is_partial', checked === true)
-                                }
-                                error={errors.is_partial}
-                            />
+                            {canApprovePartially && (
+                                <FormCheckbox
+                                    id="is_partial"
+                                    label="Aprobación parcial"
+                                    help="Indica cuánto sale ahora de cada producto."
+                                    checked={data.is_partial}
+                                    onCheckedChange={(checked) =>
+                                        setData('is_partial', checked === true)
+                                    }
+                                    error={errors.is_partial}
+                                />
+                            )}
 
                             {data.is_partial && (
                                 <div className="space-y-3">
-                                    {items.map((item, index) => (
+                                    {lines.map((item, index) => (
                                         <FormLineItem
                                             key={item.id}
                                             index={index}

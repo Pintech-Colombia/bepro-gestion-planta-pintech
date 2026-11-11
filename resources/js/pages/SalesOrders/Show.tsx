@@ -60,8 +60,8 @@ type SalesOrderDetail = {
     approval: {
         /** Pedido del que salió este como resto de una aprobación parcial. */
         parent_id: number | null;
-        /** Pedidos con lo que no se aprobó de este (aprobación parcial). */
-        remainder_ids: number[];
+        /** Pedido con lo que no se aprobó de este (aprobación parcial); a lo sumo uno. */
+        remainder_id: number | null;
         approved_by: string | null;
         approved_at: string | null;
         note: string | null;
@@ -84,6 +84,8 @@ type Props = {
         updateStatus: boolean;
         /** Aprobar: en «Por aprobar» o «Retenido», con `sales_orders.approve`. */
         approve: boolean;
+        /** Aprobar parcial: además, el pedido suma al menos 2 unidades (`SalesOrder::canBeSplit`). */
+        approvePartially: boolean;
         /** Retener: solo en «Por aprobar». */
         hold: boolean;
         viewQuotation: boolean;
@@ -121,6 +123,9 @@ export default function SalesOrdersShow({
                                     <ApproveOrderDialog
                                         orderId={order.id}
                                         items={order.items}
+                                        canApprovePartially={
+                                            can.approvePartially
+                                        }
                                     />
                                 )}
                             </div>
@@ -275,28 +280,25 @@ export default function SalesOrdersShow({
                                                 />
                                             </>
                                         )}
-                                        {order.approval.remainder_ids.length >
-                                            0 && (
+                                        {order.approval.remainder_id !==
+                                            null && (
                                             <DetailItem
                                                 label="Lo no aprobado"
                                                 value={
-                                                    <span className="flex flex-col gap-1">
-                                                        {order.approval.remainder_ids.map(
-                                                            (id) => (
-                                                                <RecordLink
-                                                                    key={id}
-                                                                    href={
-                                                                        salesOrdersShow(
-                                                                            id,
-                                                                        ).url
-                                                                    }
-                                                                >
-                                                                    Resto en el
-                                                                    pedido #{id}
-                                                                </RecordLink>
-                                                            ),
-                                                        )}
-                                                    </span>
+                                                    <RecordLink
+                                                        href={
+                                                            salesOrdersShow(
+                                                                order.approval
+                                                                    .remainder_id,
+                                                            ).url
+                                                        }
+                                                    >
+                                                        Resto en el pedido #
+                                                        {
+                                                            order.approval
+                                                                .remainder_id
+                                                        }
+                                                    </RecordLink>
                                                 }
                                             />
                                         )}

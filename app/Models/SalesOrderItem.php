@@ -48,8 +48,16 @@ class SalesOrderItem extends Model
     protected bool $auditFeminine = true;
 
     /**
-     * Las líneas solo cambian al aprobar parcial: se reducen (cantidad) o pasan al pedido con el resto (pedido). La
-     * auditoría guarda qué cantidad tenía cada una y a qué pedido pasó.
+     * Solo se auditan las modificaciones: una línea solo cambia al aprobar parcial, cuando se reduce (cantidad) o pasa
+     * al pedido con el resto (pedido). Crear las líneas de cada pedido no se registra: el pedido ya deja su propia
+     * entrada, y una por línea solo llenaría la auditoría.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = ['updated'];
+
+    /**
+     * La auditoría guarda qué cantidad tenía cada línea y a qué pedido pasó.
      */
     public function getActivitylogOptions(): LogOptions
     {
