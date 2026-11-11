@@ -145,41 +145,6 @@
             white-space: pre-line;
         }
 
-        /* ── Badges de estado (tonos de DESIGN.md) ── */
-        .badge {
-            display: inline-block;
-            padding: 1.5pt 6pt;
-            border-radius: 8pt;
-            font-size: 7.2pt;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .badge-draft {
-            background-color: #e7e9ee;
-            color: #606e80;
-        }
-
-        .badge-submitted {
-            background-color: #e0f0fb;
-            color: #1259a1;
-        }
-
-        .badge-in_review {
-            background-color: #fef3db;
-            color: #955104;
-        }
-
-        .badge-approved {
-            background-color: #dcf2e4;
-            color: #137236;
-        }
-
-        .badge-rejected {
-            background-color: #fae1e1;
-            color: #b81e1e;
-        }
-
         /* ── Pie de página fijo ── */
         .footer {
             position: fixed;
@@ -195,6 +160,11 @@
     </style>
 </head>
 <body>
+    {{-- PIE FIJO (va primero en <body> para que DomPDF lo repita desde la hoja 1 tras saltos de página) --}}
+    <div class="footer">
+        Solicitud SDR-{{ $request['request_number'] }} &nbsp;·&nbsp; Generado el {{ $generatedAt }} — Pintech OS
+    </div>
+
     {{-- CABECERA DE CONTROL DOCUMENTAL --}}
     <table class="header-table">
         <tr>
@@ -301,9 +271,5 @@
             @endif
         </table>
     @endif
-
-    <div class="footer">
-        Solicitud SDR-{{ $request['request_number'] }} &nbsp;·&nbsp; Generado el {{ $generatedAt }} — Pintech OS
-    </div>
 </body>
 </html>

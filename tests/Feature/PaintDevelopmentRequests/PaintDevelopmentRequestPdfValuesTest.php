@@ -106,3 +106,44 @@ it('filters conditional payload fields and groups short fields before full-width
 
     expect($keysWhenShown)->toBe(['sustrato', 'otro_sustrato', 'pintura_existente', 'sistema_existente']);
 });
+
+it('keeps conditional and full-width payload fields aligned with the frontend form and validation rules', function () {
+    preg_match_all(
+        "/(\w+): \{\s*source: '(\w+)',\s*value: '([^']+)'\s*\}/u",
+        file_get_contents(resource_path('js/components/paint-development-requests/conditional-fields.ts')),
+        $matches,
+        PREG_SET_ORDER
+    );
+
+    $inFrontend = collect($matches)
+        ->mapWithKeys(fn (array $match) => [$match[1] => ['source' => $match[2], 'value' => $match[3]]])
+        ->all();
+
+    expect(PaintDevelopmentRequest::CONDITIONAL_PAYLOAD_FIELDS)->toBe($inFrontend);
+
+    $textAreaFieldsInRules = collect((new StorePaintDevelopmentRequest)->rules())
+        ->filter(fn (mixed $rules) => is_array($rules) && in_array('max:5000', $rules, true))
+        ->keys()
+        ->sort()
+        ->values()
+        ->all();
+
+    $fullWidthFields = collect(PaintDevelopmentRequest::FULL_WIDTH_PAYLOAD_FIELDS)
+        ->flatMap(fn (array $fields, string $payload) => array_map(fn (string $field) => "{$payload}.{$field}", $fields))
+        ->all();
+
+    foreach ($textAreaFieldsInRules as $textAreaField) {
+        expect($fullWidthFields)->toContain($textAreaField);
+    }
+});
+
+it('handles numeric payload keys without throwing a TypeError', function () {
+    $rows = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        0 => 'Valor con clave entera',
+        'sustrato' => 'Acero al carbono',
+    ]);
+
+    $keys = collect($rows)->flatten(1)->pluck('key')->all();
+
+    expect($keys)->toBe(['sustrato', '0']);
+});

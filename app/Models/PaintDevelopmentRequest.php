@@ -187,7 +187,7 @@ class PaintDevelopmentRequest extends Model
         'context_payload' => ['sistema_existente', 'quimicos'],
         'performance_payload' => ['criterios_tecnicos', 'indispensable', 'negociable', 'acabado_ref'],
         'application_payload' => ['restricciones', 'equipo_detalle', 'sistema_capas'],
-        'specifications_payload' => ['secados', 'estabilidad', 'almacenamiento', 'criterios_aprobacion', 'observaciones'],
+        'specifications_payload' => ['kit_ab', 'secados', 'estabilidad', 'almacenamiento', 'criterios_aprobacion', 'observaciones'],
     ];
 
     /** Una respuesta como se lee en el PDF: el 0 es un dato, y un texto en un campo numérico sigue como texto. */
@@ -243,16 +243,18 @@ class PaintDevelopmentRequest extends Model
         $shortItems = [];
         $fullWidthItems = [];
 
-        foreach ($orderedKeys as $field) {
-            if (! array_key_exists($field, $payloadData)) {
+        foreach ($orderedKeys as $rawKey) {
+            if (! array_key_exists($rawKey, $payloadData)) {
                 continue;
             }
+
+            $field = (string) $rawKey;
 
             if (! self::payloadFieldApplies($field, $payloadData)) {
                 continue;
             }
 
-            $rawValue = $payloadData[$field];
+            $rawValue = $payloadData[$rawKey];
             if (is_string($rawValue)) {
                 $rawValue = trim($rawValue);
             }
