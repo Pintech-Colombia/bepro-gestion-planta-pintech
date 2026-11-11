@@ -92,46 +92,45 @@ class PaintDevelopmentRequest extends Model
             'otro_sustrato' => 'Especificación del sustrato',
             'estado_superficie' => 'Estado de la superficie',
             'pintura_existente' => '¿Pintura existente?',
-            'sistema_existente' => 'Sistema de pintura actual',
             'preparacion' => 'Preparación superficial',
             'exposicion' => 'Tipo de exposición',
-            'agua_humedad' => 'Contacto con agua o humedad',
+            'agua_humedad' => 'Contacto con agua / humedad',
             'corrosividad' => 'Categoría de corrosividad',
-            'temp_min' => 'Temperatura mín. servicio (°C)',
-            'temp_max' => 'Temperatura máx. servicio (°C)',
             'ciclos_termicos' => 'Ciclos térmicos',
-            'quimicos' => 'Exposición a químicos / contaminantes',
+            'temp_min' => 'Temp. mín. de servicio (°C)',
+            'temp_max' => 'Temp. máx. de servicio (°C)',
+            'sistema_existente' => 'Sistema de pintura actual',
+            'quimicos' => 'Químicos / contaminantes',
         ],
         'performance_payload' => [
             'funcion' => 'Función principal',
             'vida_util' => 'Vida útil esperada',
             'prioridad' => 'Prioridad técnica',
-            'pruebas' => 'Pruebas o evidencias requeridas',
+            'pruebas' => 'Pruebas requeridas',
             'adherencia_obj' => 'Adherencia objetivo (psi)',
             'camara_obj' => 'Cámara salina objetivo (h)',
-            'criterios_tecnicos' => 'Otros criterios técnicos',
-            'indispensable' => 'Características indispensables',
-            'negociable' => 'Características negociables',
             'color' => 'Color o referencia',
             'brillo' => 'Nivel de brillo',
             'textura' => 'Textura',
             'cubricion' => 'Cubrición esperada',
-            'delta_e' => 'Tolerancia máxima Delta E',
+            'delta_e' => 'Tolerancia máx. Delta E',
             'retencion' => 'Retención de color y brillo',
+            'criterios_tecnicos' => 'Otros criterios técnicos',
+            'indispensable' => 'Características indispensables',
+            'negociable' => 'Características negociables',
             'acabado_ref' => 'Referencia visual / acabado',
         ],
         'application_payload' => [
             'metodo' => 'Método de aplicación',
-            'temp_aplicacion' => 'Temperatura de aplicación (°C)',
-            'humedad_aplicacion' => 'Humedad relativa (% HR)',
             'geometria' => 'Geometría o tipo de pieza',
-            'dft_min' => 'Espesor seco mín. por mano (mils)',
-            'dft_max' => 'Espesor seco máx. por mano (mils)',
+            'temp_aplicacion' => 'Temp. de aplicación (°C)',
+            'humedad_aplicacion' => 'Humedad relativa (% HR)',
+            'dft_min' => 'Espesor seco mín. (mils)',
+            'dft_max' => 'Espesor seco máx. (mils)',
             'manos' => 'Número previsto de manos',
             'repinte' => 'Tiempo entre manos',
-            'servicio' => 'Puesta en servicio',
+            'servicio' => 'Puesta en servicio (h)',
             'antidescuelgue' => 'Resistencia al descuelgue',
-            'equipo_detalle' => 'Equipo, boquilla o restricciones',
             'vehiculo' => 'Base requerida',
             'tecnologia' => 'Tecnología preferida',
             'otra_tecnologia' => 'Especificación de tecnología',
@@ -140,8 +139,9 @@ class PaintDevelopmentRequest extends Model
             'pot_life' => 'Pot life mínimo (min)',
             'solidos_vol' => 'Sólidos por volumen (%)',
             'ajustador' => '¿Se permite ajustador?',
-            'voc' => 'VOC máximo permitido (g/L)',
+            'voc' => 'VOC máx. permitido (g/L)',
             'restricciones' => 'Restricciones especiales',
+            'equipo_detalle' => 'Equipo, boquilla o presión',
             'sistema_capas' => 'Sistema completo previsto',
         ],
         'specifications_payload' => [
@@ -149,20 +149,20 @@ class PaintDevelopmentRequest extends Model
             'densidad' => 'Densidad objetivo',
             'solidos_peso' => 'Sólidos por peso objetivo',
             'finura' => 'Finura de molienda',
-            'secados' => 'Tiempos de secado objetivo',
-            'estabilidad' => 'Estabilidad en envase',
             'presentacion' => 'Presentaciones requeridas',
             'consumo' => 'Consumo estimado',
             'frecuencia' => 'Frecuencia de compra',
-            'almacenamiento' => 'Almacenamiento y transporte',
-            'kit_ab' => 'Configuración del kit A/B',
             'competidor' => 'Producto competidor',
-            'meta_competidor' => 'Objetivo frente a la referencia',
+            'meta_competidor' => 'Objetivo vs. referencia',
             'costo_objetivo' => 'Costo o precio objetivo',
-            'cantidad_prueba' => 'Cantidad para muestra / prueba',
+            'cantidad_prueba' => 'Cantidad para muestra',
             'aprobador' => 'Quién aprueba el desarrollo',
             'forma_aprobacion' => 'Forma de aprobación',
-            'criterios_aprobacion' => 'Criterios exactos de aprobación',
+            'kit_ab' => 'Configuración del kit A/B',
+            'secados' => 'Tiempos de secado objetivo',
+            'estabilidad' => 'Estabilidad en envase',
+            'almacenamiento' => 'Almacenamiento y transporte',
+            'criterios_aprobacion' => 'Criterios de aprobación',
             'observaciones' => 'Observaciones adicionales',
         ],
     ];
@@ -179,15 +179,15 @@ class PaintDevelopmentRequest extends Model
     ];
 
     /**
-     * Campos descriptivos (TextArea) que ocupan el ancho completo de la fila en el PDF.
+     * Campos descriptivos (TextArea) que cierran cada sección ocupando el ancho completo de la fila en el PDF.
      *
      * @var array<string, list<string>>
      */
     public const FULL_WIDTH_PAYLOAD_FIELDS = [
-        'context_payload' => ['quimicos'],
+        'context_payload' => ['sistema_existente', 'quimicos'],
         'performance_payload' => ['criterios_tecnicos', 'indispensable', 'negociable', 'acabado_ref'],
-        'application_payload' => ['equipo_detalle', 'sistema_capas'],
-        'specifications_payload' => ['secados', 'estabilidad', 'almacenamiento', 'kit_ab', 'criterios_aprobacion', 'observaciones'],
+        'application_payload' => ['restricciones', 'equipo_detalle', 'sistema_capas'],
+        'specifications_payload' => ['secados', 'estabilidad', 'almacenamiento', 'criterios_aprobacion', 'observaciones'],
     ];
 
     /** Una respuesta como se lee en el PDF: el 0 es un dato, y un texto en un campo numérico sigue como texto. */
@@ -228,19 +228,20 @@ class PaintDevelopmentRequest extends Model
     }
 
     /**
-     * Organiza un bloque del payload en filas sobre una grilla base de 12 columnas (hasta 4 campos cortos por fila).
+     * Organiza un bloque del payload en filas para una tabla de 2 columnas (`th | td | th | td`).
+     * Los campos cortos van en pares (2 por fila) y los descriptivos (`full_width`) cierran el bloque a ancho completo.
      *
      * @param  array<string, mixed>  $payloadData
-     * @param  int  $maxColumnsPerRow  Máximo de campos cortos por fila (3 o 4).
-     * @return list<list<array{key: string, label: string, value: string, full_width: bool, colspan: int}>>
+     * @return list<list<array{key: string, label: string, value: string, full_width: bool}>>
      */
-    public static function pdfPayloadRows(string $payload, array $payloadData, int $maxColumnsPerRow = 4): array
+    public static function pdfPayloadRows(string $payload, array $payloadData): array
     {
         $definedKeys = array_keys(self::PAYLOAD_FIELD_LABELS[$payload] ?? []);
         $extraKeys = array_values(array_diff(array_keys($payloadData), $definedKeys));
         $orderedKeys = [...$definedKeys, ...$extraKeys];
 
-        $items = [];
+        $shortItems = [];
+        $fullWidthItems = [];
 
         foreach ($orderedKeys as $field) {
             if (! array_key_exists($field, $payloadData)) {
@@ -251,87 +252,34 @@ class PaintDevelopmentRequest extends Model
                 continue;
             }
 
-            $items[] = [
+            $rawValue = $payloadData[$field];
+            if (is_string($rawValue)) {
+                $rawValue = trim($rawValue);
+            }
+
+            $item = [
                 'key' => $field,
                 'label' => self::displayPayloadLabel($payload, $field),
-                'value' => self::displayPayloadValue($payload, $field, $payloadData[$field]),
+                'value' => self::displayPayloadValue($payload, $field, $rawValue),
                 'full_width' => self::isFullWidthPayloadField($payload, $field),
             ];
+
+            if ($item['full_width']) {
+                $fullWidthItems[] = $item;
+            } else {
+                $shortItems[] = $item;
+            }
         }
 
         $rows = [];
-        $buffer = [];
-        $wideBuffer = [];
 
-        $emitRow = static function (array $chunk) use (&$rows): void {
-            $count = count($chunk);
-            if ($count === 0) {
-                return;
-            }
-
-            $colspan = intdiv(12, $count);
-            $rows[] = array_map(
-                static fn (array $item): array => [...$item, 'colspan' => $colspan],
-                $chunk
-            );
-        };
-
-        $flushWideBuffer = static function () use (&$wideBuffer, $emitRow): void {
-            $total = count($wideBuffer);
-            if ($total === 0) {
-                return;
-            }
-
-            for ($i = 0; $i < $total; $i += 2) {
-                $emitRow(array_slice($wideBuffer, $i, 2));
-            }
-
-            $wideBuffer = [];
-        };
-
-        $flushBuffer = static function () use (&$buffer, $maxColumnsPerRow, $emitRow): void {
-            $total = count($buffer);
-            if ($total === 0) {
-                return;
-            }
-
-            $index = 0;
-            while ($total - $index > 0) {
-                $remaining = $total - $index;
-
-                if ($remaining <= $maxColumnsPerRow) {
-                    $emitRow(array_slice($buffer, $index, $remaining));
-                    break;
-                }
-
-                // Evita dejar 1 campo suelto en la última fila (p. ej. 5 → 3+2, 6 → 3+3, 9 → 3+3+3, 10 → 4+3+3).
-                if ($remaining === 5 || $remaining === 6 || $remaining === 9) {
-                    $take = 3;
-                } else {
-                    $take = $maxColumnsPerRow;
-                }
-
-                $emitRow(array_slice($buffer, $index, $take));
-                $index += $take;
-            }
-
-            $buffer = [];
-        };
-
-        foreach ($items as $item) {
-            if ($item['full_width']) {
-                $flushBuffer();
-                $wideBuffer[] = $item;
-
-                continue;
-            }
-
-            $flushWideBuffer();
-            $buffer[] = $item;
+        foreach (array_chunk($shortItems, 2) as $pair) {
+            $rows[] = $pair;
         }
 
-        $flushBuffer();
-        $flushWideBuffer();
+        foreach ($fullWidthItems as $item) {
+            $rows[] = [$item];
+        }
 
         return $rows;
     }

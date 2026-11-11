@@ -8,15 +8,15 @@
          * No usar `* { margin: 0 }`: en DomPDF alcanza a `@page` y anula los márgenes de impresión.
          */
         @page {
-            margin: 14pt 22pt 22pt 22pt;
+            margin: 22pt 28pt 34pt 28pt;
         }
 
         body {
             margin: 0;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 7.4pt;
-            color: #111111;
-            line-height: 1.15;
+            font-size: 8.5pt;
+            color: #202532;
+            line-height: 1.28;
         }
 
         table {
@@ -24,45 +24,38 @@
             border-collapse: collapse;
         }
 
-        td,
-        th {
-            border: 0.5pt solid #a6a6a6;
-            padding: 1.8pt 4pt;
-            vertical-align: top;
-            text-align: left;
-            word-wrap: break-word;
+        tr {
+            page-break-inside: avoid;
         }
 
-        /* Fila invisible de 12 celdas para que DomPDF resuelva exacto colspan 3 (25%), 4 (33,3%), 6 (50%) y 12 (100%). */
-        tr.grid-sizer td {
-            border: none;
-            padding: 0;
-            height: 0;
-            line-height: 0;
-            font-size: 0;
-            width: 8.333%;
+        th,
+        td {
+            border: 0.75pt solid #d0d4dc;
+            padding: 3.2pt 6pt;
+            vertical-align: top;
+            text-align: left;
         }
 
         /* ── Cabecera estilo formato técnico ISO ── */
         .header-table td,
         .header-table th {
             vertical-align: middle;
-            border-color: #333333;
+            border: 0.75pt solid #333333;
         }
 
         .logo-cell {
             width: 22%;
             text-align: center;
-            padding: 2.5pt;
+            padding: 4pt;
         }
 
         .logo-img {
-            max-height: 30pt;
-            max-width: 100pt;
+            max-height: 36pt;
+            max-width: 115pt;
         }
 
         .logo-fallback {
-            font-size: 12pt;
+            font-size: 13pt;
             font-weight: bold;
             letter-spacing: 0.5pt;
             color: #111111;
@@ -71,11 +64,11 @@
         .title-cell {
             width: 48%;
             text-align: center;
-            padding: 2.5pt 6pt;
+            padding: 4pt 6pt;
         }
 
         .doc-title {
-            font-size: 10pt;
+            font-size: 11pt;
             font-weight: bold;
             text-transform: uppercase;
             color: #111111;
@@ -83,9 +76,9 @@
         }
 
         .doc-subtitle {
-            font-size: 7.2pt;
+            font-size: 8pt;
             color: #444444;
-            margin-top: 1pt;
+            margin-top: 2pt;
         }
 
         .meta-label {
@@ -93,67 +86,111 @@
             background-color: #efefef;
             color: #222222;
             font-weight: bold;
-            font-size: 6.3pt;
+            font-size: 7pt;
             text-transform: uppercase;
-            padding: 1.8pt 4pt;
+            padding: 2.5pt 4pt;
         }
 
         .meta-value {
             width: 18%;
-            font-size: 7.2pt;
+            font-size: 8pt;
             color: #111111;
-            padding: 1.8pt 4pt;
+            padding: 2.5pt 4pt;
         }
 
-        /* ── Bloques técnicos (grilla de 12 columnas con etiqueta arriba + valor abajo) ── */
+        /* ── Secciones y grilla de 2 columnas (Sentence case) ── */
         .section-table {
-            margin-top: 3pt;
+            margin-top: 6pt;
+        }
+
+        .page-break-before {
+            page-break-before: always;
+            margin-top: 0;
         }
 
         .section-header {
-            background-color: #e6e6e6;
-            color: #111111;
+            background-color: #202532;
+            color: #ffffff;
             font-weight: bold;
-            font-size: 6.8pt;
+            font-size: 8.2pt;
             text-transform: uppercase;
-            letter-spacing: 0.25pt;
-            padding: 1.8pt 4pt;
-            border-top: 0.9pt solid #333333;
-            border-bottom: 0.7pt solid #333333;
-            border-left: 0.5pt solid #333333;
-            border-right: 0.5pt solid #333333;
+            letter-spacing: 0.3pt;
+            padding: 3.5pt 6pt;
+            border-color: #202532;
         }
 
-        .cell-label {
-            font-size: 5.7pt;
+        .field-label {
+            width: 19%;
+            background-color: #e7e9ee;
+            color: #202532;
             font-weight: bold;
-            text-transform: uppercase;
-            color: #555555;
-            letter-spacing: 0.1pt;
-            margin-bottom: 0.6pt;
+            font-size: 7.8pt;
         }
 
-        .cell-value {
-            font-size: 7.4pt;
-            color: #111111;
-            line-height: 1.15;
+        .field-value {
+            width: 31%;
+            color: #202532;
+            font-size: 8.3pt;
+            word-wrap: break-word;
+        }
+
+        .field-value-full {
+            width: 81%;
+            color: #202532;
+            font-size: 8.3pt;
+            word-wrap: break-word;
         }
 
         .pre-line {
             white-space: pre-line;
         }
 
+        /* ── Badges de estado (tonos de DESIGN.md) ── */
+        .badge {
+            display: inline-block;
+            padding: 1.5pt 6pt;
+            border-radius: 8pt;
+            font-size: 7.2pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-draft {
+            background-color: #e7e9ee;
+            color: #606e80;
+        }
+
+        .badge-submitted {
+            background-color: #e0f0fb;
+            color: #1259a1;
+        }
+
+        .badge-in_review {
+            background-color: #fef3db;
+            color: #955104;
+        }
+
+        .badge-approved {
+            background-color: #dcf2e4;
+            color: #137236;
+        }
+
+        .badge-rejected {
+            background-color: #fae1e1;
+            color: #b81e1e;
+        }
+
         /* ── Pie de página fijo ── */
         .footer {
             position: fixed;
-            bottom: -14pt;
+            bottom: -20pt;
             left: 0;
             right: 0;
             text-align: right;
-            font-size: 6.3pt;
-            color: #666666;
-            border-top: 0.5pt solid #bbbbbb;
-            padding-top: 1.5pt;
+            font-size: 7.2pt;
+            color: #606e80;
+            border-top: 0.5pt solid #d0d4dc;
+            padding-top: 2.5pt;
         }
     </style>
 </head>
@@ -185,43 +222,32 @@
         </tr>
     </table>
 
-    {{-- 1. IDENTIFICACIÓN DEL PROYECTO --}}
+    {{-- 1. IDENTIFICACIÓN --}}
     <table class="section-table">
-        <tr class="grid-sizer">@for($i = 0; $i < 12; $i++)<td></td>@endfor</tr>
         <tr>
-            <td colspan="12" class="section-header">1. Identificación del proyecto</td>
+            <td colspan="4" class="section-header">1. Identificación del proyecto</td>
         </tr>
         <tr>
-            <td colspan="4">
-                <div class="cell-label">Proyecto</div>
-                <div class="cell-value"><strong>{{ $request['project_name'] }}</strong></div>
-            </td>
-            <td colspan="4">
-                <div class="cell-label">Cliente</div>
-                <div class="cell-value">{{ filled($request['client_name'] ?? null) ? $request['client_name'] : '—' }}</div>
-            </td>
-            <td colspan="4">
-                <div class="cell-label">Responsable</div>
-                <div class="cell-value">{{ $request['responsible'] }}</div>
-            </td>
+            <th class="field-label">Proyecto</th>
+            <td class="field-value"><strong>{{ $request['project_name'] }}</strong></td>
+            <th class="field-label">Cliente</th>
+            <td class="field-value">{{ filled($request['client_name'] ?? null) ? $request['client_name'] : '—' }}</td>
         </tr>
         <tr>
-            <td colspan="4">
-                <div class="cell-label">Ciudad / región</div>
-                <div class="cell-value">{{ $request['city'] }}</div>
-            </td>
-            <td colspan="4">
-                <div class="cell-label">Fecha requerida para la muestra</div>
-                <div class="cell-value">{{ $request['sample_due_date'] ?? '—' }}</div>
-            </td>
-            <td colspan="4">
-                <div class="cell-label">Producto usado actualmente</div>
-                <div class="cell-value">{{ filled($request['current_product'] ?? null) ? $request['current_product'] : '—' }}</div>
-            </td>
+            <th class="field-label">Responsable</th>
+            <td class="field-value">{{ $request['responsible'] }}</td>
+            <th class="field-label">Ciudad / región</th>
+            <td class="field-value">{{ $request['city'] }}</td>
+        </tr>
+        <tr>
+            <th class="field-label">Fecha req. muestra</th>
+            <td class="field-value">{{ $request['sample_due_date'] ?? '—' }}</td>
+            <th class="field-label">Producto actual</th>
+            <td class="field-value">{{ filled($request['current_product'] ?? null) ? $request['current_product'] : '—' }}</td>
         </tr>
     </table>
 
-    {{-- 2 A 5. SECCIONES TÉCNICAS DEL PAYLOAD --}}
+    {{-- 2 A 5. BLOQUES TÉCNICOS DEL PAYLOAD (Pág 1: Secc 1–3 | Pág 2: Secc 4–5) --}}
     @foreach([
         'context_payload' => '2. Contexto — Proyecto, sustrato y exposición',
         'performance_payload' => '3. Desempeño — Función, resistencia y acabado',
@@ -232,20 +258,24 @@
             $rows = \App\Models\PaintDevelopmentRequest::pdfPayloadRows($payloadKey, $request[$payloadKey] ?? []);
         @endphp
         @if(count($rows) > 0)
-            <table class="section-table">
-                <tr class="grid-sizer">@for($i = 0; $i < 12; $i++)<td></td>@endfor</tr>
+            <table class="section-table {{ $payloadKey === 'application_payload' ? 'page-break-before' : '' }}">
                 <tr>
-                    <td colspan="12" class="section-header">{{ $sectionTitle }}</td>
+                    <td colspan="4" class="section-header">{{ $sectionTitle }}</td>
                 </tr>
                 @foreach($rows as $row)
-                    <tr>
-                        @foreach($row as $cell)
-                            <td colspan="{{ $cell['colspan'] }}">
-                                <div class="cell-label">{{ $cell['label'] }}</div>
-                                <div class="cell-value {{ $cell['full_width'] ? 'pre-line' : '' }}">{{ $cell['value'] }}</div>
-                            </td>
-                        @endforeach
-                    </tr>
+                    @if(count($row) === 2)
+                        <tr>
+                            <th class="field-label">{{ $row[0]['label'] }}</th>
+                            <td class="field-value">{{ $row[0]['value'] }}</td>
+                            <th class="field-label">{{ $row[1]['label'] }}</th>
+                            <td class="field-value">{{ $row[1]['value'] }}</td>
+                        </tr>
+                    @else
+                        <tr>
+                            <th class="field-label">{{ $row[0]['label'] }}</th>
+                            <td colspan="3" class="field-value-full pre-line">{{ $row[0]['value'] }}</td>
+                        </tr>
+                    @endif
                 @endforeach
             </table>
         @endif
@@ -254,26 +284,19 @@
     {{-- 6. REVISIÓN --}}
     @if(!empty($request['review_notes']) || !empty($request['reviewed_at']) || !empty($request['reviewer']['name']))
         <table class="section-table">
-            <tr class="grid-sizer">@for($i = 0; $i < 12; $i++)<td></td>@endfor</tr>
             <tr>
-                <td colspan="12" class="section-header">6. Revisión técnica</td>
+                <td colspan="4" class="section-header">6. Revisión técnica</td>
             </tr>
             <tr>
-                <td colspan="6">
-                    <div class="cell-label">Revisado por</div>
-                    <div class="cell-value">{{ $request['reviewer']['name'] ?? '—' }}</div>
-                </td>
-                <td colspan="6">
-                    <div class="cell-label">Fecha de revisión</div>
-                    <div class="cell-value">{{ $request['reviewed_at'] ?? '—' }}</div>
-                </td>
+                <th class="field-label">Revisado por</th>
+                <td class="field-value">{{ $request['reviewer']['name'] ?? '—' }}</td>
+                <th class="field-label">Fecha de revisión</th>
+                <td class="field-value">{{ $request['reviewed_at'] ?? '—' }}</td>
             </tr>
             @if(!empty($request['review_notes']))
                 <tr>
-                    <td colspan="12">
-                        <div class="cell-label">Notas de revisión</div>
-                        <div class="cell-value pre-line">{{ $request['review_notes'] }}</div>
-                    </td>
+                    <th class="field-label">Notas de revisión</th>
+                    <td colspan="3" class="field-value-full pre-line">{{ $request['review_notes'] }}</td>
                 </tr>
             @endif
         </table>

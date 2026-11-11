@@ -70,7 +70,7 @@ it('defines a readable Spanish label for every validated payload field', functio
     expect($labeled)->toBe($validated);
 });
 
-it('filters conditional payload fields and groups fields into balanced PDF grid rows', function () {
+it('filters conditional payload fields and groups short fields before full-width fields', function () {
     $rowsWhenHidden = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
         'sustrato' => 'Acero al carbono',
         'otro_sustrato' => '',
@@ -87,13 +87,13 @@ it('filters conditional payload fields and groups fields into balanced PDF grid 
 
     expect($keysWhenHidden)
         ->toBe(['sustrato', 'estado_superficie', 'pintura_existente', 'preparacion', 'temp_min', 'temp_max', 'quimicos'])
-        ->and($rowsWhenHidden[0])->toHaveCount(3)
-        ->and($rowsWhenHidden[1])->toHaveCount(3)
-        ->and($rowsWhenHidden[1][1]['label'])->toBe('Temperatura mín. servicio (°C)')
-        ->and($rowsWhenHidden[1][2]['label'])->toBe('Temperatura máx. servicio (°C)')
-        ->and($rowsWhenHidden[2])->toHaveCount(1)
-        ->and($rowsWhenHidden[2][0]['full_width'])->toBeTrue()
-        ->and($rowsWhenHidden[2][0]['colspan'])->toBe(12);
+        ->and($rowsWhenHidden[0])->toHaveCount(2)
+        ->and($rowsWhenHidden[1])->toHaveCount(2)
+        ->and($rowsWhenHidden[2])->toHaveCount(2)
+        ->and($rowsWhenHidden[2][0]['label'])->toBe('Temp. mín. de servicio (°C)')
+        ->and($rowsWhenHidden[2][1]['label'])->toBe('Temp. máx. de servicio (°C)')
+        ->and($rowsWhenHidden[3])->toHaveCount(1)
+        ->and($rowsWhenHidden[3][0]['full_width'])->toBeTrue();
 
     $rowsWhenShown = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
         'sustrato' => 'Otro',
