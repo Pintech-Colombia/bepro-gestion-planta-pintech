@@ -52,3 +52,56 @@ it('keeps the numeric fields the same as the validation rules and the form', fun
 
     expect($listed)->toBe($validated)->toBe($inForm);
 });
+
+it('defines a readable Spanish label for every validated payload field', function () {
+    $labeled = collect(PaintDevelopmentRequest::PAYLOAD_FIELD_LABELS)
+        ->flatMap(fn (array $fields, string $payload) => array_map(fn (string $field) => "{$payload}.{$field}", array_keys($fields)))
+        ->sort()
+        ->values()
+        ->all();
+
+    $validated = collect((new StorePaintDevelopmentRequest)->rules())
+        ->keys()
+        ->filter(fn (string $key) => preg_match('/^\w+_payload\.\w+$/', $key) === 1)
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($labeled)->toBe($validated);
+});
+
+it('filters conditional payload fields and pairs short fields into two-column PDF rows', function () {
+    $rowsWhenHidden = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        'sustrato' => 'Acero al carbono',
+        'otro_sustrato' => '',
+        'estado_superficie' => 'Nueva / sin pintar',
+        'pintura_existente' => 'No',
+        'sistema_existente' => '',
+        'preparacion' => ['Chorro abrasivo', 'Limpieza / desengrase'],
+        'temp_min' => '-5',
+        'temp_max' => '80',
+    ]);
+
+    $keysWhenHidden = collect($rowsWhenHidden)->flatten(1)->pluck('key')->all();
+
+    expect($keysWhenHidden)
+        ->toBe(['sustrato', 'estado_superficie', 'pintura_existente', 'preparacion', 'temp_min', 'temp_max'])
+        ->and($rowsWhenHidden[0])->toHaveCount(2)
+        ->and($rowsWhenHidden[1])->toHaveCount(1)
+        ->and($rowsWhenHidden[2])->toHaveCount(1)
+        ->and($rowsWhenHidden[2][0]['full_width'])->toBeTrue()
+        ->and($rowsWhenHidden[3])->toHaveCount(2)
+        ->and($rowsWhenHidden[3][0]['label'])->toBe('Temperatura mín. servicio (°C)')
+        ->and($rowsWhenHidden[3][1]['label'])->toBe('Temperatura máx. servicio (°C)');
+
+    $rowsWhenShown = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        'sustrato' => 'Otro',
+        'otro_sustrato' => 'Fibra de vidrio',
+        'pintura_existente' => 'Sí',
+        'sistema_existente' => 'Epóxico antiguo en dos capas',
+    ]);
+
+    $keysWhenShown = collect($rowsWhenShown)->flatten(1)->pluck('key')->all();
+
+    expect($keysWhenShown)->toBe(['sustrato', 'otro_sustrato', 'pintura_existente', 'sistema_existente']);
+});
