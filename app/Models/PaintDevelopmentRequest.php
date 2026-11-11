@@ -81,6 +81,115 @@ class PaintDevelopmentRequest extends Model
         'performance_payload' => ['adherencia_obj', 'camara_obj', 'delta_e'],
     ];
 
+    /**
+     * Etiquetas legibles y orden de presentación para el PDF, alineadas con los pasos del formulario y las reglas.
+     *
+     * @var array<string, array<string, string>>
+     */
+    public const PAYLOAD_FIELD_LABELS = [
+        'context_payload' => [
+            'sustrato' => 'Sustrato principal',
+            'otro_sustrato' => 'Especificación del sustrato',
+            'estado_superficie' => 'Estado de la superficie',
+            'pintura_existente' => '¿Pintura existente?',
+            'preparacion' => 'Preparación superficial',
+            'exposicion' => 'Tipo de exposición',
+            'agua_humedad' => 'Contacto con agua / humedad',
+            'corrosividad' => 'Categoría de corrosividad',
+            'ciclos_termicos' => 'Ciclos térmicos',
+            'temp_min' => 'Temp. mín. de servicio (°C)',
+            'temp_max' => 'Temp. máx. de servicio (°C)',
+            'sistema_existente' => 'Sistema de pintura actual',
+            'quimicos' => 'Químicos / contaminantes',
+        ],
+        'performance_payload' => [
+            'funcion' => 'Función principal',
+            'vida_util' => 'Vida útil esperada',
+            'prioridad' => 'Prioridad técnica',
+            'pruebas' => 'Pruebas requeridas',
+            'adherencia_obj' => 'Adherencia objetivo (psi)',
+            'camara_obj' => 'Cámara salina objetivo (h)',
+            'color' => 'Color o referencia',
+            'brillo' => 'Nivel de brillo',
+            'textura' => 'Textura',
+            'cubricion' => 'Cubrición esperada',
+            'delta_e' => 'Tolerancia máx. Delta E',
+            'retencion' => 'Retención de color y brillo',
+            'criterios_tecnicos' => 'Otros criterios técnicos',
+            'indispensable' => 'Características indispensables',
+            'negociable' => 'Características negociables',
+            'acabado_ref' => 'Referencia visual / acabado',
+        ],
+        'application_payload' => [
+            'metodo' => 'Método de aplicación',
+            'geometria' => 'Geometría o tipo de pieza',
+            'temp_aplicacion' => 'Temp. de aplicación (°C)',
+            'humedad_aplicacion' => 'Humedad relativa (% HR)',
+            'dft_min' => 'Espesor seco mín. (mils)',
+            'dft_max' => 'Espesor seco máx. (mils)',
+            'manos' => 'Número previsto de manos',
+            'repinte' => 'Tiempo entre manos',
+            'servicio' => 'Puesta en servicio (h)',
+            'antidescuelgue' => 'Resistencia al descuelgue',
+            'vehiculo' => 'Base requerida',
+            'tecnologia' => 'Tecnología preferida',
+            'otra_tecnologia' => 'Especificación de tecnología',
+            'componentes' => 'Número de componentes',
+            'relacion_mezcla' => 'Relación de mezcla',
+            'pot_life' => 'Pot life mínimo (min)',
+            'solidos_vol' => 'Sólidos por volumen (%)',
+            'ajustador' => '¿Se permite ajustador?',
+            'voc' => 'VOC máx. permitido (g/L)',
+            'restricciones' => 'Restricciones especiales',
+            'equipo_detalle' => 'Equipo, boquilla o presión',
+            'sistema_capas' => 'Sistema completo previsto',
+        ],
+        'specifications_payload' => [
+            'viscosidad_metodo' => 'Viscosidad y método',
+            'densidad' => 'Densidad objetivo',
+            'solidos_peso' => 'Sólidos por peso objetivo',
+            'finura' => 'Finura de molienda',
+            'presentacion' => 'Presentaciones requeridas',
+            'consumo' => 'Consumo estimado',
+            'frecuencia' => 'Frecuencia de compra',
+            'competidor' => 'Producto competidor',
+            'meta_competidor' => 'Objetivo vs. referencia',
+            'costo_objetivo' => 'Costo o precio objetivo',
+            'cantidad_prueba' => 'Cantidad para muestra',
+            'aprobador' => 'Quién aprueba el desarrollo',
+            'forma_aprobacion' => 'Forma de aprobación',
+            'kit_ab' => 'Configuración del kit A/B',
+            'secados' => 'Tiempos de secado objetivo',
+            'estabilidad' => 'Estabilidad en envase',
+            'almacenamiento' => 'Almacenamiento y transporte',
+            'criterios_aprobacion' => 'Criterios de aprobación',
+            'observaciones' => 'Observaciones adicionales',
+        ],
+    ];
+
+    /**
+     * Campos condicionales que solo aplican según otra respuesta (espejo de `conditional-fields.ts`).
+     *
+     * @var array<string, array{source: string, value: string}>
+     */
+    public const CONDITIONAL_PAYLOAD_FIELDS = [
+        'otro_sustrato' => ['source' => 'sustrato', 'value' => 'Otro'],
+        'sistema_existente' => ['source' => 'pintura_existente', 'value' => 'Sí'],
+        'otra_tecnologia' => ['source' => 'tecnologia', 'value' => 'Otra'],
+    ];
+
+    /**
+     * Campos descriptivos (TextArea) que cierran cada sección ocupando el ancho completo de la fila en el PDF.
+     *
+     * @var array<string, list<string>>
+     */
+    public const FULL_WIDTH_PAYLOAD_FIELDS = [
+        'context_payload' => ['sistema_existente', 'quimicos'],
+        'performance_payload' => ['criterios_tecnicos', 'indispensable', 'negociable', 'acabado_ref'],
+        'application_payload' => ['restricciones', 'equipo_detalle', 'sistema_capas'],
+        'specifications_payload' => ['kit_ab', 'secados', 'estabilidad', 'almacenamiento', 'criterios_aprobacion', 'observaciones'],
+    ];
+
     /** Una respuesta como se lee en el PDF: el 0 es un dato, y un texto en un campo numérico sigue como texto. */
     public static function displayPayloadValue(string $payload, string $field, mixed $value): string
     {
@@ -95,6 +204,86 @@ class PaintDevelopmentRequest extends Model
         return in_array($field, self::NUMERIC_PAYLOAD_FIELDS[$payload] ?? [], true) && is_numeric($value)
             ? NumberFormat::quantity($value)
             : (string) $value;
+    }
+
+    public static function displayPayloadLabel(string $payload, string $field): string
+    {
+        return self::PAYLOAD_FIELD_LABELS[$payload][$field]
+            ?? ucfirst(str_replace('_', ' ', $field));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payloadData
+     */
+    public static function payloadFieldApplies(string $field, array $payloadData): bool
+    {
+        $condition = self::CONDITIONAL_PAYLOAD_FIELDS[$field] ?? null;
+
+        return $condition === null || ($payloadData[$condition['source']] ?? null) === $condition['value'];
+    }
+
+    public static function isFullWidthPayloadField(string $payload, string $field): bool
+    {
+        return in_array($field, self::FULL_WIDTH_PAYLOAD_FIELDS[$payload] ?? [], true);
+    }
+
+    /**
+     * Organiza un bloque del payload en filas para una tabla de 2 columnas (`th | td | th | td`).
+     * Los campos cortos van en pares (2 por fila) y los descriptivos (`full_width`) cierran el bloque a ancho completo.
+     *
+     * @param  array<string, mixed>  $payloadData
+     * @return list<list<array{key: string, label: string, value: string, full_width: bool}>>
+     */
+    public static function pdfPayloadRows(string $payload, array $payloadData): array
+    {
+        $definedKeys = array_keys(self::PAYLOAD_FIELD_LABELS[$payload] ?? []);
+        $extraKeys = array_values(array_diff(array_keys($payloadData), $definedKeys));
+        $orderedKeys = [...$definedKeys, ...$extraKeys];
+
+        $shortItems = [];
+        $fullWidthItems = [];
+
+        foreach ($orderedKeys as $rawKey) {
+            if (! array_key_exists($rawKey, $payloadData)) {
+                continue;
+            }
+
+            $field = (string) $rawKey;
+
+            if (! self::payloadFieldApplies($field, $payloadData)) {
+                continue;
+            }
+
+            $rawValue = $payloadData[$rawKey];
+            if (is_string($rawValue)) {
+                $rawValue = trim($rawValue);
+            }
+
+            $item = [
+                'key' => $field,
+                'label' => self::displayPayloadLabel($payload, $field),
+                'value' => self::displayPayloadValue($payload, $field, $rawValue),
+                'full_width' => self::isFullWidthPayloadField($payload, $field),
+            ];
+
+            if ($item['full_width']) {
+                $fullWidthItems[] = $item;
+            } else {
+                $shortItems[] = $item;
+            }
+        }
+
+        $rows = [];
+
+        foreach (array_chunk($shortItems, 2) as $pair) {
+            $rows[] = $pair;
+        }
+
+        foreach ($fullWidthItems as $item) {
+            $rows[] = [$item];
+        }
+
+        return $rows;
     }
 
     /** @use HasFactory<PaintDevelopmentRequestFactory> */

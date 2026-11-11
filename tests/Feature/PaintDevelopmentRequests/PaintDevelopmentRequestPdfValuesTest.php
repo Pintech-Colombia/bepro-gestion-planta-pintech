@@ -52,3 +52,98 @@ it('keeps the numeric fields the same as the validation rules and the form', fun
 
     expect($listed)->toBe($validated)->toBe($inForm);
 });
+
+it('defines a readable Spanish label for every validated payload field', function () {
+    $labeled = collect(PaintDevelopmentRequest::PAYLOAD_FIELD_LABELS)
+        ->flatMap(fn (array $fields, string $payload) => array_map(fn (string $field) => "{$payload}.{$field}", array_keys($fields)))
+        ->sort()
+        ->values()
+        ->all();
+
+    $validated = collect((new StorePaintDevelopmentRequest)->rules())
+        ->keys()
+        ->filter(fn (string $key) => preg_match('/^\w+_payload\.\w+$/', $key) === 1)
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($labeled)->toBe($validated);
+});
+
+it('filters conditional payload fields and groups short fields before full-width fields', function () {
+    $rowsWhenHidden = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        'sustrato' => 'Acero al carbono',
+        'otro_sustrato' => '',
+        'estado_superficie' => 'Nueva / sin pintar',
+        'pintura_existente' => 'No',
+        'sistema_existente' => '',
+        'preparacion' => ['Chorro abrasivo', 'Limpieza / desengrase'],
+        'temp_min' => '-5',
+        'temp_max' => '80',
+        'quimicos' => 'Salpicaduras de aceite',
+    ]);
+
+    $keysWhenHidden = collect($rowsWhenHidden)->flatten(1)->pluck('key')->all();
+
+    expect($keysWhenHidden)
+        ->toBe(['sustrato', 'estado_superficie', 'pintura_existente', 'preparacion', 'temp_min', 'temp_max', 'quimicos'])
+        ->and($rowsWhenHidden[0])->toHaveCount(2)
+        ->and($rowsWhenHidden[1])->toHaveCount(2)
+        ->and($rowsWhenHidden[2])->toHaveCount(2)
+        ->and($rowsWhenHidden[2][0]['label'])->toBe('Temp. mín. de servicio (°C)')
+        ->and($rowsWhenHidden[2][1]['label'])->toBe('Temp. máx. de servicio (°C)')
+        ->and($rowsWhenHidden[3])->toHaveCount(1)
+        ->and($rowsWhenHidden[3][0]['full_width'])->toBeTrue();
+
+    $rowsWhenShown = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        'sustrato' => 'Otro',
+        'otro_sustrato' => 'Fibra de vidrio',
+        'pintura_existente' => 'Sí',
+        'sistema_existente' => 'Epóxico antiguo en dos capas',
+    ]);
+
+    $keysWhenShown = collect($rowsWhenShown)->flatten(1)->pluck('key')->all();
+
+    expect($keysWhenShown)->toBe(['sustrato', 'otro_sustrato', 'pintura_existente', 'sistema_existente']);
+});
+
+it('keeps conditional and full-width payload fields aligned with the frontend form and validation rules', function () {
+    preg_match_all(
+        "/(\w+): \{\s*source: '(\w+)',\s*value: '([^']+)'\s*\}/u",
+        file_get_contents(resource_path('js/components/paint-development-requests/conditional-fields.ts')),
+        $matches,
+        PREG_SET_ORDER
+    );
+
+    $inFrontend = collect($matches)
+        ->mapWithKeys(fn (array $match) => [$match[1] => ['source' => $match[2], 'value' => $match[3]]])
+        ->all();
+
+    expect(PaintDevelopmentRequest::CONDITIONAL_PAYLOAD_FIELDS)->toBe($inFrontend);
+
+    $textAreaFieldsInRules = collect((new StorePaintDevelopmentRequest)->rules())
+        ->filter(fn (mixed $rules) => is_array($rules) && in_array('max:5000', $rules, true))
+        ->keys()
+        ->sort()
+        ->values()
+        ->all();
+
+    $fullWidthFields = collect(PaintDevelopmentRequest::FULL_WIDTH_PAYLOAD_FIELDS)
+        ->flatMap(fn (array $fields, string $payload) => array_map(fn (string $field) => "{$payload}.{$field}", $fields))
+        ->all();
+
+    foreach ($textAreaFieldsInRules as $textAreaField) {
+        expect($fullWidthFields)->toContain($textAreaField);
+    }
+});
+
+it('handles numeric payload keys without throwing a TypeError', function () {
+    $rows = PaintDevelopmentRequest::pdfPayloadRows('context_payload', [
+        0 => 'Valor con clave entera',
+        'sustrato' => 'Acero al carbono',
+    ]);
+
+    $keys = collect($rows)->flatten(1)->pluck('key')->all();
+
+    expect($keys)->toBe(['sustrato', '0']);
+});

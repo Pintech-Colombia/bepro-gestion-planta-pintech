@@ -15,6 +15,7 @@ use App\Models\PaintDevelopmentRequest;
 use App\Services\PaintDevelopmentRequestService;
 use App\Services\TimezoneService;
 use App\Support\EnumOptions;
+use App\Support\ImageDataUri;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -183,9 +184,12 @@ class PaintDevelopmentRequestController extends Controller
                 : null,
         ];
 
+        $logoBase64 = ImageDataUri::fromFile(public_path('images/logo-pintech-pdf.png'));
+
         /** @var \Barryvdh\DomPDF\PDF $pdf */
         $pdf = Pdf::loadView('pdf.paint-development-request', [
             'request' => $pdfRequestData,
+            'logoBase64' => $logoBase64,
             'generatedAt' => $this->timezoneService->formatPlantDateTime(now()),
         ]);
 
