@@ -152,6 +152,18 @@ class BuildProductionOrderShowDataAction
                 ...($includeCosts ? [
                     'cif_percentage' => $productionOrder->product->cif_percentage !== null ? (float) $productionOrder->product->cif_percentage : null,
                 ] : []),
+                'quality_viscosity_lower' => $productionOrder->product->quality_viscosity_lower !== null
+                    ? (float) $productionOrder->product->quality_viscosity_lower
+                    : null,
+                'quality_viscosity_upper' => $productionOrder->product->quality_viscosity_upper !== null
+                    ? (float) $productionOrder->product->quality_viscosity_upper
+                    : null,
+                'quality_fineness_lower' => $productionOrder->product->quality_fineness_lower !== null
+                    ? (float) $productionOrder->product->quality_fineness_lower
+                    : null,
+                'quality_fineness_upper' => $productionOrder->product->quality_fineness_upper !== null
+                    ? (float) $productionOrder->product->quality_fineness_upper
+                    : null,
                 'quality_solids_lower' => $productionOrder->product->quality_solids_lower !== null
                     ? (float) $productionOrder->product->quality_solids_lower
                     : null,
@@ -163,6 +175,7 @@ class BuildProductionOrderShowDataAction
                 'id' => $productionOrder->formula->id,
                 'version' => $productionOrder->formula->version,
                 'name' => $productionOrder->formula->name,
+                'notes' => $productionOrder->formula->notes,
             ] : null,
             'warehouse' => $productionOrder->warehouse ? [
                 'id' => $productionOrder->warehouse->id,

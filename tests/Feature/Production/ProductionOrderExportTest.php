@@ -309,3 +309,44 @@ test('el pdf y el excel imprimen el rendimiento y la cantidad proyectada en galo
         ->and($excelHtml)->toContain('333.00 gal')
         ->and($excelHtml)->not->toContain('333.00 kg');
 });
+
+test('the order pdf shows formula instructions, density per gallon, solids and expected quality ranges', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $order->formula->update([
+        'notes' => 'Dispersar a 1200 rpm durante 25 minutos.',
+    ]);
+    $order->product->update([
+        'quality_fineness_lower' => '6.0',
+        'quality_fineness_upper' => '7.5',
+        'quality_viscosity_lower' => '95.0',
+        'quality_viscosity_upper' => '105.0',
+        'quality_solids_lower' => '62.0',
+        'quality_solids_upper' => '66.0',
+    ]);
+    $order->update([
+        'notes' => 'Revisar filtro antes de envasar.',
+        'density_kg_per_gallon' => '6.25',
+        'quality_solids' => '64.2',
+    ]);
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+
+    $pdfHtml = view('pdf.production-order', [
+        'order' => $payload,
+        'logoBase64' => null,
+        'generatedAt' => '11/11/2026 15:50',
+    ])->render();
+
+    expect($pdfHtml)
+        ->toContain('Dispersar a 1200 rpm durante 25 minutos.')
+        ->toContain('Revisar filtro antes de envasar.')
+        ->toContain('6,25 kg/gal')
+        ->toContain('64,2')
+        ->toContain('Esperado: 6,0 – 7,5 HG')
+        ->toContain('Esperado: 95,0 – 105,0 KU')
+        ->toContain('Esperado: 62,0 – 66,0 %')
+        ->toContain('ENVASES A USAR')
+        ->toContain('ENVASES USADOS');
+});
