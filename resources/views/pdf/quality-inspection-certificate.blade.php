@@ -5,13 +5,15 @@
     <meta charset="UTF-8">
     <title>Certificado de Calidad - {{ $certificate['lot'] }}</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+        /*
+         * No usar `* { margin: 0 }`: en DomPDF alcanza a `@page` y anula los márgenes de impresión.
+         */
+        @page {
+            margin: 40pt 48pt;
         }
 
         body {
+            margin: 0;
             font-family: Arial, Helvetica, sans-serif;
             font-size: 12px;
             color: #000;
@@ -20,9 +22,7 @@
         }
 
         .page {
-            padding: 52px 64px;
-            max-width: 800px;
-            margin: 0 auto;
+            width: 100%;
         }
 
         /* ── HEADER ── */
@@ -120,7 +120,7 @@
         }
 
         table tr.row-stripe {
-            background-color: #d3d3d3;
+            background-color: #efefef;
         }
 
         table td:first-child {
@@ -133,9 +133,9 @@
 
         /* ── DATES ── */
         .dates {
-            margin-bottom: 40px;
+            margin-bottom: 64px;
             font-size: 13px;
-            line-height: 1.8;
+            line-height: 1.4;
         }
 
         .dates strong {
@@ -144,28 +144,31 @@
 
         /* ── SIGNATURE ── */
         .signature {
-            margin-top: 16px;
+            margin-top: 0;
         }
 
         .signature .label {
             font-weight: bold;
             font-size: 13px;
-            margin-bottom: 16px;
+            margin-bottom: 6px;
         }
 
         .signature img {
             display: block;
             max-height: 64px;
             max-width: 200px;
-            margin-bottom: 4px;
+            margin-bottom: -6px;
         }
 
         .signature .name {
-            font-size: 12px;
+            font-size: 13px;
+            text-transform: uppercase;
+            line-height: 1.35;
         }
 
         .signature .role {
-            font-size: 12px;
+            font-size: 13px;
+            line-height: 1.35;
         }
     </style>
 </head>
@@ -209,8 +212,8 @@
                     <th>PRUEBA</th>
                     <th>UNIDAD</th>
                     <th>RESULTADO</th>
-                    <th>LIMITE INFERIOR</th>
-                    <th>LIMITE SUPERIOR</th>
+                    <th>LÍMITE INFERIOR</th>
+                    <th>LÍMITE SUPERIOR</th>
                 </tr>
             </thead>
             <tbody>

@@ -212,14 +212,27 @@ class ProductionOrderController extends Controller
         // con Xdebug activo (desarrollo), el logo transparente sube el pico de 14 a 46 MB.
         $logoBase64 = ImageDataUri::fromFile(public_path('images/logo-pintech-pdf.png'));
 
-        /** @var \Barryvdh\DomPDF\PDF $pdf */
-        $pdf = Pdf::loadView('pdf.production-order', [
+        $viewData = [
             'order' => $orderData,
             'logoBase64' => $logoBase64,
             'generatedAt' => $this->timezoneService->formatPlantDateTime(now()),
-        ]);
+        ];
 
+        /** @var \Barryvdh\DomPDF\PDF $pdf */
+        $pdf = Pdf::loadView('pdf.production-order', $viewData);
         $pdf->setPaper('letter');
+        $pdf->render();
+
+        if ($pdf->getDomPDF()->getCanvas()->get_page_count() > 1) {
+            /** @var \Barryvdh\DomPDF\PDF $compactPdf */
+            $compactPdf = Pdf::loadView('pdf.production-order', [...$viewData, 'compactPass' => true]);
+            $compactPdf->setPaper('letter');
+            $compactPdf->render();
+
+            if ($compactPdf->getDomPDF()->getCanvas()->get_page_count() <= $pdf->getDomPDF()->getCanvas()->get_page_count()) {
+                $pdf = $compactPdf;
+            }
+        }
 
         return $pdf->stream($filename);
     }

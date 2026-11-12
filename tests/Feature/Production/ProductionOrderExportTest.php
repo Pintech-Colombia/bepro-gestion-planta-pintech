@@ -21,6 +21,7 @@ use App\Models\Warehouse;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 uses(RefreshDatabase::class);
@@ -308,4 +309,76 @@ test('el pdf y el excel imprimen el rendimiento y la cantidad proyectada en galo
         ->and($excelHtml)->toContain('1,248.00 gal')
         ->and($excelHtml)->toContain('333.00 gal')
         ->and($excelHtml)->not->toContain('333.00 kg');
+});
+
+test('the order pdf shows formula instructions, density per gallon, solids and expected quality ranges', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $order->formula->update([
+        'notes' => 'Dispersar a 1200 rpm durante 25 minutos.',
+    ]);
+    $order->product->update([
+        'quality_fineness_lower' => '6.0',
+        'quality_fineness_upper' => '7.5',
+        'quality_viscosity_lower' => '95.0',
+        'quality_viscosity_upper' => '105.0',
+        'quality_solids_lower' => '62.0',
+        'quality_solids_upper' => '66.0',
+    ]);
+    $order->update([
+        'notes' => 'Revisar filtro antes de envasar.',
+        'density_kg_per_gallon' => '6.25',
+        'quality_solids' => '64.2',
+    ]);
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+
+    $pdfHtml = view('pdf.production-order', [
+        'order' => $payload,
+        'logoBase64' => null,
+        'generatedAt' => '11/11/2026 15:50',
+    ])->render();
+
+    expect($pdfHtml)
+        ->toContain('Dispersar a 1200 rpm durante 25 minutos.')
+        ->toContain('Revisar filtro antes de envasar.')
+        ->toContain('6,25 kg/gal')
+        ->toContain('64,2')
+        ->toContain('Esperado: 6,0 – 7,5 HG')
+        ->toContain('Esperado: 95,0 – 105,0 KU')
+        ->toContain('Esperado: 62,0 – 66,0 %')
+        ->toContain('ENVASES A USAR')
+        ->toContain('ENVASES USADOS');
+});
+
+test('the order pdf in review answers spillage, totals the added quantity and lists used packaging without a trailing comma', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $order->update(['status' => ProductionOrderStatus::PendingReview->value, 'spillage_quantity' => '0']);
+    $order->details()->update(['actual_quantity' => '98.5']);
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+    $payload['packaging_plans'] = [
+        ['planned_units' => 10, 'actual_units' => 9, 'product_variant' => ['presentation_label' => 'Galón'], 'packaging_materials' => null],
+        ['planned_units' => 2, 'actual_units' => null, 'product_variant' => ['presentation_label' => 'Cuñete'], 'packaging_materials' => null],
+    ];
+
+    $pdfHtml = view('pdf.production-order', [
+        'order' => $payload,
+        'logoBase64' => null,
+        'generatedAt' => '12/11/2026 10:00',
+    ])->render();
+
+    $usedPackaging = Str::of($pdfHtml)->after('ENVASES USADOS</td>')->after('>')->before('</td>')->squish()->toString();
+    $spillage = Str::of($pdfHtml)->after('DERRAMES EN ENVASADO')->before('</tr>')->toString();
+    $totalRow = Str::of($pdfHtml)->after('>TOTAL</td>')->before('</tr>')->toString();
+
+    expect($payload['pdf_materials']['mode'])->toBe('steps')
+        ->and($spillage)->toContain('NO')
+        ->and($spillage)->not->toContain('check-box')
+        ->and($totalRow)->toContain('98,5')
+        ->and($usedPackaging)->toEndWith('9 Galón')
+        ->and($usedPackaging)->not->toContain('Cuñete');
 });

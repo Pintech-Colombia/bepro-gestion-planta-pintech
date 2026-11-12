@@ -184,6 +184,7 @@ export function FormulaForm({
                     <FormField
                         id="notes"
                         label="Notas / Observaciones"
+                        help="Se imprimen en la orden de producción como indicaciones para la planta."
                         error={errors.notes}
                         className="md:col-span-2"
                     >
