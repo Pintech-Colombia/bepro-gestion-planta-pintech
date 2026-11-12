@@ -21,6 +21,7 @@ use App\Models\Warehouse;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 uses(RefreshDatabase::class);
@@ -349,4 +350,35 @@ test('the order pdf shows formula instructions, density per gallon, solids and e
         ->toContain('Esperado: 62,0 – 66,0 %')
         ->toContain('ENVASES A USAR')
         ->toContain('ENVASES USADOS');
+});
+
+test('the order pdf in review answers spillage, totals the added quantity and lists used packaging without a trailing comma', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $order->update(['status' => ProductionOrderStatus::PendingReview->value, 'spillage_quantity' => '0']);
+    $order->details()->update(['actual_quantity' => '98.5']);
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+    $payload['packaging_plans'] = [
+        ['planned_units' => 10, 'actual_units' => 9, 'product_variant' => ['presentation_label' => 'Galón'], 'packaging_materials' => null],
+        ['planned_units' => 2, 'actual_units' => null, 'product_variant' => ['presentation_label' => 'Cuñete'], 'packaging_materials' => null],
+    ];
+
+    $pdfHtml = view('pdf.production-order', [
+        'order' => $payload,
+        'logoBase64' => null,
+        'generatedAt' => '12/11/2026 10:00',
+    ])->render();
+
+    $usedPackaging = Str::of($pdfHtml)->after('ENVASES USADOS</td>')->after('>')->before('</td>')->squish()->toString();
+    $spillage = Str::of($pdfHtml)->after('DERRAMES EN ENVASADO')->before('</tr>')->toString();
+    $totalRow = Str::of($pdfHtml)->after('>TOTAL</td>')->before('</tr>')->toString();
+
+    expect($payload['pdf_materials']['mode'])->toBe('steps')
+        ->and($spillage)->toContain('NO')
+        ->and($spillage)->not->toContain('check-box')
+        ->and($totalRow)->toContain('98,5')
+        ->and($usedPackaging)->toEndWith('9 Galón')
+        ->and($usedPackaging)->not->toContain('Cuñete');
 });

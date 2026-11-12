@@ -355,11 +355,10 @@
             <td class="label">ENVASES USADOS</td>
             <td colspan="5" class="value">
                 @if(count($order['packaging_plans']) > 0)
-                    @foreach($order['packaging_plans'] as $plan)
-                        @if($plan['actual_units'] !== null)
-                            {{ NumberFormat::units($plan['actual_units']) }}
-                            {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
-                        @endif
+                    {{-- Solo las presentaciones con unidades registradas, para que la coma no quede al final. --}}
+                    @foreach(collect($order['packaging_plans'])->whereNotNull('actual_units') as $plan)
+                        {{ NumberFormat::units($plan['actual_units']) }}
+                        {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
                     @endforeach
                 @endif
             </td>
@@ -406,7 +405,8 @@
             <td class="value">
                 @if(($order['spillage_quantity'] ?? 0) > 0)
                     SÍ — {{ NumberFormat::quantity($order['spillage_quantity']) }} kg
-                @elseif(($order['status'] ?? '') === 'completed')
+                @elseif(in_array($order['status'] ?? '', ['pending_review', 'completed'], true))
+                    {{-- El derrame no admite vacío (0 por defecto): desde la revisión, 0 es la respuesta del operario. --}}
                     NO
                 @else
                     SÍ <span class="check-box">&nbsp;</span> NO <span class="check-box">&nbsp;</span>
@@ -495,7 +495,10 @@
                 <td class="text-center label" colspan="2">TOTAL</td>
                 <td class="text-center">{{ NumberFormat::quantity($pdfTotals['kg'] ?? 0) }}</td>
                 <td class="text-center">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '0' }}</td>
-                <td colspan="2"></td>
+                <td></td>
+                <td class="text-center">
+                    {{ (float) ($pdfTotals['actual_quantity'] ?? 0) > 0 ? NumberFormat::quantity($pdfTotals['actual_quantity']) : '' }}
+                </td>
             </tr>
         @endif
     </table>
