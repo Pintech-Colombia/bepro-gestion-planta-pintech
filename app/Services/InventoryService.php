@@ -20,6 +20,7 @@ class InventoryService
     public function __construct(
         private readonly DecimalCalculator $calculator,
         private readonly AlertService $alertService,
+        private readonly RawMaterialLotNumberGenerator $lotNumbers,
     ) {}
 
     public function storeMovement(array $data, int $userId): InventoryMovement
@@ -239,13 +240,6 @@ class InventoryService
             return $batchId;
         }
 
-        $lotNumber = $data['lot_number'] ?? null;
-        if ($lotNumber === null || trim((string) $lotNumber) === '') {
-            throw ValidationException::withMessages([
-                'lot_number' => __('Debes indicar el número de lote para crear un lote nuevo.'),
-            ]);
-        }
-
         $batch = InventoryBatch::create([
             'raw_material_id' => $data['raw_material_id'],
             'warehouse_id' => $data['warehouse_id'],
@@ -255,7 +249,7 @@ class InventoryService
             'entry_date' => $data['movement_date'],
             'expiry_date' => ($data['expiry_date'] ?? null) ?: null,
             'supplier_id' => ($data['supplier_id'] ?? null) ?: null,
-            'lot_number' => ($data['lot_number'] ?? null) ?: null,
+            'lot_number' => $this->lotNumbers->next(),
         ]);
 
         return (int) $batch->id;

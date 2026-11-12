@@ -163,7 +163,6 @@ test('inventory movements apply the same policy and keep conservative cost refer
         'type' => InventoryMovementType::Entry->value,
         'quantity' => 10,
         'cost_price' => 5000,
-        'lot_number' => 'LOT-POL-HIGH',
         'movement_date' => now()->toDateString(),
         'notes' => 'Lote alto',
     ], (int) $user->id);
@@ -176,7 +175,6 @@ test('inventory movements apply the same policy and keep conservative cost refer
         'type' => InventoryMovementType::Entry->value,
         'quantity' => 10,
         'cost_price' => 2000,
-        'lot_number' => 'LOT-POL-LOW',
         'movement_date' => now()->toDateString(),
         'notes' => 'Lote barato',
     ], (int) $user->id);
@@ -203,7 +201,6 @@ test('inventory movement correctly updates current_price for raw materials creat
         'type' => InventoryMovementType::Entry->value,
         'quantity' => 50,
         'cost_price' => 1500,
-        'lot_number' => 'LOT-FIRST-ENTRY',
         'movement_date' => now()->toDateString(),
         'notes' => 'First entry',
     ], (int) $user->id);

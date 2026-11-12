@@ -8,9 +8,11 @@ use App\Models\InventoryBatch;
 use App\Models\RawMaterial;
 use App\Models\Supplier;
 use App\Models\Warehouse;
+use App\Services\RawMaterialLotNumberGenerator;
 use App\Services\RawMaterialReferencePriceService;
 use App\Support\DeploymentEnvironment;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class InventoryBatchSeeder extends Seeder
 {
@@ -734,6 +736,8 @@ class InventoryBatchSeeder extends Seeder
             ],
         ];
 
+        $lotNumbers = app(RawMaterialLotNumberGenerator::class);
+
         foreach ($batchesConfig as $code => $batches) {
             $material = RawMaterial::where('code', $code)->first();
 
@@ -749,27 +753,29 @@ class InventoryBatchSeeder extends Seeder
                 continue;
             }
 
-            foreach ($batches as $index => $batch) {
-                $daysAgo = 60 - ($index * 15) + rand(0, 10);
-                $entryDate = now()->subDays($daysAgo);
-                $expiryDate = now()->addDays(rand(180, 720));
-                $quantity = max($batch['qty'], 1000);
+            DB::transaction(function () use ($batches, $material, $cali, $supplier, $lotNumbers): void {
+                foreach ($batches as $index => $batch) {
+                    $daysAgo = 60 - ($index * 15) + rand(0, 10);
+                    $entryDate = now()->subDays($daysAgo);
+                    $expiryDate = now()->addDays(rand(180, 720));
+                    $quantity = max($batch['qty'], 1000);
 
-                InventoryBatch::create([
-                    'raw_material_id' => $material->id,
-                    'warehouse_id' => $cali->id,
-                    'initial_quantity' => $quantity,
-                    'remaining_quantity' => $quantity,
-                    'unit_price' => $batch['price'],
-                    'entry_date' => $entryDate,
-                    'expiry_date' => $expiryDate,
-                    'lot_number' => 'LOTE-'.$entryDate->format('Y-m').'-'.str_pad((string) $material->id, 4, '0', STR_PAD_LEFT).'-'.($index + 1),
-                    'supplier_id' => $supplier->id,
-                ]);
-            }
+                    InventoryBatch::create([
+                        'raw_material_id' => $material->id,
+                        'warehouse_id' => $cali->id,
+                        'initial_quantity' => $quantity,
+                        'remaining_quantity' => $quantity,
+                        'unit_price' => $batch['price'],
+                        'entry_date' => $entryDate,
+                        'expiry_date' => $expiryDate,
+                        'lot_number' => $lotNumbers->next(),
+                        'supplier_id' => $supplier->id,
+                    ]);
+                }
 
-            app(RawMaterialReferencePriceService::class)
-                ->syncRawMaterialCurrentPrice((int) $material->id);
+                app(RawMaterialReferencePriceService::class)
+                    ->syncRawMaterialCurrentPrice((int) $material->id);
+            });
         }
 
         $this->command->info('Inventory batches seeded successfully.');

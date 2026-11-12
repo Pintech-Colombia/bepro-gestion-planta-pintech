@@ -206,6 +206,11 @@ export function MovementFormBase({
                     id="batch_id"
                     label={type === 'entry' ? 'Lote (opcional)' : 'Lote'}
                     required={type === 'exit'}
+                    help={
+                        type === 'entry' && form.data.batch_id === ''
+                            ? 'El sistema asigna el número de lote al guardar (MP-AAAA-NNNN).'
+                            : undefined
+                    }
                     error={form.errors.batch_id}
                 >
                     <Combobox
@@ -229,7 +234,11 @@ export function MovementFormBase({
                     />
                 </FormField>
             ) : (
-                <FormField id="batch_id" label="Lote">
+                <FormField
+                    id="batch_id"
+                    label="Lote"
+                    help="El sistema asigna el número de lote al guardar (MP-AAAA-NNNN)."
+                >
                     <Input
                         value="Se generará uno nuevo"
                         disabled

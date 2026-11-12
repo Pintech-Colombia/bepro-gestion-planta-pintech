@@ -72,10 +72,11 @@ class StoreInventoryMovementRequest extends FormRequest
             // Día de planta, sin futuras (D1). En una entrada, tampoco más de un mes atrás (D1b): también es el
             // `entry_date` del lote nuevo, que ordena el FIFO.
             'movement_date' => ['bail', 'required', $this->movementDateRule()],
-            // Lote, proveedor y vencimiento solo se usan al crear un lote nuevo (una entrada sin lote elegido). En una salida o
+            // El número de lote lo asigna el sistema (MP-AAAA-NNNN).
+            'lot_number' => ['prohibited'],
+            // Proveedor y vencimiento solo se usan al crear un lote nuevo (una entrada sin lote elegido). En una salida o
             // una entrada a un lote existente el servicio los ignora, así que tampoco se validan (INV-13). El proveedor lo
             // exige esta regla, no el servicio: la carga inicial de lotes puede no traerlo.
-            'lot_number' => [$this->excludeUnlessNewLot(), 'nullable', 'string', 'max:50'],
             'supplier_id' => [$this->excludeUnlessNewLot(), ...$this->activeOrCurrentRules('suppliers', 'supplier_id')],
             'expiry_date' => [$this->excludeUnlessNewLot(), 'bail', 'nullable', PlantDate::make(), 'after_or_equal:movement_date'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -103,17 +104,6 @@ class StoreInventoryMovementRequest extends FormRequest
             function ($validator): void {
                 $batchId = $this->input('batch_id');
                 if ($batchId === null || $batchId === '') {
-                    if ($this->input('type') === 'entry') {
-                        $lotNumber = $this->input('lot_number');
-
-                        // Un arreglo o un número ya los rechaza la regla `string`: aquí solo se revisa que haya texto.
-                        $missing = $lotNumber === null || (is_string($lotNumber) && trim($lotNumber) === '');
-
-                        if ($missing) {
-                            $validator->errors()->add('lot_number', __('Debes indicar el número de lote para crear un lote nuevo.'));
-                        }
-                    }
-
                     return;
                 }
 

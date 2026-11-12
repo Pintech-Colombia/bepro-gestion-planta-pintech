@@ -193,7 +193,7 @@ Lotes de materia prima (base del costeo FIFO).
 | `entry_date` | DATE |  |  |
 | `expiry_date` | DATE | sí | vencimiento del lote; `Y-m-d`, no anterior a la fecha del movimiento que lo crea |
 | `supplier_id` | BIGINT | sí | FK → `suppliers` (RESTRICT). Obligatorio al crear un lote desde la entrada de MP; admite nulos para la carga inicial |
-| `lot_number` | VARCHAR(50) | sí |  |
+| `lot_number` | VARCHAR(50) | sí | Lo asigna el sistema: `MP-AAAA-NNNN`, consecutivo por año de registro. Índice único parcial sobre `MP-%`; los lotes anteriores conservan su código |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
 

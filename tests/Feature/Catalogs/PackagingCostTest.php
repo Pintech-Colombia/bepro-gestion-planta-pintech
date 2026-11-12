@@ -353,7 +353,6 @@ it('no registra compras ni salidas de una materia prima sin control de inventari
         'quantity' => 100,
         'cost_price' => 300,
         'movement_date' => now()->toDateString(),
-        'lot_number' => 'ETQ-01',
         'supplier_id' => Supplier::factory()->create()->id,
     ])->assertSessionHasErrors(['raw_material_id' => 'Esta materia prima no controla inventario: no se registran compras ni salidas de ella.']);
 
@@ -506,7 +505,6 @@ it('el servicio de movimientos también rechaza una materia prima sin control de
         'quantity' => '10',
         'cost_price' => '300',
         'movement_date' => now()->toDateString(),
-        'lot_number' => 'ETQ-02',
     ], $this->admin->id))->toThrow(ValidationException::class);
 
     expect(InventoryBatch::query()->where('raw_material_id', $this->label->id)->exists())->toBeFalse();

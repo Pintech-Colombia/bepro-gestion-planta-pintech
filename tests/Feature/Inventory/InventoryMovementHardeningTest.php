@@ -98,7 +98,6 @@ test('it dispatches reference price recalculation after storing a movement', fun
             'type' => 'entry',
             'quantity' => 10,
             'cost_price' => 12,
-            'lot_number' => 'LOT-JOB-001',
             'supplier_id' => Supplier::factory()->create()->id,
             'movement_date' => plantToday(),
         ]);
@@ -112,7 +111,7 @@ test('it dispatches reference price recalculation after storing a movement', fun
     );
 });
 
-test('it requires a lot number when an entry creates a new batch', function () {
+test('it prohibits sending a lot number when storing a movement', function () {
     $response = $this->from(route('inventory-movements.index'))
         ->post(route('inventory-movements.store'), [
             'raw_material_id' => $this->rawMaterial->id,
@@ -121,6 +120,7 @@ test('it requires a lot number when an entry creates a new batch', function () {
             'type' => 'entry',
             'quantity' => 10,
             'cost_price' => 12,
+            'lot_number' => 'LOT-MANUAL-001',
             'supplier_id' => Supplier::factory()->create()->id,
             'movement_date' => plantToday(),
         ]);
@@ -257,7 +257,6 @@ test('it rejects manual movements linked to production orders', function () {
             'type' => 'entry',
             'quantity' => 5,
             'cost_price' => 10,
-            'lot_number' => 'LOT-MANUAL-LINK',
             'supplier_id' => Supplier::factory()->create()->id,
             'movement_date' => plantToday(),
         ]);
@@ -385,7 +384,6 @@ test('it requires an entry cost greater than zero with at most two decimals', fu
         'type' => 'entry',
         'quantity' => '5',
         'cost_price' => $cost,
-        'lot_number' => 'L-COSTO',
         'supplier_id' => Supplier::factory()->create()->id,
         'movement_date' => plantToday(),
     ]);
