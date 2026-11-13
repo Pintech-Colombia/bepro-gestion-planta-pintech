@@ -16,17 +16,19 @@ use App\Models\Warehouse;
 use App\Services\DecimalCalculator;
 use App\Services\FormulaService;
 use App\Services\Inventory\FifoStockAllocatorService;
-use App\Services\TimezoneService;
+use App\Services\YearlySequenceNumberGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateProductionOrderAction
 {
+    private const ORDER_NUMBER_LOCK_KEY = 801337;
+
     public function __construct(
         private readonly FifoStockAllocatorService $fifoStockAllocator,
         private readonly FormulaService $formulaService,
         private readonly DecimalCalculator $calculator,
-        private readonly TimezoneService $timezone,
+        private readonly YearlySequenceNumberGenerator $sequence,
     ) {}
 
     /**
@@ -152,21 +154,7 @@ class CreateProductionOrderAction
 
     private function generateOrderNumber(): string
     {
-        // Año de la planta: el 31-dic después de las 7 p. m. ya es 1-ene en UTC (auditoría 3.6, OPC-04).
-        $year = $this->timezone->nowInPlant()->year;
-        $prefix = "OP-{$year}-";
-
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::statement('SELECT pg_advisory_xact_lock(?, ?)', [801337, $year]);
-        }
-
-        $lastSequence = ProductionOrder::query()
-            ->where('order_number', 'like', $prefix.'%')
-            ->pluck('order_number')
-            ->map(fn (string $orderNumber): int => (int) substr($orderNumber, strlen($prefix)))
-            ->max();
-
-        return $prefix.str_pad((string) (((int) $lastSequence) + 1), 4, '0', STR_PAD_LEFT);
+        return $this->sequence->next(ProductionOrder::query(), 'order_number', 'OP', self::ORDER_NUMBER_LOCK_KEY);
     }
 
     private function generateLotNumber(): int

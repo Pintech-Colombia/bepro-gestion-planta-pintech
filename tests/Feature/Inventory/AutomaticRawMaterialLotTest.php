@@ -41,6 +41,9 @@ it('generates sequential lot numbers per year and ignores other years and manual
 
     createBatchWithLot('LOTE-2026-9999');
     createBatchWithLot('MP-2026-ABC');
+    // Sufijos que no son puros dígitos: `(int)` los leería como 50 y 100000 y adelantaría el consecutivo.
+    createBatchWithLot('MP-2026-0050-B');
+    createBatchWithLot('MP-2026-1e5');
     createBatchWithLot('MP-2025-0050');
     createBatchWithLot('MP-2026-0007');
 
@@ -140,4 +143,3 @@ it('allows duplicate manual lot numbers without MP- prefix and rejects duplicate
     expect(fn () => createBatchWithLot('MP-2026-0001'))
         ->toThrow(UniqueConstraintViolationException::class);
 });
-

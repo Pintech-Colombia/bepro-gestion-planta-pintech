@@ -11,15 +11,16 @@ use App\Models\User;
  * Solo se alcanza con una petición armada a mano, pero un 500 no es una respuesta de validación.
  */
 
-it('rejects an array as lot number of a raw material movement with 422', function () {
+it('rejects an array as type of a raw material movement with 422', function () {
     actingAsRole(SystemRole::Admin, ['email_verified_at' => now()]);
 
+    // `type` lo leen las reglas de lote nuevo y el `after()`, que corren aunque ya haya errores.
     $response = $this->postJson(route('inventory-movements.store'), [
-        'type' => 'entry',
-        'lot_number' => ['LOTE-1'],
+        'type' => ['entry'],
+        'batch_id' => null,
     ]);
 
-    $response->assertUnprocessable()->assertJsonValidationErrors(['lot_number']);
+    $response->assertUnprocessable()->assertJsonValidationErrors(['type']);
 });
 
 it('rejects an array as type or reason of a finished product movement with 422', function (array $payload, string $field) {

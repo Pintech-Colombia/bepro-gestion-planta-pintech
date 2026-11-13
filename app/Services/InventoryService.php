@@ -68,6 +68,10 @@ class InventoryService
             );
 
             $movement = InventoryMovement::create($movementData);
+            // El lote ya está en memoria: quien lea `$movement->batch` (el aviso con el código del lote nuevo) no consulta de nuevo.
+            if ($lockedBatch !== null) {
+                $movement->setRelation('batch', $lockedBatch);
+            }
 
             $rawMaterialId = (int) $movementData['raw_material_id'];
             $this->dispatchReferencePriceAndDependentCosts($rawMaterialId);

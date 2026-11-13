@@ -84,9 +84,15 @@ class StoreInventoryMovementRequest extends FormRequest
         ];
     }
 
+    /** Una entrada sin lote elegido crea un lote nuevo, con número asignado por el sistema. */
+    public function createsNewLot(): bool
+    {
+        return $this->input('type') === InventoryMovementType::Entry->value && blank($this->input('batch_id'));
+    }
+
     private function excludeUnlessNewLot(): ExcludeIf
     {
-        return Rule::excludeIf(fn (): bool => $this->input('type') !== InventoryMovementType::Entry->value || filled($this->input('batch_id')));
+        return Rule::excludeIf(fn (): bool => ! $this->createsNewLot());
     }
 
     private function movementDateRule(): PlantDate

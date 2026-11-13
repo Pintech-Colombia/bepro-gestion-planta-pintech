@@ -38,6 +38,8 @@ type Props = {
 
 /** Valor de la opción «Registrar como nuevo lote» (en el formulario, `batch_id` queda vacío). */
 const NEW_BATCH = '__new__';
+const NEW_BATCH_HELP =
+    'El sistema asigna el número de lote al guardar (MP-AAAA-NNNN).';
 
 function batchDescription(batch: InventoryOption): string {
     return [
@@ -208,7 +210,7 @@ export function MovementFormBase({
                     required={type === 'exit'}
                     help={
                         type === 'entry' && form.data.batch_id === ''
-                            ? 'El sistema asigna el número de lote al guardar (MP-AAAA-NNNN).'
+                            ? NEW_BATCH_HELP
                             : undefined
                     }
                     error={form.errors.batch_id}
@@ -234,11 +236,7 @@ export function MovementFormBase({
                     />
                 </FormField>
             ) : (
-                <FormField
-                    id="batch_id"
-                    label="Lote"
-                    help="El sistema asigna el número de lote al guardar (MP-AAAA-NNNN)."
-                >
+                <FormField id="batch_id" label="Lote" help={NEW_BATCH_HELP}>
                     <Input
                         value="Se generará uno nuevo"
                         disabled
