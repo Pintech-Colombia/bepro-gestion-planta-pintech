@@ -298,7 +298,7 @@ const options = rawMaterials.map(rm => ({
 La regla vive en `DESIGN.md` §8: **`Select`** para listas fijas (enums, opciones `{value, label}` de
 `EnumOptions::for()`) o que casi siempre tienen menos de ~8 opciones (tipo de ítem, validez, forma de pago, bodega);
 **`Combobox`** para datos del negocio que crecen y donde buscar ayuda (clientes, productos, materias primas, lotes, OP).
-Los casos dudosos, como la presentación de un producto, se deciden en el rediseño de cada módulo. Los lotes van
+La presentación de un producto va siempre en `PresentationSelect` (abajo, en «Piezas de formulario»). Los lotes van
 siempre en `Combobox`, aunque sean pocos: el número de lote es la etiqueta y lo que queda, la entrada y el vencimiento
 van en la descripción; donde el movimiento puede crear un lote, «Registrar como nuevo lote» es la primera opción.
 
@@ -361,6 +361,26 @@ Un grupo de radios o casillas recibe la función y se nombra con la etiqueta, cu
     )}
 </FormField>
 ```
+
+### PresentationSelect
+
+`components/presentation-select.tsx`. Elige la presentación de un producto (cotización, pedido, plan de envasado de la
+OP, movimiento de PT): un `Select` sin buscador, porque un producto tiene pocas. Solo muestra y avisa: la presentación
+la escoge el usuario.
+
+| Prop | Tipo | Uso |
+| :--- | :--- | :--- |
+| `options` | `{ id, label }[]` | Las presentaciones que se pueden elegir (la OP nueva quita las de otras filas) |
+| `value` | `string \| number \| null` | `''` o `null`: sin elegir |
+| `onChange` | `(value: string) => void` | Recibe el id como texto |
+| `disabled` | `boolean` | Mientras no hay producto: dice «Selecciona producto primero» |
+| `control` | `FormFieldControlProps` | Dentro de un `FormField`, con la forma de función `{(control) => …}` |
+| `aria-label` | `string` | Fuera de un `FormField` |
+
+Sin opciones dice «Sin presentaciones» y queda deshabilitado.
+
+El movimiento de PT, además, deja puesta la presentación cuando solo una tiene stock en la bodega: es su regla, no la
+del componente.
 
 ### FormCheckbox
 

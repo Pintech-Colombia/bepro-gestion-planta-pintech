@@ -6,6 +6,7 @@ import { FormField } from '@/components/form-field';
 import { formatSafeDate } from '@/components/formatted-date';
 import { IntegerInput } from '@/components/integer-input';
 import { PlantDateInput } from '@/components/plant-date-input';
+import { PresentationSelect } from '@/components/presentation-select';
 import { Combobox } from '@/components/ui/combobox';
 import {
     Select,
@@ -353,31 +354,18 @@ export function FinishedMovementFormFields({
 
             <FormField id="finished_variant_key" label="Presentación">
                 {(control) => (
-                    <Select
+                    // Aquí la que se elige sola es la única con stock en la bodega (`activeVariantKey`), no la única
+                    // del producto: una salida solo puede sacar lo que hay.
+                    <PresentationSelect
+                        control={control}
+                        options={variantOptions}
                         value={activeVariantKey}
-                        onValueChange={(value) => {
+                        onChange={(value) => {
                             setSelectedVariantKey(value);
                             form.setData('finished_product_batch_id', '');
                         }}
-                        disabled={variantOptions.length === 0}
-                    >
-                        <SelectTrigger {...control}>
-                            <SelectValue
-                                placeholder={
-                                    activeProductKey
-                                        ? 'Selecciona presentación'
-                                        : 'Selecciona producto primero'
-                                }
-                            />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {variantOptions.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                        disabled={activeProductKey === ''}
+                    />
                 )}
             </FormField>
 

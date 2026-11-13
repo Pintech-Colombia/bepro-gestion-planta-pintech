@@ -9,6 +9,7 @@ import { FormPage } from '@/components/form-page';
 import { IntegerInput } from '@/components/integer-input';
 import { PageHeader } from '@/components/page-header';
 import { PlantDateInput } from '@/components/plant-date-input';
+import { PresentationSelect } from '@/components/presentation-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
@@ -126,7 +127,7 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
 
             const next = { ...item, [field]: value };
 
-            // Reset variant when product changes
+            // Al cambiar el producto, la presentación se vacía.
             if (field === 'product_id') {
                 next.product_variant_id = '';
             }
@@ -134,6 +135,17 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
             return next;
         });
         setData('items', updated);
+
+        clearErrors(
+            ...((field === 'product_id'
+                ? [
+                      `items.${index}.product_id`,
+                      `items.${index}.product_variant_id`,
+                  ]
+                : [`items.${index}.${String(field)}`]) as Array<
+                keyof typeof errors
+            >),
+        );
     };
 
     return (
@@ -428,23 +440,27 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
                                                     }
                                                     className="md:col-span-3"
                                                 >
-                                                    <Combobox
-                                                        options={variantOptions}
-                                                        value={
-                                                            item.product_variant_id
-                                                        }
-                                                        onChange={(value) =>
-                                                            updateItem(
-                                                                index,
-                                                                'product_variant_id',
-                                                                String(value),
-                                                            )
-                                                        }
-                                                        placeholder="Seleccionar..."
-                                                        disabled={
-                                                            !selectedProduct
-                                                        }
-                                                    />
+                                                    {(control) => (
+                                                        <PresentationSelect
+                                                            control={control}
+                                                            options={
+                                                                variantOptions
+                                                            }
+                                                            value={
+                                                                item.product_variant_id
+                                                            }
+                                                            onChange={(value) =>
+                                                                updateItem(
+                                                                    index,
+                                                                    'product_variant_id',
+                                                                    value,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !selectedProduct
+                                                            }
+                                                        />
+                                                    )}
                                                 </FormField>
 
                                                 <FormField

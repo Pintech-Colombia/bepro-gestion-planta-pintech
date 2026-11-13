@@ -11,6 +11,7 @@ import { FormPage } from '@/components/form-page';
 import { IntegerInput } from '@/components/integer-input';
 import { PageHeader } from '@/components/page-header';
 import { PlantDateInput } from '@/components/plant-date-input';
+import { PresentationSelect } from '@/components/presentation-select';
 import { StockShortageDialog } from '@/components/production/stock-shortage-dialog';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -450,21 +451,25 @@ export default function ProductionOrdersCreate({
                                             )}
                                             className="md:col-span-8"
                                         >
-                                            <Combobox
-                                                options={variantOptionsForRow(
-                                                    index,
-                                                )}
-                                                value={pack.product_variant_id}
-                                                onChange={(v) =>
-                                                    updatePackaging(
+                                            {(control) => (
+                                                <PresentationSelect
+                                                    control={control}
+                                                    options={variantOptionsForRow(
                                                         index,
-                                                        'product_variant_id',
-                                                        String(v),
-                                                    )
-                                                }
-                                                placeholder="Presentación..."
-                                                disabled={!data.product_id}
-                                            />
+                                                    )}
+                                                    value={
+                                                        pack.product_variant_id
+                                                    }
+                                                    onChange={(value) =>
+                                                        updatePackaging(
+                                                            index,
+                                                            'product_variant_id',
+                                                            value,
+                                                        )
+                                                    }
+                                                    disabled={!data.product_id}
+                                                />
+                                            )}
                                         </FormField>
 
                                         <FormField
