@@ -21,4 +21,3 @@ return new class extends Migration
         DB::statement('DROP INDEX IF EXISTS inventory_batches_generated_lot_number_unique');
     }
 };
-
