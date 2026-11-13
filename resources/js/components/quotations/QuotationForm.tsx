@@ -12,6 +12,7 @@ import InputError from '@/components/input-error';
 import { IntegerInput } from '@/components/integer-input';
 import { PageHeader } from '@/components/page-header';
 import { PlantDateInput } from '@/components/plant-date-input';
+import { PresentationSelect } from '@/components/presentation-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
@@ -248,7 +249,7 @@ export default function QuotationForm({
                     (entry) => entry.id === Number(next.product_id),
                 );
                 const variant = product?.variants.find(
-                    (entry) => entry.id === Number(value),
+                    (entry) => entry.id === Number(next.product_variant_id),
                 );
 
                 // El precio lo calcula la vista previa del servidor con el ajuste (0 %).
@@ -280,6 +281,11 @@ export default function QuotationForm({
         setData('items', updated);
 
         const cleared: string[] = [`items.${index}.${field}`];
+
+        // Al cambiar el producto la presentación se vacía: su error ya no corresponde.
+        if (field === 'product_id') {
+            cleared.push(`items.${index}.product_variant_id`);
+        }
 
         if (field === 'price_adjustment_pct' || field === 'unit_price') {
             cleared.push(
@@ -678,21 +684,25 @@ export default function QuotationForm({
                                                 )}
                                                 className="md:col-span-3"
                                             >
-                                                <Combobox
-                                                    options={variantOptions}
-                                                    value={
-                                                        item.product_variant_id
-                                                    }
-                                                    onChange={(value) =>
-                                                        updateItem(
-                                                            index,
-                                                            'product_variant_id',
-                                                            String(value),
-                                                        )
-                                                    }
-                                                    placeholder="Seleccionar..."
-                                                    disabled={!selectedProduct}
-                                                />
+                                                {(control) => (
+                                                    <PresentationSelect
+                                                        control={control}
+                                                        options={variantOptions}
+                                                        value={
+                                                            item.product_variant_id
+                                                        }
+                                                        onChange={(value) =>
+                                                            updateItem(
+                                                                index,
+                                                                'product_variant_id',
+                                                                value,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            !selectedProduct
+                                                        }
+                                                    />
+                                                )}
                                             </FormField>
                                             <FormField
                                                 id={`items.${index}.type`}

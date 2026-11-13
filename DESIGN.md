@@ -301,9 +301,10 @@ Same in all three:
   `EnumOptions::for()`) or lists that almost always have fewer than ~8 options. `Combobox` (`ui/combobox.tsx`) for
   business data that grows and where searching helps: clients, products, raw materials, suppliers, batches, production
   orders.
-  Unclear cases (such as a product's presentation) are decided in each module's redesign. Batches always go in a
-  `Combobox`, even when there are few: the label is the lot number and the description holds what is left, the entry
-  date and the expiry date. Where a movement can create a batch, «Registrar como nuevo lote» is the first option.
+  A product's presentation always goes in `PresentationSelect` (`components/presentation-select.tsx`): a product has
+  few. Batches always go in a `Combobox`, even when there are few: the label is the lot number and the description
+  holds what is left, the entry date and the expiry date. Where a movement can create a batch, «Registrar como nuevo
+  lote» is the first option.
 
 ## 9. Tables and listings
 

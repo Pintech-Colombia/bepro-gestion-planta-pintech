@@ -8,9 +8,9 @@ import {
 } from '@/actions/App/Http/Controllers/Production/PackagingPlanController';
 import { FormattedNumber } from '@/components/formatted-number';
 import { IntegerInput } from '@/components/integer-input';
+import { PresentationSelect } from '@/components/presentation-select';
 import { PrintLabelsButton } from '@/components/production/print-labels-button';
 import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -395,7 +395,7 @@ function PackagingPlanForm({
     const [submitting, setSubmitting] = useState(false);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-    const comboboxOptions = availableVariants.map((variant) => ({
+    const variantOptions = availableVariants.map((variant) => ({
         id: variant.id,
         label: variantPresentationLabel(variant),
     }));
@@ -447,12 +447,11 @@ function PackagingPlanForm({
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1 sm:col-span-2">
-                    <Combobox
-                        options={comboboxOptions}
+                    <PresentationSelect
+                        aria-label="Presentación"
+                        options={variantOptions}
                         value={variantId}
                         onChange={(value) => setVariantId(Number(value))}
-                        placeholder="Presentación..."
-                        emptyText="Sin resultados"
                     />
                     {formErrors.product_variant_id && (
                         <p className="text-xs text-destructive">
