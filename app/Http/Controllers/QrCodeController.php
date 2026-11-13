@@ -90,7 +90,7 @@ class QrCodeController extends Controller
                 ->orderByDesc('version'),
         ]);
 
-        $landingUrl = route('qr.public.show', ['token' => $qrCode->token]);
+        $landingUrl = $qrCode->landingUrl();
         $imageUrl = route('qr-codes.qr-image', ['qrCode' => $qrCode]);
         $canManageDocuments = $request->user()?->can('manageDocuments', $qrCode) ?? false;
 
@@ -192,12 +192,7 @@ class QrCodeController extends Controller
     {
         $this->authorize('view', $qrCode);
 
-        $png = $this->qrImageService->generatePng($qrCode);
-
-        return response($png, 200, [
-            'Content-Type' => 'image/png',
-            'Cache-Control' => 'private, max-age=86400',
-        ]);
+        return $this->qrImageService->pngResponse($qrCode);
     }
 
     public function downloadDocument(QrCode $qrCode, QrDocument $document): StreamedResponse

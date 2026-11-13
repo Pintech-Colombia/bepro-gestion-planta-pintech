@@ -8,7 +8,6 @@ use App\Models\ProductionOrder;
 use App\Models\QrCode;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /**
  * @extends Factory<QrCode>
@@ -24,14 +23,14 @@ class QrCodeFactory extends Factory
      */
     public function definition(): array
     {
-        $token = Str::random(40);
+        $token = QrCode::newToken();
 
         return [
             // Cada QR pertenece a una orden (production_order_id no admite nulos) y comparte su producto.
             'production_order_id' => ProductionOrder::factory(),
             'product_id' => fn (array $attributes) => ProductionOrder::query()->findOrFail($attributes['production_order_id'])->product_id,
             'token' => $token,
-            'url' => route('qr.public.show', ['token' => $token]),
+            'url' => QrCode::landingUrlFor($token),
             'is_active' => true,
             'created_by' => User::factory(),
         ];

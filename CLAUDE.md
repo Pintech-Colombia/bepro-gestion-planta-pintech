@@ -129,6 +129,9 @@ Route (routes/web.php, role: middleware)
    - Use `TimezoneService` for server-side user-facing exports (PDF, Excel) and `FormattedDate` / `date-time-helpers` in the frontend.
 6. **Frontend Navigation & Forms**:
    - Never hardcode URLs in React. Always import typed Wayfinder helpers from `@/routes` or `@/actions` (e.g. `href={productsIndex().url}`).
+     Only exception: the QR host routes (`routes/public.php`, `@/routes/qr`). Wayfinder bakes in the host it was
+     generated with (`qr.localhost` in CI and in the image), so use the absolute URL the server sends
+     (`QrCode::landingUrl()`). ESLint blocks those imports.
    - Always use Inertia helpers (`useForm`, `<Link>`, `router`). Initialize `useForm` directly with props.
 
 ## Coding Standards

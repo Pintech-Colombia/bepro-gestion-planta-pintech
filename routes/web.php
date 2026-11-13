@@ -22,12 +22,12 @@ use App\Http\Controllers\ProductDocumentController;
 use App\Http\Controllers\Production\LineAdjustmentController;
 use App\Http\Controllers\Production\PackagingPlanController;
 use App\Http\Controllers\Production\ProductionLabelController;
+use App\Http\Controllers\Production\ProductionOrderQrImageController;
 use App\Http\Controllers\Production\RemnantConsumptionController;
 use App\Http\Controllers\Production\RemnantController;
 use App\Http\Controllers\Production\ShrinkWrapController;
 use App\Http\Controllers\ProductionOrderController;
 use App\Http\Controllers\ProductVariantController;
-use App\Http\Controllers\PublicQrLandingController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\RoleController;
@@ -41,12 +41,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login')->name('home');
 
-Route::get('/c/{token}', [PublicQrLandingController::class, 'show'])->name('qr.public.show');
-Route::get('/c/{token}/qr.png', [PublicQrLandingController::class, 'qrImage'])->name('qr.public.image');
-Route::get('/c/{token}/documents/{document}', [PublicQrLandingController::class, 'downloadDocument'])
-    ->name('qr.public.documents.download');
-Route::get('/c/{token}/product-documents/{document}', [PublicQrLandingController::class, 'downloadProductDocument'])
-    ->name('qr.public.product-documents.download');
+// La página pública del QR vive en su propio dominio: routes/public.php.
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
@@ -324,6 +319,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('production-orders/{production_order}', [ProductionOrderController::class, 'show'])
         ->middleware('can:'.Permission::ProductionOrdersView->value)
         ->name('production-orders.show');
+    // La imagen del QR de la tarjeta de la OP: con el permiso de ver la OP, no el de Códigos QR, y del mismo dominio del
+    // ERP para que «Descargar QR» descargue (los navegadores ignoran `download` entre dominios).
+    Route::get('production-orders/{production_order}/qr.png', ProductionOrderQrImageController::class)
+        ->middleware('can:'.Permission::ProductionOrdersView->value)
+        ->name('production-orders.qr-image');
     Route::get('production-orders/{production_order}/export-pdf', [ProductionOrderController::class, 'exportPdf'])
         ->middleware('can:'.Permission::ProductionOrdersExport->value)
         ->name('production-orders.export-pdf');

@@ -88,12 +88,12 @@ class BuildProductionOrderShowDataAction
                 }, '0');
         }
 
+        // La página pública vive en el dominio del QR: va absoluta. La imagen sale del ERP, con la sesión de quien ve la OP.
         $qrCode = $productionOrder->qrCode;
-        $qrLandingUrl = ($qrCode && $qrCode->is_active)
-            ? route('qr.public.show', ['token' => $qrCode->token], false)
-            : null;
-        $qrImageUrl = ($qrCode && $qrCode->is_active)
-            ? route('qr.public.image', ['token' => $qrCode->token], false)
+        $hasActiveQr = $qrCode !== null && $qrCode->is_active;
+        $qrLandingUrl = $hasActiveQr ? $qrCode->landingUrl() : null;
+        $qrImageUrl = $hasActiveQr
+            ? route('production-orders.qr-image', ['production_order' => $productionOrder], false)
             : null;
 
         return [

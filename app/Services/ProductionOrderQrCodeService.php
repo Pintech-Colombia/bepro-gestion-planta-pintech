@@ -9,7 +9,6 @@ use App\Models\ProductionOrder;
 use App\Models\QrCode;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * El QR de una orden: uno por orden (`qr_codes.production_order_id` es único), creado por quien lo necesite primero.
@@ -31,7 +30,7 @@ class ProductionOrderQrCodeService
 
         $qrCode->fill([
             'product_id' => $order->product_id,
-            'url' => route('qr.public.show', ['token' => $qrCode->token]),
+            'url' => $qrCode->landingUrl(),
         ]);
         $qrCode->save();
 
@@ -92,12 +91,12 @@ class ProductionOrderQrCodeService
             return $existing;
         }
 
-        $token = $this->generateToken();
+        $token = QrCode::newToken();
         $qrCode = new QrCode([
             'production_order_id' => $order->id,
             'product_id' => $order->product_id,
             'token' => $token,
-            'url' => route('qr.public.show', ['token' => $token]),
+            'url' => QrCode::landingUrlFor($token),
             'is_active' => true,
             'created_by' => $userId,
         ]);
@@ -112,14 +111,5 @@ class ProductionOrderQrCodeService
         }
 
         return $qrCode;
-    }
-
-    private function generateToken(): string
-    {
-        do {
-            $token = Str::random(40);
-        } while (QrCode::query()->where('token', $token)->exists());
-
-        return $token;
     }
 }
