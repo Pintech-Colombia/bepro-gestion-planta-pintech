@@ -149,7 +149,7 @@ combinación, se crea un rol nuevo.
 | | `paint_development_requests.export_pdf` | [x] | [x] | [ ] | [ ] | [x] | [x] | |
 | **Alertas** | `alerts.view` | [x] | [x] | [x] | [ ] | [ ] | [x] | Incluye la campana de notificaciones de la cabecera. |
 | | `alerts.resolve` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede resolver. |
-| **Códigos QR** | `qr_codes.view` | [x] | [x] | [x] | [ ] | [x] | [x] | ⚠️ hoy Comercial no los ve. La landing pública `/c/{token}` no requiere sesión. |
+| **Códigos QR** | `qr_codes.view` | [x] | [x] | [x] | [ ] | [x] | [x] | ⚠️ hoy Comercial no los ve. La landing pública (`{QR_HOST}/{token}`, dominio propio) no requiere sesión. La imagen del QR de la OP pide `production_orders.view`. |
 | | `qr_codes.update` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede editar. |
 | | `qr_codes.manage_documents` | [x] | [x] | [x] | [ ] | [ ] | [ ] | 🆕 Subir el certificado de calidad de una orden completada y eliminar sus versiones. |
 | **Bodegas** | `warehouses.view` | [x] | [x] | [x] | [ ] | [x] | [x] | Solo las bodegas asignadas. |

@@ -76,8 +76,8 @@ function createPublicQrFixture(): array
     $qrCode = QrCode::create([
         'product_id' => $product->id,
         'production_order_id' => $order->id,
-        'token' => 'public-token',
-        'url' => route('qr.public.show', 'public-token'),
+        'token' => 'publictoken1',
+        'url' => QrCode::landingUrlFor('publictoken1'),
         'is_active' => true,
         'created_by' => $user->id,
     ]);
@@ -187,8 +187,8 @@ test('public downloads only allow documents associated with the scanned token', 
     $otherQrCode = QrCode::create([
         'product_id' => $order->product_id,
         'production_order_id' => $otherOrder->id,
-        'token' => 'other-public-token',
-        'url' => route('qr.public.show', 'other-public-token'),
+        'token' => 'otherpublic1',
+        'url' => QrCode::landingUrlFor('otherpublic1'),
         'is_active' => true,
         'created_by' => $order->created_by,
     ]);
@@ -202,28 +202,26 @@ test('inactive or unknown QR token returns not found', function () {
     $qrCode->update(['is_active' => false]);
 
     $this->get(route('qr.public.show', $qrCode->token))->assertNotFound();
-    $this->get(route('qr.public.show', 'missing-token'))->assertNotFound();
+    $this->get(route('qr.public.show', 'missingtoken'))->assertNotFound();
 });
 
-test('qr image endpoint returns a png for a valid active token', function () {
+// El QR impreso puede pasar a mayúsculas sin romper lo ya pegado: la búsqueda no distingue.
+test('public QR landing and downloads open with the token in uppercase', function () {
+    [$qrCode, $productDocument, $certificate] = createPublicQrFixture();
+    $upper = strtoupper($qrCode->token);
+
+    $this->get(route('qr.public.show', $upper))
+        ->assertSuccessful()
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('Public/QrLanding/Show'));
+    $this->get(route('qr.public.documents.download', [$upper, $certificate]))->assertSuccessful();
+    $this->get(route('qr.public.product-documents.download', [$upper, $productDocument]))->assertSuccessful();
+});
+
+test('the qr image is no longer public', function () {
     [$qrCode] = createPublicQrFixture();
 
-    $response = $this->get(route('qr.public.image', $qrCode->token));
-
-    $response->assertOk();
-    $response->assertHeader('Content-Type', 'image/png');
-    expect($response->getContent())->not->toBeEmpty();
-});
-
-test('qr image endpoint returns 404 for inactive token', function () {
-    [$qrCode] = createPublicQrFixture();
-    $qrCode->update(['is_active' => false]);
-
-    $this->get(route('qr.public.image', $qrCode->token))->assertNotFound();
-});
-
-test('qr image endpoint returns 404 for unknown token', function () {
-    $this->get(route('qr.public.image', 'nonexistent-token'))->assertNotFound();
+    $this->get('http://'.config('qr.host').'/'.$qrCode->token.'/qr.png')->assertNotFound();
+    $this->get('/c/'.$qrCode->token.'/qr.png')->assertNotFound();
 });
 
 // 3.4: el cliente ve el nombre con el color que pidió.

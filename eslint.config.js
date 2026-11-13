@@ -91,6 +91,25 @@ export default [
                 'error',
                 'prefer-top-level',
             ],
+            // Las rutas del dominio del QR (routes/public.php) llevan el dominio con el que se generó Wayfinder: en el CI
+            // y en la imagen es `qr.localhost`, así que un enlace armado con ellas no abriría en producción. La URL de la
+            // página pública llega absoluta desde el servidor (QrCode::landingUrl()). `@/routes/qr-codes` es otra cosa.
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: [
+                                '@/routes/qr',
+                                '@/routes/qr/**',
+                                '@/actions/App/Http/Controllers/PublicQrLandingController',
+                            ],
+                            message:
+                                'El dominio del QR se fija al generar Wayfinder: usa la URL absoluta que manda el servidor (QrCode::landingUrl()).',
+                        },
+                    ],
+                },
+            ],
         },
     },
     {

@@ -43,10 +43,12 @@ use App\Services\FormulaService;
 use App\Services\TimezoneService;
 use App\Support\DeploymentEnvironment;
 use App\Support\ModelRouteParameters;
+use App\Support\QrHost;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
@@ -89,6 +91,10 @@ class AppServiceProvider extends ServiceProvider
         ModelRouteParameters::register();
 
         Event::listen(Failed::class, LogFailedLoginAttempt::class);
+
+        // `/up` falla en un servidor sin QR_HOST: pintech-deploy revierte el despliegue en vez de dejarlo en vivo. La
+        // construcción de la imagen no llama a `/up`, así que ahí el valor por defecto sigue sirviendo.
+        Event::listen(DiagnosingHealth::class, fn () => QrHost::assertConfiguredForServer());
 
         Event::listen(Login::class, function (Login $event) {
             /** @var User $user */
@@ -139,6 +145,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('quotation-preview-pricing', fn (Request $request): Limit => $this->perUserOrIp($request, 120));
 
         RateLimiter::for('production-preview-costs', fn (Request $request): Limit => $this->perUserOrIp($request, 30));
+
+        // La página pública del QR y sus descargas, por IP (ahí nadie tiene sesión; la IP real la entrega Nginx desde
+        // Cloudflare). Un cliente que escanea varios envases cabe de sobra; adivinar tokens, no. El contador va en la
+        // caché que diga el `.env`, no en una fija.
+        RateLimiter::for('qr-public', fn (Request $request): Limit => $this->perUserOrIp($request, 60));
     }
 
     /** Límite por usuario con sesión, o por IP sin ella. */

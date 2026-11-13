@@ -45,6 +45,10 @@
         <server name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array" force="true"/>
         <server name="MAIL_MAILER" value="array"/>
+        <env name="QR_HOST" value="qr.localhost" force="true"/>
+        <server name="QR_HOST" value="qr.localhost"/>
+        <env name="QR_PORTFOLIO_URL" value="https://beprocoatings.com" force="true"/>
+        <server name="QR_PORTFOLIO_URL" value="https://beprocoatings.com"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <server name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>

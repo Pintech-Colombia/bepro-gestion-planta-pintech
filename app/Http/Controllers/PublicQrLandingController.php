@@ -10,14 +10,17 @@ use App\Models\ProductDocument;
 use App\Models\ProductionOrder;
 use App\Models\QrCode;
 use App\Models\QrDocument;
-use App\Services\QrImageService;
 use App\Services\TimezoneService;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * La página pública del lote, en el dominio del QR (routes/public.php). El token se busca en minúsculas: la ruta
+ * acepta mayúsculas para que un QR impreso en mayúsculas siga abriendo.
+ */
 class PublicQrLandingController extends Controller
 {
     public function __construct(
@@ -26,15 +29,11 @@ class PublicQrLandingController extends Controller
 
     public function show(string $token): InertiaResponse
     {
-        $qrCode = QrCode::query()
-            ->active()
-            ->with([
-                'product.productDocuments' => fn ($query) => $query->current()->latest('id'),
-                'productionOrder',
-                'documents' => fn ($query) => $query->current()->latest('id'),
-            ])
-            ->where('token', $token)
-            ->firstOrFail();
+        $qrCode = $this->activeQrCode($token)->load([
+            'product.productDocuments' => fn ($query) => $query->current()->latest('id'),
+            'productionOrder',
+            'documents' => fn ($query) => $query->current()->latest('id'),
+        ]);
 
         return Inertia::render('Public/QrLanding/Show', [
             'product' => [
@@ -85,7 +84,7 @@ class PublicQrLandingController extends Controller
 
     public function downloadDocument(string $token, QrDocument $document): StreamedResponse
     {
-        $qrCode = QrCode::query()->active()->where('token', $token)->firstOrFail();
+        $qrCode = $this->activeQrCode($token);
 
         abort_unless($document->qr_code_id === $qrCode->id && $document->is_current, 404);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
@@ -102,7 +101,7 @@ class PublicQrLandingController extends Controller
 
     public function downloadProductDocument(string $token, ProductDocument $document): StreamedResponse
     {
-        $qrCode = QrCode::query()->active()->where('token', $token)->firstOrFail();
+        $qrCode = $this->activeQrCode($token);
 
         abort_unless($document->product_id === $qrCode->product_id && $document->is_current, 404);
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
@@ -117,16 +116,9 @@ class PublicQrLandingController extends Controller
         );
     }
 
-    public function qrImage(string $token, QrImageService $service): Response
+    private function activeQrCode(string $token): QrCode
     {
-        $qrCode = QrCode::query()->active()->where('token', $token)->firstOrFail();
-
-        $png = $service->generatePng($qrCode);
-
-        return response($png, 200, [
-            'Content-Type' => 'image/png',
-            'Cache-Control' => 'public, max-age=86400',
-        ]);
+        return QrCode::query()->active()->where('token', Str::lower($token))->firstOrFail();
     }
 
     private function formatFileSize(int $bytes): string

@@ -163,17 +163,8 @@ export default function ProductionOrderShow({
             enabled: can.previewCosts,
         });
 
-    const landingFullUrl = useMemo(() => {
-        if (!order.qr_landing_url) {
-            return '';
-        }
-
-        if (typeof window === 'undefined') {
-            return order.qr_landing_url;
-        }
-
-        return `${window.location.origin}${order.qr_landing_url}`;
-    }, [order.qr_landing_url]);
+    // Absoluta desde el servidor: la página pública vive en el dominio del QR, no en el del ERP.
+    const landingFullUrl = order.qr_landing_url ?? '';
 
     const solidsReferenceLabel = useMemo(() => {
         const lower = order.product?.quality_solids_lower;

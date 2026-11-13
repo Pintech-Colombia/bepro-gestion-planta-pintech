@@ -49,8 +49,8 @@ final class RoutePermissionMap
         return [
             // Públicas y generales
             'home' => self::PUBLIC,
+            'qr.public.portfolio' => self::PUBLIC,
             'qr.public.show' => self::PUBLIC,
-            'qr.public.image' => self::PUBLIC,
             'qr.public.documents.download' => self::PUBLIC,
             'qr.public.product-documents.download' => self::PUBLIC,
             'dashboard' => Permission::DashboardView,
@@ -126,6 +126,7 @@ final class RoutePermissionMap
             // Órdenes de producción
             'production-orders.index' => Permission::ProductionOrdersView,
             'production-orders.show' => Permission::ProductionOrdersView,
+            'production-orders.qr-image' => Permission::ProductionOrdersView,
             'production-orders.create' => Permission::ProductionOrdersCreate,
             'production-orders.store' => Permission::ProductionOrdersCreate,
             'production-orders.update-color' => Permission::ProductionOrdersCreate,
