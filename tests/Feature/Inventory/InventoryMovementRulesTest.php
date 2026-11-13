@@ -50,8 +50,8 @@ function movementBody(object $test, array $override = []): array
 }
 
 it('does not validate the lot data of an exit, which it never uses (INV-13)', function (): void {
-    $this->post(route('inventory-movements.store'), movementBody($this, ['expiry_date' => '2020-01-01', 'lot_number' => str_repeat('X', 80)]))
-        ->assertSessionDoesntHaveErrors(['expiry_date', 'lot_number']);
+    $this->post(route('inventory-movements.store'), movementBody($this, ['expiry_date' => '2020-01-01']))
+        ->assertSessionDoesntHaveErrors(['expiry_date']);
 });
 
 it('does not validate the lot data of an entry into an existing lot (INV-13)', function (): void {
@@ -67,7 +67,6 @@ it('still validates the expiry date of an entry that creates a new lot', functio
         'type' => 'entry',
         'batch_id' => null,
         'cost_price' => '10',
-        'lot_number' => 'LOTE-NUEVO',
         'expiry_date' => '2020-01-01',
     ]))->assertSessionHasErrors(['expiry_date']);
 });
@@ -101,7 +100,6 @@ it('rejects a raw material movement in a warehouse that is not a factory (D6)', 
         'batch_id' => null,
         'warehouse_id' => $storage->id,
         'cost_price' => '10',
-        'lot_number' => 'LOTE-ALMACEN',
         'supplier_id' => Supplier::factory()->create()->id,
     ]))->assertSessionHasErrors(['warehouse_id' => 'La materia prima solo se registra en la fábrica. Los almacenes reciben producto terminado.']);
 

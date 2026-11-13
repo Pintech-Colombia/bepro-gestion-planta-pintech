@@ -116,9 +116,13 @@ class InventoryMovementController extends Controller
     {
         $this->authorize('create', InventoryMovement::class);
 
-        $this->inventoryService->storeMovement($request->validated(), (int) $request->user()->id);
+        $movement = $this->inventoryService->storeMovement($request->validated(), (int) $request->user()->id);
 
-        Inertia::flash('success', __('Movimiento de inventario registrado exitosamente.'));
+        if ($request->createsNewLot()) {
+            Inertia::flash('success', __('Entrada registrada en el lote :lot.', ['lot' => $movement->batch->lot_number]));
+        } else {
+            Inertia::flash('success', __('Movimiento de inventario registrado exitosamente.'));
+        }
 
         return redirect()->route('inventory-movements.index');
     }

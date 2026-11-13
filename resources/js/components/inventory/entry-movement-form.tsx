@@ -1,11 +1,10 @@
 import { useForm, usePage } from '@inertiajs/react';
-import type { FormEvent, ChangeEvent } from 'react';
+import type { FormEvent } from 'react';
 import { DecimalInput } from '@/components/decimal-input';
 import { FormActions } from '@/components/form-actions';
 import { FormField } from '@/components/form-field';
 import { PlantDateInput } from '@/components/plant-date-input';
 import { Combobox } from '@/components/ui/combobox';
-import { Input } from '@/components/ui/input';
 import { SheetBody, SheetFooter } from '@/components/ui/sheet';
 import { NUMBER_TYPES } from '@/lib/number-types';
 import { idPayload, toDecimalPayload } from '@/lib/numeric-input';
@@ -43,7 +42,6 @@ export function EntryMovementForm({
         type: 'entry';
         quantity: string;
         cost_price: string;
-        lot_number: string;
         supplier_id: string;
         expiry_date: string;
         movement_date: string;
@@ -55,7 +53,6 @@ export function EntryMovementForm({
         type: 'entry',
         quantity: '',
         cost_price: '',
-        lot_number: '',
         supplier_id: '',
         expiry_date: '',
         movement_date: plantToday,
@@ -75,7 +72,6 @@ export function EntryMovementForm({
                 data.cost_price === ''
                     ? null
                     : toDecimalPayload(data.cost_price),
-            lot_number: data.batch_id === '' ? data.lot_number : null,
             supplier_id:
                 data.batch_id === '' ? idPayload(data.supplier_id) : null,
             expiry_date:
@@ -147,30 +143,9 @@ export function EntryMovementForm({
                         </FormField>
                     }
                 >
-                    {/* Lote nuevo: número y vencimiento en una fila; el proveedor, que suele ser largo, a lo ancho. */}
+                    {/* Lote nuevo: vencimiento en su fila y el proveedor, que suele ser largo, a lo ancho. */}
                     {form.data.batch_id === '' && (
                         <>
-                            <FormField
-                                id="lot_number"
-                                label="Número de lote"
-                                required
-                                error={form.errors.lot_number}
-                            >
-                                <Input
-                                    maxLength={50}
-                                    value={form.data.lot_number}
-                                    onChange={(
-                                        e: ChangeEvent<HTMLInputElement>,
-                                    ) =>
-                                        form.setData(
-                                            'lot_number',
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="Ej. LOT-2026-001"
-                                />
-                            </FormField>
-
                             <FormField
                                 id="expiry_date"
                                 label="Fecha de vencimiento"

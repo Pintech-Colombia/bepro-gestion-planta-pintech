@@ -222,7 +222,7 @@ describe('movimientos de materia prima (INV-03, D1)', function (): void {
         $this->entry = fn (array $o) => $this->actingAs($this->admin)->post(route('inventory-movements.store'), array_merge([
             'raw_material_id' => $this->material->id, 'warehouse_id' => $this->warehouse->id, 'batch_id' => null,
             'type' => 'entry', 'quantity' => '10', 'cost_price' => '1000', 'movement_date' => '2026-10-13',
-            'lot_number' => 'L-FECHA', 'supplier_id' => Supplier::factory()->create()->id, 'expiry_date' => null, 'notes' => null,
+            'supplier_id' => Supplier::factory()->create()->id, 'expiry_date' => null, 'notes' => null,
         ], $o));
         $this->exit = fn (array $o) => $this->actingAs($this->admin)->post(route('inventory-movements.store'), array_merge([
             'raw_material_id' => $this->material->id, 'warehouse_id' => $this->warehouse->id, 'batch_id' => $this->batch->id,

@@ -42,7 +42,6 @@ function newLotEntry(array $overrides = []): array
         'type' => 'entry',
         'quantity' => '10',
         'cost_price' => '1500',
-        'lot_number' => 'L-PROV-1',
         'supplier_id' => test()->supplier->id,
         'movement_date' => plantToday(),
     ], $overrides);
@@ -64,7 +63,7 @@ function existingBatch(array $attributes = []): InventoryBatch
 it('saves the supplier in the new lot', function (): void {
     $this->post(route('inventory-movements.store'), newLotEntry())->assertSessionHasNoErrors();
 
-    expect(InventoryBatch::query()->where('lot_number', 'L-PROV-1')->sole()->supplier_id)->toBe($this->supplier->id);
+    expect(InventoryBatch::query()->sole()->supplier_id)->toBe($this->supplier->id);
 });
 
 it('requires the supplier when an entry creates a new lot, and says so in Spanish', function (): void {
@@ -120,7 +119,7 @@ it('does not ask for a supplier in an exit', function (): void {
 it('lets the service create a lot without a supplier: only the form requires it', function (): void {
     app(InventoryService::class)->storeMovement(newLotEntry(['supplier_id' => null]), (int) $this->admin->id);
 
-    expect(InventoryBatch::query()->where('lot_number', 'L-PROV-1')->sole()->supplier_id)->toBeNull();
+    expect(InventoryBatch::query()->sole()->supplier_id)->toBeNull();
 });
 
 it('offers only the active suppliers in the form, with only their id and name', function (): void {
@@ -185,7 +184,7 @@ it('keeps the raw material detail working for a lot without a supplier', functio
 it('audits the supplier of the lot', function (): void {
     $this->post(route('inventory-movements.store'), newLotEntry())->assertSessionHasNoErrors();
 
-    $batch = InventoryBatch::query()->where('lot_number', 'L-PROV-1')->sole();
+    $batch = InventoryBatch::query()->sole();
     $activity = Activity::query()
         ->where('subject_type', InventoryBatch::class)
         ->where('subject_id', $batch->id)
