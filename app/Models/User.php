@@ -58,6 +58,16 @@ class User extends Authenticatable
      */
     public const SIGNATURE_DISK = 'local';
 
+    /**
+     * El mismo valor por defecto que la columna (`default(true)`), para que un usuario recién creado diga lo mismo en
+     * memoria que en la base. `EnsureUserIsActive` lee `is_active` en cada petición.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
     protected string $auditLabel = 'Usuario';
 
     protected string $auditIdentifierAttribute = 'name';

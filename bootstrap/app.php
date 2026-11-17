@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IsolateQrHost;
@@ -47,11 +48,16 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Si cambia la contraseña de una cuenta (hoy, por «¿Olvidaste tu contraseña?»), sus otras sesiones abiertas y su
+        // cookie de «Recordarme» dejan de servir en la siguiente petición: quien robó la cuenta queda fuera.
+        $middleware->authenticateSessions();
+
         $middleware->web(append: [
             StripControlCharacters::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            EnsureUserIsActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
