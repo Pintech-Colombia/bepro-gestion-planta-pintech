@@ -41,6 +41,9 @@ LABEL org.opencontainers.image.source="https://github.com/Pintech-Colombia/bepro
 # - Automatizaciones al arrancar (solo las enciende el servicio web, con AUTORUN_ENABLED): `optimize`. Las migraciones
 #   nunca corren al arrancar: las corre `pintech-deploy` antes de reemplazar los contenedores. El enlace de `storage`
 #   ya viene en la imagen.
+# - IP del visitante: Nginx la toma de CF-Connecting-IP (que Cloudflare siempre sobrescribe) cuando la visita llega
+#   desde la red de Docker, es decir, del túnel, y se la pasa a PHP como REMOTE_ADDR. Ya es el valor por defecto de la
+#   base; se fija aquí porque la app depende de él (bootstrap/app.php no confía en X-Forwarded-For).
 # Ya vienen de la base: expose_php Off, session.upload_progress apagado y server_tokens off.
 ENV PHP_OPCACHE_ENABLE=1 \
     PHP_UPLOAD_MAX_FILE_SIZE=25M \
@@ -49,6 +52,7 @@ ENV PHP_OPCACHE_ENABLE=1 \
     NGINX_FASTCGI_BUFFER_SIZE=32k \
     NGINX_FASTCGI_BUFFERS="16 16k" \
     HEALTHCHECK_PATH=/up \
+    TRUSTED_PROXY=cloudflare \
     AUTORUN_LARAVEL_MIGRATION=false \
     AUTORUN_LARAVEL_STORAGE_LINK=false
 
