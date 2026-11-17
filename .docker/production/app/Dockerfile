@@ -2,13 +2,13 @@
 # imagen corre web, queue y scheduler; cambia solo el comando (compose.prod.yaml).
 #
 # Bases fijadas por versión exacta y digest (índice multiarquitectura). La etiqueta lleva la versión de PHP
-# (`8.3.36-fpm-nginx-trixie`) y no la de serversideup (`-v5.1.1`): Dependabot solo entiende la primera y propone el
+# (`8.3.36-fpm-nginx-trixie`) y no la de serversideup (`-vX.Y.Z`): Dependabot solo entiende la primera y propone el
 # parche de PHP siguiente. serversideup recompila cada semana con los arreglos de Debian sin cambiar la etiqueta: ese
 # digest nuevo no lo propone Dependabot, lo avisa Trivy (workflow `security`).
 FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS node_base
 
 # Base común: la imagen de serversideup trae pdo_pgsql, zip, pcntl y opcache; faltan estas.
-FROM serversideup/php:8.3.36-fpm-nginx-trixie@sha256:5ff96ba254d8772689c69288a4c4363c9dc81aab8981c1511911122a44030233 AS base
+FROM serversideup/php:8.3.36-fpm-nginx-trixie@sha256:5e3477965b0e732d8830d0230a3892f58ebf846c31669aed3fed67d2c222e850 AS base
 USER root
 RUN install-php-extensions intl bcmath gd pgsql
 USER www-data
