@@ -113,16 +113,16 @@ test('crear una fórmula deja una actividad por línea con producto, versión, c
 
     expect($created)->toHaveCount(3)
         ->and($created->pluck('description')->all())->toBe([
-            'Línea 1 de "PINTURA AUDITADA" v1 (RM-AUD-01) creada',
-            'Línea 2 de "PINTURA AUDITADA" v1 (RM-AUD-02) creada',
-            'Línea 3 de "PINTURA AUDITADA" v1 (RM-AUD-03) creada',
+            'Línea de fórmula "PINTURA AUDITADA v1 · paso 1 · RM-AUD-01" creada',
+            'Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-02" creada',
+            'Línea de fórmula "PINTURA AUDITADA v1 · paso 3 · RM-AUD-03" creada',
         ])
         ->and($created->every(fn (Activity $activity) => (int) $activity->causer_id === $this->admin->id))->toBeTrue();
 
     expect($created->map(fn (Activity $activity) => $activity->properties['attributes'])->all())->toBe([
-        ['formula_id' => $formula->id, 'raw_material_id' => $first->id, 'quantity' => '2.0000', 'unit_of_measure_id' => $this->unit->id, 'step_order' => 1],
-        ['formula_id' => $formula->id, 'raw_material_id' => $second->id, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id, 'step_order' => 2],
-        ['formula_id' => $formula->id, 'raw_material_id' => $third->id, 'quantity' => '0.2500', 'unit_of_measure_id' => $this->unit->id, 'step_order' => 3],
+        ['formula_id' => $formula->id, 'raw_material_id' => $first->id, 'quantity' => '2.0000', 'unit_of_measure_id' => $this->unit->id],
+        ['formula_id' => $formula->id, 'raw_material_id' => $second->id, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id],
+        ['formula_id' => $formula->id, 'raw_material_id' => $third->id, 'quantity' => '0.2500', 'unit_of_measure_id' => $this->unit->id],
     ]);
 });
 
@@ -153,34 +153,62 @@ test('cambiar una cantidad deja un solo registro con la cantidad vieja y la nuev
 
     expect($activities)->toHaveCount(1)
         ->and($activities->first()->event)->toBe('updated')
-        ->and($activities->first()->description)->toBe('Línea 2 de "PINTURA AUDITADA" v1 (RM-AUD-02) actualizada')
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-02" actualizada')
         ->and($activities->first()->properties['attributes'])->toBe(['quantity' => '4.0000'])
         ->and($activities->first()->properties['old'])->toBe(['quantity' => '3.5000']);
 });
 
-test('quitar un paso del medio actualiza el que sube y borra el último con sus valores', function () {
+test('quitar un paso del medio deja un solo borrado, sin cambios en los pasos que suben', function () {
     [$first, $second, $third] = $this->materials;
     $formula = auditedFormula($this->product, $this->unit, [[$first, '2'], [$second, '3.5'], [$third, '0.25']]);
+    $thirdLineId = $formula->details()->where('step_order', 3)->value('id');
 
     $this->put(route('formulas.update', $formula), [
         'details' => auditedFormulaLines([[$first, '2'], [$third, '0.25']], $this->unit),
     ])->assertSessionHasNoErrors();
 
-    $updated = formulaLineActivities('updated');
-    $deleted = formulaLineActivities('deleted');
+    $activities = formulaLineActivities();
 
-    expect(formulaLineActivities('created'))->toBeEmpty()
-        ->and($updated)->toHaveCount(1)
-        ->and($updated->first()->description)->toBe('Línea 2 de "PINTURA AUDITADA" v1 (RM-AUD-03) actualizada')
-        ->and($updated->first()->properties['old'])->toBe(['raw_material_id' => $second->id, 'quantity' => '3.5000'])
-        ->and($updated->first()->properties['attributes'])->toBe(['raw_material_id' => $third->id, 'quantity' => '0.2500'])
-        ->and($deleted)->toHaveCount(1)
-        ->and($deleted->first()->description)->toBe('Línea 3 de "PINTURA AUDITADA" v1 (RM-AUD-03) eliminada')
-        ->and($deleted->first()->properties['old'])->toBe([
-            'formula_id' => $formula->id, 'raw_material_id' => $third->id, 'quantity' => '0.2500', 'unit_of_measure_id' => $this->unit->id, 'step_order' => 3,
+    expect($activities)->toHaveCount(1)
+        ->and($activities->first()->event)->toBe('deleted')
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-02" eliminada')
+        ->and($activities->first()->properties['old'])->toBe([
+            'formula_id' => $formula->id, 'raw_material_id' => $second->id, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id,
         ])
+        // La tercera línea es la misma (se corrió al paso 2), no una nueva.
+        ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->id === $thirdLineId, $line->step_order, $line->raw_material_id])->all())
+        ->toBe([[false, 1, $first->id], [true, 2, $third->id]]);
+});
+
+test('agregar un paso en el medio deja una sola creación', function () {
+    [$first, $second, , $fourth] = $this->materials;
+    $formula = auditedFormula($this->product, $this->unit, [[$first, '2'], [$second, '3.5']]);
+
+    $this->put(route('formulas.update', $formula), [
+        'details' => auditedFormulaLines([[$first, '2'], [$fourth, '1'], [$second, '3.5']], $this->unit),
+    ])->assertSessionHasNoErrors();
+
+    $activities = formulaLineActivities();
+
+    expect($activities)->toHaveCount(1)
+        ->and($activities->first()->event)->toBe('created')
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-04" creada')
         ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->step_order, $line->raw_material_id])->all())
-        ->toBe([[1, $first->id], [2, $third->id]]);
+        ->toBe([[1, $first->id], [2, $fourth->id], [3, $second->id]]);
+});
+
+test('cambiar la materia prima de un paso deja el borrado de la vieja y la creación de la nueva', function () {
+    [$first, $second, $third, $fourth] = $this->materials;
+    $formula = auditedFormula($this->product, $this->unit, [[$first, '2'], [$second, '3.5'], [$third, '0.25']]);
+
+    $this->put(route('formulas.update', $formula), [
+        'details' => auditedFormulaLines([[$first, '2'], [$fourth, '3.5'], [$third, '0.25']], $this->unit),
+    ])->assertSessionHasNoErrors();
+
+    expect(formulaLineActivities()->map(fn (Activity $activity) => [$activity->event, $activity->description])->all())->toBe([
+        ['deleted', 'Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-02" eliminada'],
+        ['created', 'Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-04" creada'],
+    ]);
 });
 
 test('agregar un paso al final solo lo crea', function () {
@@ -195,7 +223,7 @@ test('agregar un paso al final solo lo crea', function () {
 
     expect($activities)->toHaveCount(1)
         ->and($activities->first()->event)->toBe('created')
-        ->and($activities->first()->description)->toBe('Línea 3 de "PINTURA AUDITADA" v1 (RM-AUD-04) creada');
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 3 · RM-AUD-04" creada');
 });
 
 test('la misma materia prima en dos pasos se actualiza por paso (D-FOR2)', function () {
@@ -209,10 +237,45 @@ test('la misma materia prima en dos pasos se actualiza por paso (D-FOR2)', funct
     $activities = formulaLineActivities();
 
     expect($activities)->toHaveCount(1)
-        ->and($activities->first()->description)->toBe('Línea 3 de "PINTURA AUDITADA" v1 (RM-AUD-01) actualizada')
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 3 · RM-AUD-01" actualizada')
         ->and($activities->first()->properties['attributes'])->toBe(['quantity' => '5.0000'])
         ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->step_order, $line->raw_material_id, $line->quantity])->all())
         ->toBe([[1, $first->id, '2.0000'], [2, $second->id, '1.0000'], [3, $first->id, '5.0000']]);
+});
+
+test('con la misma materia prima en dos pasos, quitar la primera borra esa y no la otra (D-FOR2)', function () {
+    [$first, $second] = $this->materials;
+    $formula = auditedFormula($this->product, $this->unit, [[$first, '2'], [$second, '1'], [$first, '3']]);
+
+    $this->put(route('formulas.update', $formula), [
+        'details' => auditedFormulaLines([[$second, '1'], [$first, '3']], $this->unit),
+    ])->assertSessionHasNoErrors();
+
+    $activities = formulaLineActivities();
+
+    expect($activities)->toHaveCount(1)
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 1 · RM-AUD-01" eliminada')
+        ->and($activities->first()->properties['old']['quantity'])->toBe('2.0000')
+        ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->step_order, $line->raw_material_id, $line->quantity])->all())
+        ->toBe([[1, $second->id, '1.0000'], [2, $first->id, '3.0000']]);
+});
+
+test('con la misma materia prima en dos pasos y distinta cantidad, quitar una borra esa y no cambia la otra (D-FOR2)', function () {
+    [$first] = $this->materials;
+    $formula = auditedFormula($this->product, $this->unit, [[$first, '2'], [$first, '3']]);
+
+    $this->put(route('formulas.update', $formula), [
+        'details' => auditedFormulaLines([[$first, '3']], $this->unit),
+    ])->assertSessionHasNoErrors();
+
+    $activities = formulaLineActivities();
+
+    expect($activities)->toHaveCount(1)
+        ->and($activities->first()->event)->toBe('deleted')
+        ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 1 · RM-AUD-01" eliminada')
+        ->and($activities->first()->properties['old']['quantity'])->toBe('2.0000')
+        ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->step_order, $line->quantity])->all())
+        ->toBe([[1, '3.0000']]);
 });
 
 test('eliminar una fórmula sin uso deja el borrado de cada línea con sus valores', function () {
@@ -227,8 +290,8 @@ test('eliminar una fórmula sin uso deja el borrado de cada línea con sus valor
 
     expect(Formula::query()->whereKey($formula->id)->exists())->toBeFalse()
         ->and($deleted->pluck('description')->all())->toBe([
-            'Línea 1 de "PINTURA AUDITADA" v2 (RM-AUD-01) eliminada',
-            'Línea 2 de "PINTURA AUDITADA" v2 (RM-AUD-02) eliminada',
+            'Línea de fórmula "PINTURA AUDITADA v2 · paso 1 · RM-AUD-01" eliminada',
+            'Línea de fórmula "PINTURA AUDITADA v2 · paso 2 · RM-AUD-02" eliminada',
         ])
         ->and($deleted->map(fn (Activity $activity) => $activity->properties['old']['quantity'])->all())->toBe(['2.0000', '3.5000']);
 });
@@ -251,7 +314,20 @@ test('una fórmula con historial no se elimina y sus líneas siguen sin registro
 });
 
 test('la descripción de la auditoría no lee la fórmula, el producto ni la materia prima por línea', function () {
-    $selectsWhileEditing = function (int $lineCount): int {
+    // Un solo listener: cuenta solo mientras `$state->selects` no es null.
+    $state = (object) ['selects' => null];
+
+    DB::listen(function (QueryExecuted $query) use ($state): void {
+        // Solo las lecturas que sirven a la descripción (fórmula, producto, materia prima). Spatie vuelve a leer cada
+        // línea actualizada para registrar sus valores: eso es suyo, en todo modelo auditado, y no depende de esto.
+        $sql = strtolower(ltrim($query->sql));
+
+        if ($state->selects !== null && str_starts_with($sql, 'select') && preg_match('/from "(formulas|products|raw_materials)"/', $sql) === 1) {
+            $state->selects++;
+        }
+    });
+
+    $selectsWhileEditing = function (int $lineCount) use ($state): int {
         $product = Product::create([
             'name' => "Producto de {$lineCount} líneas",
             'category_id' => $this->product->category_id,
@@ -262,24 +338,17 @@ test('la descripción de la auditoría no lee la fórmula, el producto ni la mat
         ]);
 
         $lines = collect(range(0, $lineCount - 1))
-            ->map(fn (int $index) => [$this->materials[$index % 4], '1'])
+            ->map(fn (int $index) => [$this->materials[$index % 3], '1'])
             ->all();
         $formula = auditedFormula($product, $this->unit, $lines);
 
-        $changed = array_map(fn (array $line) => [$line[0], '2'], $lines);
-        $selects = 0;
+        // Cambia todas las cantidades, quita la primera línea y agrega una al final: actualiza, borra y crea.
+        $changed = [...array_map(fn (array $line) => [$line[0], '2'], array_slice($lines, 1)), [$this->materials[3], '7']];
 
-        // Solo las lecturas que sirven a la descripción (fórmula, producto, materia prima). Spatie vuelve a leer cada
-        // línea actualizada para registrar sus valores: eso es suyo, en todo modelo auditado, y no depende de esto.
-        DB::listen(function (QueryExecuted $query) use (&$selects): void {
-            $sql = strtolower(ltrim($query->sql));
-
-            if (str_starts_with($sql, 'select') && preg_match('/from "(formulas|products|raw_materials)"/', $sql) === 1) {
-                $selects++;
-            }
-        });
-
+        $state->selects = 0;
         DB::transaction(fn () => Formula::query()->findOrFail($formula->id)->replaceDetails(auditedFormulaLines($changed, $this->unit)));
+        $selects = $state->selects;
+        $state->selects = null;
 
         return $selects;
     };
@@ -287,7 +356,9 @@ test('la descripción de la auditoría no lee la fórmula, el producto ni la mat
     $withThree = $selectsWhileEditing(3);
     $withTen = $selectsWhileEditing(10);
 
-    // Crear la segunda fórmula borró la actividad de la primera: quedan las 10 líneas actualizadas de la última.
-    expect(formulaLineActivities('updated'))->toHaveCount(10)
+    // Crear la segunda fórmula borró la actividad de la primera: queda la edición de la de 10 líneas.
+    expect(formulaLineActivities('updated'))->toHaveCount(9)
+        ->and(formulaLineActivities('deleted'))->toHaveCount(1)
+        ->and(formulaLineActivities('created'))->toHaveCount(1)
         ->and($withTen)->toBe($withThree);
 });
