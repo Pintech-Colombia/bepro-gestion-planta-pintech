@@ -81,7 +81,8 @@ trait ProfileValidationRules
             'email',
             // `email` acepta `nuevo@pintech`: sirve para entrar, pero el correo de recuperación nunca llegaría (USR-03).
             'regex:/@[^@\s]+\.[^@\s]+$/',
-            'max:255',
+            // 254: el máximo de una dirección según la RFC 5321 (la regla `email` lo exige desde Laravel 13.43).
+            'max:254',
             $userId === null
                 ? Rule::unique(User::class)
                 : Rule::unique(User::class)->ignore($userId),

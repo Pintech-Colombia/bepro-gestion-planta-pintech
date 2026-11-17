@@ -170,7 +170,7 @@ it('acepta justo lo que cabe en cada columna', function () {
         'nit' => str_repeat('1', 20),
         'contact_name' => str_repeat('c', 255),
         'phone' => str_repeat('3', 20),
-        'email' => str_repeat('e', 242).'@example.test',
+        'email' => str_repeat('e', 241).'@example.test', // 254, el máximo de la RFC 5321
         'notes' => str_repeat('o', 2000),
     ])->assertSessionHasNoErrors();
 
@@ -191,7 +191,7 @@ it('rechaza lo que no cabe o no tiene el formato', function (string $field, stri
     'teléfono largo' => ['phone', str_repeat('3', 21)],
     'teléfono con letras' => ['phone', 'llamar al 31012'],
     'correo sin formato' => ['email', 'no-es-correo'],
-    'correo largo' => ['email', str_repeat('e', 243).'@example.test'],
+    'correo largo' => ['email', str_repeat('e', 242).'@example.test'],
     'notas largas' => ['notes', str_repeat('o', 2001)],
 ]);
 
