@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\Alert;
-use App\Models\FormulaDetail;
 use App\Models\ProductionCost;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
@@ -17,7 +16,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
 /** Modelos que hoy no registran auditoría, con lo que guardan. Agregar uno exige justificarlo aquí. */
 const AUDIT_EXEMPT_MODELS = [
     Alert::class => 'Alerta generada por el sistema',
-    FormulaDetail::class => 'Línea de una fórmula',
     ProductionCost::class => 'Costo calculado de una OP',
     ProductionOrderDetail::class => 'Línea de una OP',
     ProductionOrderLineAdjustment::class => 'Ajuste de una línea de OP',
