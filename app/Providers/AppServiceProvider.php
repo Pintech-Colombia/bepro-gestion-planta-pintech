@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Listeners\LogFailedLoginAttempt;
 use App\Models\Alert;
 use App\Models\FinishedInventory;
 use App\Models\FinishedInventoryMovement;
@@ -45,7 +44,6 @@ use App\Support\DeploymentEnvironment;
 use App\Support\ModelRouteParameters;
 use App\Support\QrHost;
 use Carbon\CarbonImmutable;
-use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Events\DiagnosingHealth;
@@ -89,8 +87,6 @@ class AppServiceProvider extends ServiceProvider
 
         // Antes de que se carguen las rutas: el patrón se copia a cada ruta al registrarla (T-01).
         ModelRouteParameters::register();
-
-        Event::listen(Failed::class, LogFailedLoginAttempt::class);
 
         // `/up` falla en un servidor sin QR_HOST: pintech-deploy revierte el despliegue en vez de dejarlo en vivo. La
         // construcción de la imagen no llama a `/up`, así que ahí el valor por defecto sigue sirviendo.

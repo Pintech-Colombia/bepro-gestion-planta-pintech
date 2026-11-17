@@ -24,15 +24,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // En el servidor solo llega tráfico por el túnel de Cloudflare: no hay puertos publicados, así que quien le habla
-        // a la app siempre es otro contenedor. El Nginx de la imagen ya reemplaza la IP de origen por la real
-        // (CF-Connecting-IP): por eso se confía en cualquier origen ('*') y no solo en las redes de Docker, que dejarían
-        // de reconocer X-Forwarded-Proto y la app creería que la visita llegó por HTTP.
-        // De las cabeceras X-Forwarded-* solo se aceptan For (IP) y Proto (HTTPS). Host, Port y Prefix las puede mandar
-        // cualquier visitante: con ellas, por ejemplo, un enlace para restablecer la contraseña apuntaría a otro dominio.
+        // En el servidor solo llega tráfico por el túnel de Cloudflare (no hay puertos publicados). El Nginx de la imagen
+        // ya reemplaza la IP de origen por la del visitante, así que Laravel ve en REMOTE_ADDR una IP pública, no la de un
+        // contenedor: por eso se confía en cualquier origen ('*'). Limitarlo a las redes de Docker dejaría de reconocer
+        // X-Forwarded-Proto y la app creería que la visita llegó por HTTP.
+        // De las cabeceras X-Forwarded-* solo se acepta Proto (HTTPS):
+        // - For (IP), no: Cloudflare le agrega la IP real al final de la que mande el visitante, y la app se quedaría con
+        //   la inventada (límites de peticiones y del login, y la IP de la auditoría). La IP real ya llega en
+        //   REMOTE_ADDR: el Nginx de la imagen la toma de CF-Connecting-IP, que Cloudflare siempre sobrescribe
+        //   (TRUSTED_PROXY=cloudflare en el Dockerfile de servidor).
+        // - Host, Port y Prefix, no: las puede mandar cualquier visitante y, por ejemplo, un enlace para restablecer la
+        //   contraseña apuntaría a otro dominio.
         $middleware->trustProxies(
             at: '*',
-            headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO,
+            headers: Request::HEADER_X_FORWARDED_PROTO,
         );
 
         // Global, para decidir por dominio y por ruta qué responde en el dominio del QR antes de que corra la ruta. Al
