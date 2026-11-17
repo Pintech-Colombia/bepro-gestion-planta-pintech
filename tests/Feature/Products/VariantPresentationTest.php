@@ -14,11 +14,9 @@ use App\Models\UnitOfMeasure;
 use App\Models\Warehouse;
 use App\Services\ProductionCostRecalculationService;
 use Database\Seeders\RolePermissionSeeder;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Activitylog\Models\Activity;
 
@@ -199,15 +197,11 @@ test('las pantallas reciben la presentación de la variante, sin nombre y ordena
     'orden de producción' => ['production-orders.create', 'variants'],
 ]);
 
-test('sin la columna name, las pantallas y formularios de variantes siguen funcionando', function (): void {
-    // Red para la migración que borrará la columna: si alguna consulta todavía la pide, aquí falla.
+test('las pantallas y formularios de variantes funcionan sin la columna name', function (): void {
+    // La columna ya no existe (migración `drop_name_from_product_variants_table`): si alguna consulta la pidiera, aquí
+    // fallaría.
     $warehouse = Warehouse::factory()->create();
     FinishedInventory::factory()->create(['product_variant_id' => $this->galon->id, 'warehouse_id' => $warehouse->id, 'quantity' => 10]);
-
-    Schema::table('product_variants', function (Blueprint $table): void {
-        $table->dropIndex(['name']);
-        $table->dropColumn('name');
-    });
 
     foreach ([
         route('prices.index', ['search' => 'Galón']),

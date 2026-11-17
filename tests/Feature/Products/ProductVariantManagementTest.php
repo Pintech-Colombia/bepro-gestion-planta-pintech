@@ -54,7 +54,6 @@ test('admin can create a product variant', function () {
         'product_id' => $product->id,
         'code' => '12345678',
         'presentation_label' => '1 gal',
-        'name' => null,
     ]);
 });
 

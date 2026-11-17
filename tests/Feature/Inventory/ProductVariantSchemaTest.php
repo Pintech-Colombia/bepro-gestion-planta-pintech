@@ -19,11 +19,13 @@ test('el esquema incluye tabla de variantes de producto', function () {
         'presentation_label',
     ]))->toBeTrue();
 
-    // Portable entre SQLite (tests) y PostgreSQL (dev y producción). La presentación identifica la variante; el nombre
-    // queda nulo hasta que una migración posterior borre la columna.
+    // Portable entre SQLite (tests) y PostgreSQL (dev y producción). La presentación identifica la variante: la columna
+    // `name` ya no existe y el índice único de la presentación sigue en su lugar.
     $columns = collect(Schema::getColumns('product_variants'))->keyBy('name');
     expect($columns['presentation_label']['nullable'])->toBeFalse()
-        ->and($columns['name']['nullable'])->toBeTrue();
+        ->and($columns->has('name'))->toBeFalse()
+        ->and(collect(Schema::getIndexes('product_variants'))->pluck('name'))
+        ->toContain('product_variants_product_presentation_lower_unique');
 });
 
 test('las tablas operativas incluyen product_variant_id para migracion gradual', function () {
