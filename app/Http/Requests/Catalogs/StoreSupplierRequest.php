@@ -37,7 +37,8 @@ class StoreSupplierRequest extends FormRequest
             'nit' => [...$this->nitRules(), Rule::unique('suppliers', 'nit')->ignore($supplierId)],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => $this->phoneRules(),
-            'email' => ['nullable', 'string', 'email', 'max:255'],
+            // 254: el máximo de una dirección según la RFC 5321 (la regla `email` lo exige desde Laravel 13.43).
+            'email' => ['nullable', 'string', 'email', 'max:254'],
             'notes' => ['nullable', 'string', 'max:'.Supplier::NOTES_MAX_LENGTH],
             'is_active' => ['sometimes', 'boolean'],
         ];
