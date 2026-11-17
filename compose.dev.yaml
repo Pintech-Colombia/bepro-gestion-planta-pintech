@@ -92,7 +92,7 @@ services:
 
   postgres:
     # Pasar de 16.14 a 16.15 no toca los datos del volumen: entre versiones menores basta con reiniciar.
-    image: postgres:16.15-trixie@sha256:933463a6c8eba2b9f5cd414138738cd8d5519cd2c471214c222652f547a66a32
+    image: postgres:16.15-trixie@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657
     ports:
       - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     environment:
