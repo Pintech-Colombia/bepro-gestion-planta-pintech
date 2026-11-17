@@ -95,6 +95,13 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Login::class, function (Login $event) {
             /** @var User $user */
             $user = $event->user;
+
+            // La cookie de «Recordarme» dispara este aviso antes de que EnsureUserIsActive saque a una cuenta
+            // desactivada: no es un ingreso y no debe quedar en la auditoría.
+            if (! $user->is_active) {
+                return;
+            }
+
             $user->update([
                 'last_login_at' => now(),
             ]);

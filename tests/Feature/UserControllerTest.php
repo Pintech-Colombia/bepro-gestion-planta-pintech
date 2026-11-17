@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Permission;
 use App\Enums\SystemRole;
 use App\Models\ProductionOrder;
 use App\Models\Quotation;
@@ -780,10 +781,7 @@ test('the last active super-admin cannot be deactivated or demoted', function ()
     $activeSuperAdmin = User::factory()->create(['is_active' => true]);
     $activeSuperAdmin->assignRole('super-admin');
 
-    $inactiveSuperAdmin = User::factory()->create(['is_active' => false]);
-    $inactiveSuperAdmin->assignRole('super-admin');
-
-    $this->actingAs($inactiveSuperAdmin)
+    $this->actingAs(holderOfEveryPermission())
         ->put(route('users.update', $activeSuperAdmin), [
             'name' => $activeSuperAdmin->name,
             'email' => $activeSuperAdmin->email,
@@ -802,9 +800,6 @@ test('a blocked super-admin demotion changes nothing and discards the uploaded s
     $activeSuperAdmin = User::factory()->create(['is_active' => true, 'name' => 'Nombre original']);
     $activeSuperAdmin->assignRole(SystemRole::SuperAdmin->value);
 
-    $inactiveSuperAdmin = User::factory()->create(['is_active' => false]);
-    $inactiveSuperAdmin->assignRole(SystemRole::SuperAdmin->value);
-
     $this->mock(SignatureOptimizerService::class, function ($mock) {
         $mock->shouldReceive('optimizeAndStore')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('signatures/blocked.png', 'new-content');
@@ -813,7 +808,7 @@ test('a blocked super-admin demotion changes nothing and discards the uploaded s
         });
     });
 
-    $this->actingAs($inactiveSuperAdmin)
+    $this->actingAs(holderOfEveryPermission())
         ->put(route('users.update', $activeSuperAdmin), [
             'name' => 'Nombre nuevo',
             'email' => $activeSuperAdmin->email,
@@ -835,12 +830,10 @@ test('the last active super-admin cannot be deleted', function () {
     $activeSuperAdmin = User::factory()->create(['is_active' => true]);
     $activeSuperAdmin->assignRole(SystemRole::SuperAdmin->value);
 
-    // Quien borra es un SuperAdmin con la cuenta desactivada: el objetivo es el único activo.
-    $inactiveSuperAdmin = User::factory()->create(['is_active' => false]);
-    $inactiveSuperAdmin->assignRole(SystemRole::SuperAdmin->value);
+    // Quien borra no es otro SuperAdmin (serían dos activos): es un rol propio con todos los permisos.
     Activity::where('causer_id', $activeSuperAdmin->id)->delete();
 
-    $this->actingAs($inactiveSuperAdmin)
+    $this->actingAs(holderOfEveryPermission())
         ->delete(route('users.destroy', $activeSuperAdmin))
         ->assertRedirect()
         ->assertInertiaFlash('error', 'No se puede eliminar al único super administrador activo del sistema.');
@@ -902,3 +895,13 @@ test('admin can change the email of another user and it stays verified', functio
     expect($target->email)->toBe('correo-nuevo@test.com')
         ->and($target->email_verified_at)->not->toBeNull();
 });
+
+/**
+ * Quien choca con la regla del «único super administrador activo»: un usuario activo con un rol propio que tiene todos
+ * los permisos (puede editar o borrar a un SuperAdmin) sin ser SuperAdmin. Otro SuperAdmin activo no sirve, porque ya
+ * serían dos; uno desactivado tampoco, porque `EnsureUserIsActive` lo saca antes de llegar al controlador.
+ */
+function holderOfEveryPermission(): User
+{
+    return userWithPermissions(Permission::cases());
+}
