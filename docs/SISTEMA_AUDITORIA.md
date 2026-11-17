@@ -29,7 +29,7 @@ La tabla muestra algunos ejemplos. Todo modelo nuevo se audita o se justifica en
 | :--- | :--- |
 | `User` | Creación, Edición, Cambio de Estado, Eliminación. |
 | `RawMaterial` | Cambios en precios y datos maestros. |
-| `Formula` | Versiones de recetas y cambios en composición. |
+| `Formula` | Versiones de recetas y cambios en composición: cada línea (`FormulaDetail`) se audita en el mismo log `formulas`, con el producto, la versión y el código de la materia prima en la descripción. Al editar, cada paso se actualiza en su lugar y queda solo lo que cambió (guardar sin cambios no deja nada); los pasos que sobran o faltan quedan como borrados o creados. Al eliminar una fórmula sin uso, cada línea deja su borrado. Las líneas que crean los seeders quedan registradas sin usuario. |
 | `InventoryBatch` | Movimientos de lotes y cambios de stock. |
 | `ProductionOrder` | Cambios de estado (Pendiente -> Finalizada). |
 | `InventoryMovement` | Registro de trazabilidad de entradas/salidas. |

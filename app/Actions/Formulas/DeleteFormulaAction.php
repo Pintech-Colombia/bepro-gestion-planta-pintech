@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\DB;
  * Elimina una fórmula que nunca se usó (ninguna OP ni costo calculado; sus ingredientes se van con ella,
  * docs/POLITICA_ELIMINACION.md). Bloquea antes el producto, como toda escritura de fórmulas: una OP que se crea a la vez
  * con esta fórmula espera y la encuentra borrada, en vez de chocar con la clave foránea.
+ *
+ * Las líneas se borran una por una dentro de la misma transacción del borrado, para que su composición quede en la
+ * auditoría; si la fórmula tiene historial y no se elimina, esos borrados se revierten.
  */
 class DeleteFormulaAction
 {
@@ -37,6 +40,8 @@ class DeleteFormulaAction
                 if ($locked->is_price_reference) {
                     throw new DomainException(__('Esta fórmula define el precio del producto: marca otra como referencia de precio antes de eliminarla.'));
                 }
+
+                $locked->deleteDetails();
             });
         });
     }
