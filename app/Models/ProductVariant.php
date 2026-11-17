@@ -23,7 +23,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $id
  * @property int $product_id
  * @property string $code
- * @property string|null $name Columna sin uso: la variante se identifica por su presentación. Se borra en una migración posterior.
  * @property int $unit_of_measure_id
  * @property string|null $presentation_value
  * @property string $presentation_label

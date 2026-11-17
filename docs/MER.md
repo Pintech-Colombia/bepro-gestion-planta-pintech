@@ -262,7 +262,6 @@ se ve el producto, se nombra «Producto · Presentación» (`ProductVariant::dis
 | `id` | BIGINT |  | PK |
 | `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
 | `code` | VARCHAR(80) |  | UNIQUE. En mayúsculas (`TextFormat::Code`) |
-| `name` | VARCHAR(100) | sí | Sin uso: se borra en una migración posterior |
 | `unit_of_measure_id` | BIGINT |  | FK → `unit_of_measures` (RESTRICT) |
 | `presentation_value` | DECIMAL(12,4) | sí |  |
 | `presentation_label` | VARCHAR(50) |  | UNIQUE por producto sin distinguir mayúsculas, contando las inactivas (`product_variants_product_presentation_lower_unique` sobre `(product_id, LOWER(presentation_label))`) |
