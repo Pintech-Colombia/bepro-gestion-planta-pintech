@@ -30,6 +30,7 @@ export type ProductFormData = {
     unit_of_measure_id: string;
     cif_percentage: string;
     price_threshold: string;
+    reference_density_kg_per_gallon: string;
     quality_viscosity_lower: string;
     quality_viscosity_upper: string;
     quality_fineness_lower: string;
@@ -217,6 +218,25 @@ export function ProductForm({
                                 }
                                 placeholder="Resumen del producto, usos recomendados, notas para comercial o calidad…"
                                 className="min-h-[100px] resize-y"
+                            />
+                        </FormField>
+
+                        <FormField
+                            id="reference_density_kg_per_gallon"
+                            label="Peso por galón de referencia (kg/gal)"
+                            help="Para la lista de precios cuando este producto va dentro de la fórmula de otro. Si está vacío, se usa el peso del último lote. La OP siempre pide el peso real."
+                            error={errors.reference_density_kg_per_gallon}
+                            className="md:col-span-2"
+                        >
+                            <DecimalInput
+                                {...PRODUCT_DECIMAL_LIMITS.reference_density_kg_per_gallon}
+                                value={data.reference_density_kg_per_gallon}
+                                onValueChange={(value) =>
+                                    setData(
+                                        'reference_density_kg_per_gallon',
+                                        value,
+                                    )
+                                }
                             />
                         </FormField>
                     </div>

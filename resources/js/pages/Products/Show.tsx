@@ -120,6 +120,7 @@ type Props = {
         current_cost?: string | null;
         current_price?: string | null;
         cif_percentage?: string | null;
+        reference_density_kg_per_gallon: string | null;
         description?: string | null;
         quality_viscosity_lower?: number | string | null;
         quality_viscosity_upper?: number | string | null;
@@ -449,6 +450,16 @@ export default function ProductsShow({
                                 value={
                                     product.unit_of_measure &&
                                     `${product.unit_of_measure.name} (${product.unit_of_measure.symbol})`
+                                }
+                            />
+                            <DetailItem
+                                label="Peso por galón de referencia"
+                                value={
+                                    // Medida: los 4 decimales de su columna, sin tipo (DESIGN.md §7).
+                                    product.reference_density_kg_per_gallon !==
+                                    null
+                                        ? `${formatNumber(product.reference_density_kg_per_gallon, { maxDecimals: 4, trimTrailingZeros: true })} kg/gal`
+                                        : null
                                 }
                             />
                             {can.viewCosts && (

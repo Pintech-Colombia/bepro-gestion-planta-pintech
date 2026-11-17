@@ -18,12 +18,6 @@ use Illuminate\Support\Facades\Log;
 
 class ProductionCostRecalculationService
 {
-    /**
-     * Columnas que necesita el cálculo de cada presentación, más `product_id` y `presentation_label`: con ellas (y el
-     * producto ya puesto) la auditoría nombra la presentación «Producto · Galón» sin una consulta por variante.
-     */
-    private const VARIANT_COLUMNS = ['id', 'product_id', 'presentation_label', 'presentation_value', 'package_raw_material_id', 'label_raw_material_id', 'current_cost', 'current_price'];
-
     public function __construct(
         private readonly VariantPricingService $variantPricingService,
         private readonly ProductionCostCalculatorService $productionCostCalculator,
@@ -38,8 +32,9 @@ class ProductionCostRecalculationService
     public function recalculateForProduct(int $productId, bool $forcePriceRefresh = false): ?ProductionCost
     {
         return DB::transaction(function () use ($productId, $forcePriceRefresh): ?ProductionCost {
+            // Filas completas, aquí y en las presentaciones: el producto y sus variantes se guardan después, y la auditoría
+            // compara contra lo leído. Con columnas parciales registraría como cambio cada atributo que no se leyó.
             $product = Product::query()
-                ->select('id', 'name', 'current_price', 'cif_percentage', 'price_threshold')
                 ->whereKey($productId)
                 ->lockForUpdate()
                 ->first();
@@ -224,11 +219,11 @@ class ProductionCostRecalculationService
                 ->where('package_raw_material_id', $rawMaterialId)
                 ->orWhere('label_raw_material_id', $rawMaterialId))
             ->whereNotIn('product_id', $exceptProductIds)
-            ->get(self::VARIANT_COLUMNS);
+            ->get();
 
         $products = Product::query()
             ->whereIn('id', $variants->pluck('product_id')->unique()->all())
-            ->get(['id', 'name', 'current_cost', 'cif_percentage', 'price_threshold'])
+            ->get()
             ->keyBy('id');
 
         // Una sola consulta de precios para todas: un envase puede estar en cientos de productos.
@@ -304,7 +299,7 @@ class ProductionCostRecalculationService
     {
         return ProductVariant::query()
             ->where('product_id', $product->id)
-            ->get(self::VARIANT_COLUMNS)
+            ->get()
             ->each(fn (ProductVariant $variant) => $variant->setRelation('product', $product));
     }
 

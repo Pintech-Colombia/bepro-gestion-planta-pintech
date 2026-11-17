@@ -219,11 +219,23 @@ class CompleteProductionOrderAction
                 $bulkCostForVariant = (string) ($distributedBulkCosts[$plan->product_variant_id] ?? '0');
                 $costPriceForVariant = $this->calculator->add($bulkCostForVariant, $packagingUnitCost, 4);
 
+                // Costo de traslado del lote: el de la entrada con el CIF del producto, con la regla del saldo. Queda
+                // fijo desde hoy; el movimiento de entrada sigue sin CIF. Un envase reutilizado no suma: su costo ya
+                // viajó con el lote del que salió.
+                $transferUnitCost = $this->productionCostCalculator->transferCost($costPriceForVariant, $productCifPercentage);
+                NumberType::Money->ensureFits(
+                    $transferUnitCost,
+                    'packaging',
+                    __('El costo por unidad con CIF no cabe en el registro. Revisa las unidades envasadas.'),
+                );
+
                 $batch = FinishedProductBatch::create([
                     'product_id' => $lockedOrder->product_id,
                     'product_variant_id' => $plan->product_variant_id,
                     'production_order_id' => $lockedOrder->id,
                     'initial_quantity' => $actualUnits,
+                    'transfer_unit_cost' => $transferUnitCost,
+                    'transfer_cost_estimated' => false,
                     'entry_date' => $completionDate,
                 ]);
 
@@ -378,11 +390,7 @@ class CompleteProductionOrderAction
             return;
         }
 
-        $costPerGallon = $bulkCostPerUnit ?? '0';
-
-        if ($cifPercentage !== null && $this->calculator->cmp($cifPercentage, '0', 4) > 0) {
-            $costPerGallon = $this->productionCostCalculator->applyCifToCost($costPerGallon, $cifPercentage);
-        }
+        $costPerGallon = $this->productionCostCalculator->transferCost($bulkCostPerUnit ?? '0', $cifPercentage);
 
         ProductionRemnant::create([
             'source_order_id' => $order->id,

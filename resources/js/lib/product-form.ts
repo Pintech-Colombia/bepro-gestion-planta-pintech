@@ -2,14 +2,17 @@ import { HEGMAN_LIMITS, NUMBER_TYPES } from '@/lib/number-types';
 import type { DecimalLimits } from '@/lib/numeric-input';
 
 // Los topes de cada columna (NumberType): los rangos de calidad son numeric(4,1), con la molienda en la escala Hegman
-// (0 a 8); CIF y umbral, numeric(5,2). El CIF es un recargo y puede pasar de 100 %.
+// (0 a 8); CIF y umbral, numeric(5,2). El CIF es un recargo y puede pasar de 100 %. El peso por galón de referencia,
+// numeric(10,4), como la densidad de la OP.
 const QUALITY_RANGE: DecimalLimits = NUMBER_TYPES.quality;
 const PERCENTAGE: DecimalLimits = NUMBER_TYPES.percentage;
+const DENSITY: DecimalLimits = NUMBER_TYPES.density;
 
 /** Campos decimales del formulario de producto (crear y editar), con los topes que se pasan a `<DecimalInput>`. */
 export const PRODUCT_DECIMAL_LIMITS = {
     cif_percentage: PERCENTAGE,
     price_threshold: PERCENTAGE,
+    reference_density_kg_per_gallon: DENSITY,
     quality_viscosity_lower: QUALITY_RANGE,
     quality_viscosity_upper: QUALITY_RANGE,
     quality_fineness_lower: HEGMAN_LIMITS,

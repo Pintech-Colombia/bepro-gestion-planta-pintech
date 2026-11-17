@@ -24,6 +24,19 @@ class ProductionCostCalculatorService
     }
 
     /**
+     * Costo de traslado: el costo con el CIF del producto. Sin CIF (nulo o 0) es el mismo costo. Es la regla del saldo
+     * (costo por galón) y del lote de PT (costo por unidad) al completar la OP, y la de su vista previa.
+     */
+    public function transferCost(string $cost, ?string $cifPercentage): string
+    {
+        if ($cifPercentage === null || $this->calculator->cmp($cifPercentage, '0', 4) <= 0) {
+            return $cost;
+        }
+
+        return $this->applyCifToCost($cost, $cifPercentage);
+    }
+
+    /**
      * @param  array<int, array{id:int,actual_units:float|int}>  $packagingData
      * @return array{distributedCosts: array<int, string>, bulkCostPerUnit: string|null}
      */

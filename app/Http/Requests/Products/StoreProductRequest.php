@@ -47,6 +47,9 @@ class StoreProductRequest extends FormRequest
             // El CIF es un recargo sobre el costo (costo × (1 + CIF)): puede pasar de 100 %, hasta el tope de su columna.
             'cif_percentage' => ['bail', 'required', ...NumberType::Percentage->rules(), 'min:0'],
             'price_threshold' => ['bail', 'required', ...NumberType::Percentage->rules('100'), 'min:0'],
+            // Kg por galón para la lista de precios cuando el producto va dentro de la fórmula de otro. No es un costo:
+            // lo edita quien edita el producto. Mismas reglas que la densidad de la OP.
+            'reference_density_kg_per_gallon' => ['bail', 'nullable', ...NumberType::Density->rules(), 'min:0.0001'],
             // Un decimal y el tope de cada medición, los mismos que al medir en la OP (PRD-01).
             'quality_viscosity_lower' => ['bail', 'nullable', ...QualityMeasurement::Viscosity->rules()],
             'quality_viscosity_upper' => ['bail', 'nullable', ...QualityMeasurement::Viscosity->rules()],
@@ -92,6 +95,7 @@ class StoreProductRequest extends FormRequest
             'cif_percentage' => 'porcentaje CIF',
             'current_price' => 'precio interno',
             'price_threshold' => 'umbral de precio',
+            'reference_density_kg_per_gallon' => 'peso por galón de referencia',
             'quality_viscosity_lower' => 'viscosidad mínima',
             'quality_viscosity_upper' => 'viscosidad máxima',
             'quality_fineness_lower' => 'molienda mínima',
@@ -106,6 +110,7 @@ class StoreProductRequest extends FormRequest
     {
         $keys = [
             'description',
+            'reference_density_kg_per_gallon',
             'quality_viscosity_lower',
             'quality_viscosity_upper',
             'quality_fineness_lower',

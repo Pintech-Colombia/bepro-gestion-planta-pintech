@@ -94,7 +94,13 @@ Por cada presentación del plan de envasado, al completar la OP (`CompleteProduc
 - los dos con la regla de cualquier materia prima: si controla inventario, por FIFO al precio de sus lotes; si no, sin
   lote y a su precio de referencia (`current_price`). Un envase o una etiqueta pueden estar en cualquiera de los dos;
 - costo por unidad del lote = granel por unidad + (costo de envases nuevos + costo de etiquetas) ÷ unidades envasadas,
-  sin CIF. Sin tope en las cantidades: la merma (envase dañado, etiqueta mal pegada) es costo del lote.
+  sin CIF. Sin tope en las cantidades: la merma (envase dañado, etiqueta mal pegada) es costo del lote. Es el `cost_price`
+  del movimiento de entrada, que sigue sin CIF;
+- el lote guarda además su **costo de traslado** (`finished_product_batches.transfer_unit_cost`): ese costo por unidad
+  con el CIF del producto, con la regla del saldo (CIF nulo o 0: el mismo costo). Queda fijo desde que se completa la
+  OP, aunque después cambie el CIF. Un envase reutilizado no suma: su costo ya viajó con el lote del que salió. Los lotes
+  anteriores a la columna lo tienen estimado (`transfer_cost_estimated`): el costo de su entrada con el CIF que tenía el
+  producto al migrar.
 
 La vista previa de costos de la OP aplica la misma regla con precios estimados.
 

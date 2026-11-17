@@ -144,7 +144,7 @@ it('sends only an explicit list of product and variant fields to users without c
             ->where('product', fn ($product) => collect($product)->keys()->sort()->values()->all() === collect([
                 'id', 'name', 'description', 'is_active', 'category', 'unit_of_measure',
                 'quality_viscosity_lower', 'quality_viscosity_upper', 'quality_fineness_lower', 'quality_fineness_upper',
-                'quality_solids_lower', 'quality_solids_upper', 'variants', 'product_documents',
+                'quality_solids_lower', 'quality_solids_upper', 'reference_density_kg_per_gallon', 'variants', 'product_documents',
             ])->sort()->values()->all())
             ->where('product.variants.0', fn ($variant) => collect($variant)->keys()->sort()->values()->all() === collect([
                 'id', 'code', 'unit_of_measure_id', 'presentation_value', 'presentation_label',

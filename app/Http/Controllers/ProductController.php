@@ -201,6 +201,8 @@ class ProductController extends Controller
                 'quality_fineness_upper' => $product->quality_fineness_upper,
                 'quality_solids_lower' => $product->quality_solids_lower,
                 'quality_solids_upper' => $product->quality_solids_upper,
+                // Propiedad física, no costo: viaja sin costs.view.
+                'reference_density_kg_per_gallon' => $product->reference_density_kg_per_gallon,
                 'is_active' => $product->is_active,
             ],
             'hasPriceReferenceFormula' => $product->priceReferenceFormula()->exists(),
@@ -311,6 +313,7 @@ class ProductController extends Controller
             'quality_fineness_upper' => $product->quality_fineness_upper,
             'quality_solids_lower' => $product->quality_solids_lower,
             'quality_solids_upper' => $product->quality_solids_upper,
+            'reference_density_kg_per_gallon' => $product->reference_density_kg_per_gallon,
             // current_price es el precio interno (costo × (1 + CIF %)), no el de venta: es costo.
             ...($canViewCosts ? [
                 'current_cost' => $product->current_cost,
