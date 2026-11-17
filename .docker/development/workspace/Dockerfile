@@ -1,8 +1,8 @@
 # docker/development/workspace/Dockerfile
 # Use the official PHP CLI image as the base
 # Imágenes fijadas por versión exacta y digest (ver .docker/common/php-fpm/Dockerfile). Dependabot propone las subidas.
-FROM composer:2.11.1@sha256:f9d168f53e738474b41c77672c61b1d543fca096d827b80e6c7c2b7626933825 AS composer_bin
-FROM php:8.3.36-cli-trixie@sha256:7d334491cf2f46f6c93ac63f5e16664d8edb46bd016b40a67e089fe9a6c893cd
+FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer_bin
+FROM php:8.3.36-cli-trixie@sha256:628102249d93494233b54490b785f12db9cd60f4dc89416dfca15973f2125f10
 
 # Set environment variables for user and group ID
 ARG UID=1000

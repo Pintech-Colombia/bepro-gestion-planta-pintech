@@ -2,10 +2,10 @@
 # republique la etiqueta. Dependabot (ecosistema docker) propone las subidas: no volver a etiquetas flotantes como
 # `8.3-fpm` o `latest`. Node va sobre trixie, la misma versión de Debian que la imagen de PHP a la que se copia.
 FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS node_base
-FROM composer:2.11.1@sha256:f9d168f53e738474b41c77672c61b1d543fca096d827b80e6c7c2b7626933825 AS composer_bin
+FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer_bin
 
 # Stage 1: Build environment and Composer dependencies
-FROM php:8.3.36-fpm-trixie@sha256:a9b3deba63ea38ac8239e486211bfe33d2edd2cfbaf3fb2a9b7a476774f4224b AS builder
+FROM php:8.3.36-fpm-trixie@sha256:03af352853b05e35ee15ab898a2755532573684c7d1120b246dbd4e3c90f5007 AS builder
 
 # Install system dependencies and PHP extensions required for Laravel + MySQL/PostgreSQL support
 # Some dependencies are required for PHP extensions only in the build stage
@@ -73,7 +73,7 @@ RUN php artisan route:clear \
 
 
 # Stage 2: Production environment
-FROM php:8.3.36-fpm-trixie@sha256:a9b3deba63ea38ac8239e486211bfe33d2edd2cfbaf3fb2a9b7a476774f4224b AS production
+FROM php:8.3.36-fpm-trixie@sha256:03af352853b05e35ee15ab898a2755532573684c7d1120b246dbd4e3c90f5007 AS production
 
 # Install only runtime libraries needed in production
 # libfcgi-bin and procps are required for the php-fpm-healthcheck script
