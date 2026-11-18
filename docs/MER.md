@@ -323,13 +323,17 @@ Reglas:
 
 ### 2.4.5 `formula_details`
 
-Ingredientes de cada fórmula.
+Ingredientes de cada fórmula: una materia prima **o** un producto (PT consumible). CHECK en PostgreSQL
+(`formula_details_material_or_product`): exactamente uno de los dos; la forma de costeo solo en la línea de producto.
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `formula_id` | BIGINT |  | FK → `formulas` (CASCADE) |
-| `raw_material_id` | BIGINT |  | FK → `raw_materials` (RESTRICT) |
+| `raw_material_id` | BIGINT | sí | FK → `raw_materials` (RESTRICT). Nula en una línea de producto |
+| `product_id` | BIGINT | sí | FK → `products` (RESTRICT). El producto usado como ingrediente; en una unidad de peso |
+| `costing_basis` | VARCHAR(20) | sí | «Se costea como» (`FormulaLineCostingBasis`): `bulk` (granel) o `presentation`. Nula solo en una línea de la carga inicial sin completar |
+| `costing_variant_id` | BIGINT | sí | FK → `product_variants` (RESTRICT). La presentación con que se costea, si es `presentation` |
 | `quantity` | DECIMAL(12,4) |  |  |
 | `unit_of_measure_id` | BIGINT |  | FK → `unit_of_measures` (RESTRICT) |
 | `step_order` | SMALLINT |  | default `0` |

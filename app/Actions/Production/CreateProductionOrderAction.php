@@ -8,6 +8,7 @@ use App\Enums\NumberType;
 use App\Enums\ProductionOrderStatus;
 use App\Exceptions\StockShortageException;
 use App\Models\Formula;
+use App\Models\FormulaDetail;
 use App\Models\Product;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderDetail;
@@ -59,6 +60,14 @@ class CreateProductionOrderAction
             // La fórmula y sus líneas se leen después del bloqueo del producto: desactivarla o editar sus líneas también
             // lo bloquean (acciones de fórmulas), así que la orden ve lo ya guardado y no una versión vieja.
             $formula = $this->stillActiveFormula((int) $data['formula_id'], (int) $data['product_id']);
+
+            // Una fórmula que lleva productos (PT consumible) todavía no se puede producir: la OP aún no sabe tomar saldos ni
+            // lotes de producto como ingrediente (PR E de «Plan — PT consumible», que quita este bloqueo).
+            if ($formula->details->contains(fn (FormulaDetail $detail): bool => $detail->isProductLine())) {
+                throw ValidationException::withMessages([
+                    'formula_id' => __('Esta fórmula lleva productos como ingrediente: se podrá producir cuando la orden sepa usarlos.'),
+                ]);
+            }
 
             $order = ProductionOrder::create([
                 'product_id' => $data['product_id'],

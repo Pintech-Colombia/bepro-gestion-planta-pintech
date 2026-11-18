@@ -29,13 +29,35 @@ import { withDecimalPayloads } from '@/lib/numeric-input';
 
 type RawMaterial = { id: number; code: string };
 type ProductOption = { id: number; name: string };
-type UnitOption = { id: number; name: string; symbol: string };
+/** `is_mass`: unidad de peso (kg, g); un producto como ingrediente solo va en una de estas. */
+export type UnitOption = {
+    id: number;
+    name: string;
+    symbol: string;
+    is_mass: boolean;
+};
+/** Un producto que puede ir como ingrediente, con sus presentaciones activas para «Se costea como». */
+export type IngredientProduct = {
+    id: number;
+    name: string;
+    variants: Array<{ id: number; label: string }>;
+};
+
+/** Qué es la línea: una materia prima o un producto (PT consumible). */
+export type IngredientKind = 'raw_material' | 'product';
 
 export type DetailRow = {
+    kind: IngredientKind;
     raw_material_id: string;
+    product_id: string;
+    /** «Se costea como» (solo producto): '' sin elegir, 'bulk' a granel o el id de una presentación. */
+    costing: string;
     quantity: string;
     unit_of_measure_id: string;
 };
+
+/** El valor de «Se costea como» que se guarda: granel o una presentación. */
+export const BULK_COSTING = 'bulk';
 
 export type FormulaFormData = {
     product_id: string;
@@ -44,14 +66,49 @@ export type FormulaFormData = {
     details: DetailRow[];
 };
 
-/** Lo que se envía al crear o editar: la cantidad de cada ingrediente con punto decimal. */
-export function formulaPayload<T extends FormulaFormData>(data: T): T {
+/**
+ * Lo que se envía al crear o editar: cada línea con su materia prima **o** su producto, «Se costea como» en las columnas
+ * que guarda el servidor (`costing_basis`, `costing_variant_id`) y la cantidad con punto decimal.
+ */
+export function formulaPayload<T extends FormulaFormData>(data: T) {
     return {
         ...data,
-        details: data.details.map((detail) =>
-            withDecimalPayloads(detail, ['quantity']),
-        ),
+        details: data.details.map(({ kind, costing, ...detail }) => {
+            const isProduct = kind === 'product';
+
+            return withDecimalPayloads(
+                {
+                    raw_material_id: isProduct ? '' : detail.raw_material_id,
+                    product_id: isProduct ? detail.product_id : '',
+                    costing_basis:
+                        !isProduct || costing === ''
+                            ? ''
+                            : costing === BULK_COSTING
+                              ? BULK_COSTING
+                              : 'presentation',
+                    costing_variant_id:
+                        isProduct && costing !== '' && costing !== BULK_COSTING
+                            ? costing
+                            : '',
+                    quantity: detail.quantity,
+                    unit_of_measure_id: detail.unit_of_measure_id,
+                },
+                ['quantity'],
+            );
+        }),
     };
+}
+
+/** El «Se costea como» del formulario a partir de lo guardado (al editar). */
+export function costingFromSaved(
+    costingBasis: string | null,
+    costingVariantId: number | null,
+): string {
+    if (costingBasis === BULK_COSTING) {
+        return BULK_COSTING;
+    }
+
+    return costingVariantId !== null ? String(costingVariantId) : '';
 }
 
 type FormulaFormProps = {
@@ -60,6 +117,7 @@ type FormulaFormProps = {
     processing: boolean;
     products: ProductOption[];
     rawMaterials: RawMaterial[];
+    ingredientProducts: IngredientProduct[];
     units: UnitOption[];
     submitLabel: string;
     /** «Cancelar»: vuelve a la pantalla de donde se llegó. */
@@ -76,7 +134,10 @@ type FormulaFormProps = {
 };
 
 const emptyDetail = (): DetailRow => ({
+    kind: 'raw_material',
     raw_material_id: '',
+    product_id: '',
+    costing: '',
     quantity: '',
     unit_of_measure_id: '',
 });
@@ -91,6 +152,7 @@ export function FormulaForm({
     processing,
     products,
     rawMaterials,
+    ingredientProducts,
     units,
     submitLabel,
     cancelHref,
@@ -111,6 +173,24 @@ export function FormulaForm({
         label: rawMaterial.code,
     }));
 
+    // Un producto no puede ir en su propia fórmula (el servidor lo vuelve a revisar, con los ciclos).
+    const ingredientProductOptions = ingredientProducts
+        .filter((product) => String(product.id) !== data.product_id)
+        .map((product) => ({ id: String(product.id), label: product.name }));
+    const massUnits = units.filter((unit) => unit.is_mass);
+
+    const costingOptions = (productId: string) => [
+        { value: BULK_COSTING, label: 'Granel (sin envase)' },
+        ...(
+            ingredientProducts.find(
+                (product) => String(product.id) === productId,
+            )?.variants ?? []
+        ).map((variant) => ({
+            value: String(variant.id),
+            label: variant.label,
+        })),
+    ];
+
     const addDetail = () => {
         setData('details', [...data.details, emptyDetail()]);
     };
@@ -123,17 +203,32 @@ export function FormulaForm({
         );
     };
 
-    const updateDetail = (
-        index: number,
-        field: keyof DetailRow,
-        value: string,
-    ) => {
+    const updateDetail = (index: number, changes: Partial<DetailRow>) => {
         setData(
             'details',
             data.details.map((detail, currentIndex) =>
-                currentIndex === index ? { ...detail, [field]: value } : detail,
+                currentIndex === index ? { ...detail, ...changes } : detail,
             ),
         );
+    };
+
+    // Cambiar el tipo vacía el ingrediente y «Se costea como»; la unidad, si ya no sirve (un producto va en peso).
+    const changeKind = (index: number, kind: IngredientKind) => {
+        const unit = units.find(
+            (option) =>
+                String(option.id) === data.details[index].unit_of_measure_id,
+        );
+
+        updateDetail(index, {
+            kind,
+            raw_material_id: '',
+            product_id: '',
+            costing: '',
+            unit_of_measure_id:
+                kind === 'product' && unit && !unit.is_mass
+                    ? ''
+                    : data.details[index].unit_of_measure_id,
+        });
     };
 
     return (
@@ -241,45 +336,101 @@ export function FormulaForm({
                                 </div>
 
                                 <FormField
-                                    id={`details.${index}.raw_material_id`}
-                                    label="Materia prima"
-                                    required
-                                    error={
-                                        errors[
-                                            `details.${index}.raw_material_id`
-                                        ]
-                                    }
-                                    className="md:col-span-5"
+                                    id={`details.${index}.kind`}
+                                    label="Tipo"
+                                    className="md:col-span-2"
                                 >
-                                    <Combobox
-                                        options={rawMaterialOptions}
-                                        value={detail.raw_material_id}
-                                        onChange={(value) =>
-                                            updateDetail(
-                                                index,
-                                                'raw_material_id',
-                                                String(value),
-                                            )
-                                        }
-                                        placeholder="Materia..."
-                                    />
+                                    {(control) => (
+                                        <Select
+                                            value={detail.kind}
+                                            onValueChange={(value) =>
+                                                changeKind(
+                                                    index,
+                                                    value as IngredientKind,
+                                                )
+                                            }
+                                        >
+                                            <SelectTrigger {...control}>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="raw_material">
+                                                    Materia prima
+                                                </SelectItem>
+                                                <SelectItem value="product">
+                                                    Producto
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
                                 </FormField>
+
+                                {detail.kind === 'product' ? (
+                                    <FormField
+                                        id={`details.${index}.product_id`}
+                                        label="Producto"
+                                        required
+                                        error={
+                                            errors[
+                                                `details.${index}.product_id`
+                                            ] ??
+                                            errors[
+                                                `details.${index}.raw_material_id`
+                                            ]
+                                        }
+                                        className="md:col-span-4"
+                                    >
+                                        <Combobox
+                                            options={ingredientProductOptions}
+                                            value={detail.product_id}
+                                            onChange={(value) =>
+                                                updateDetail(index, {
+                                                    product_id: String(value),
+                                                    costing: '',
+                                                })
+                                            }
+                                            placeholder="Producto..."
+                                        />
+                                    </FormField>
+                                ) : (
+                                    <FormField
+                                        id={`details.${index}.raw_material_id`}
+                                        label="Materia prima"
+                                        required
+                                        error={
+                                            errors[
+                                                `details.${index}.raw_material_id`
+                                            ]
+                                        }
+                                        className="md:col-span-4"
+                                    >
+                                        <Combobox
+                                            options={rawMaterialOptions}
+                                            value={detail.raw_material_id}
+                                            onChange={(value) =>
+                                                updateDetail(index, {
+                                                    raw_material_id:
+                                                        String(value),
+                                                })
+                                            }
+                                            placeholder="Materia..."
+                                        />
+                                    </FormField>
+                                )}
 
                                 <FormField
                                     id={`details.${index}.quantity`}
                                     label="Cantidad (por galón)"
                                     required
                                     error={errors[`details.${index}.quantity`]}
-                                    className="md:col-span-3"
+                                    className="md:col-span-2"
                                 >
                                     <DecimalInput
                                         value={detail.quantity}
                                         onValueChange={(value) =>
-                                            updateDetail(
-                                                index,
-                                                'quantity',
-                                                value,
-                                            )
+                                            updateDetail(index, {
+                                                quantity: value,
+                                            })
                                         }
                                         placeholder="Ej: 1,5"
                                     />
@@ -300,18 +451,19 @@ export function FormulaForm({
                                         <Select
                                             value={detail.unit_of_measure_id}
                                             onValueChange={(value) =>
-                                                updateDetail(
-                                                    index,
-                                                    'unit_of_measure_id',
-                                                    value,
-                                                )
+                                                updateDetail(index, {
+                                                    unit_of_measure_id: value,
+                                                })
                                             }
                                         >
                                             <SelectTrigger {...control}>
                                                 <SelectValue placeholder="Unidad..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {units.map((unit) => (
+                                                {(detail.kind === 'product'
+                                                    ? massUnits
+                                                    : units
+                                                ).map((unit) => (
                                                     <SelectItem
                                                         key={unit.id}
                                                         value={String(unit.id)}
@@ -323,6 +475,51 @@ export function FormulaForm({
                                         </Select>
                                     )}
                                 </FormField>
+
+                                {detail.kind === 'product' && (
+                                    <FormField
+                                        id={`details.${index}.costing_basis`}
+                                        label="Se costea como"
+                                        required
+                                        help="Granel si se usa de un saldo o se tiñe en el mismo envase; una presentación si se vacían envases que no se reutilizan (su envase y etiqueta suman al precio)."
+                                        error={
+                                            errors[
+                                                `details.${index}.costing_basis`
+                                            ]
+                                        }
+                                        className="md:col-span-6 md:col-start-2"
+                                    >
+                                        {(control) => (
+                                            <Select
+                                                value={detail.costing}
+                                                onValueChange={(value) =>
+                                                    updateDetail(index, {
+                                                        costing: value,
+                                                    })
+                                                }
+                                                disabled={
+                                                    detail.product_id === ''
+                                                }
+                                            >
+                                                <SelectTrigger {...control}>
+                                                    <SelectValue placeholder="Elige granel o una presentación..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {costingOptions(
+                                                        detail.product_id,
+                                                    ).map((option) => (
+                                                        <SelectItem
+                                                            key={option.value}
+                                                            value={option.value}
+                                                        >
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </FormField>
+                                )}
                             </FormLineItem>
                         ))}
                     </div>

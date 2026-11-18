@@ -16,6 +16,13 @@ class UpdateFormulaRequest extends StoreFormulaRequest
         return $formula instanceof Formula && ($this->user()?->can('update', $formula) ?? false);
     }
 
+    protected function formulaProductId(): ?int
+    {
+        $formula = $this->route('formula');
+
+        return $formula instanceof Formula ? (int) $formula->product_id : null;
+    }
+
     /**
      * @return array<string, mixed>
      */

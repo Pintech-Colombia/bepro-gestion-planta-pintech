@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FormulaLineCostingBasis;
 use App\Enums\TextFormat;
 use App\Models\Concerns\HasAuditDescription;
 use App\Services\DecimalCalculator;
@@ -142,31 +143,46 @@ class Formula extends Model
      * repetido de datos viejos también se limpia), para que cada borrado quede en la auditoría con sus valores. Los
      * borrados van primero: en el log, un cambio de ingrediente se lee «eliminada» y luego «creada».
      *
-     * @param  array<int, array{raw_material_id:int, quantity:string|int|float, unit_of_measure_id:int}>  $details
+     * @param  array<int, array{raw_material_id?:int|null, product_id?:int|null, costing_basis?:string|null, costing_variant_id?:int|null, quantity:string|int|float, unit_of_measure_id:int}>  $details
      */
     public function replaceDetails(array $details): void
     {
-        $details = array_values($details);
+        $details = array_map(fn (array $detail): array => self::normalizedLine($detail), array_values($details));
         $existing = $this->details()->get()->values();
-        $materials = $this->auditMaterials(
-            collect($details)->pluck('raw_material_id')->merge($existing->pluck('raw_material_id'))->all()
-        );
+        $ingredients = $this->auditIngredients(collect($details)->merge($existing->map(fn (FormulaDetail $line): array => [
+            'raw_material_id' => $line->raw_material_id,
+            'product_id' => $line->product_id,
+        ]))->all());
 
+        // La pareja es por ingrediente: una materia prima (`m:12`) y un producto (`p:12`) con el mismo id nunca se emparejan.
+        // La firma completa suma cantidad, unidad y forma de costeo, para preferir las líneas idénticas.
         $calculator = app(DecimalCalculator::class);
-        $signature = fn (int|string $material, string|int|float $quantity, int|string $unit): array => [
-            (int) $material,
-            (int) $material.'|'.$calculator->round((string) $quantity, 4).'|'.(int) $unit,
-        ];
+        $signature = function (array $line) use ($calculator): array {
+            $ingredient = $line['product_id'] !== null ? 'p:'.(int) $line['product_id'] : 'm:'.(int) $line['raw_material_id'];
+
+            return [
+                $ingredient,
+                $ingredient.'|'.$calculator->round((string) $line['quantity'], 4).'|'.(int) $line['unit_of_measure_id']
+                    .'|'.($line['costing_basis'] ?? '').'|'.($line['costing_variant_id'] ?? ''),
+            ];
+        };
 
         $pairs = $this->pairLines(
-            $existing->map(fn (FormulaDetail $line): array => $signature($line->raw_material_id, $line->quantity, $line->unit_of_measure_id))->all(),
-            array_map(fn (array $detail): array => $signature($detail['raw_material_id'], $detail['quantity'], $detail['unit_of_measure_id']), $details),
+            $existing->map(fn (FormulaDetail $line): array => $signature([
+                'raw_material_id' => $line->raw_material_id,
+                'product_id' => $line->product_id,
+                'quantity' => $line->quantity,
+                'unit_of_measure_id' => $line->unit_of_measure_id,
+                'costing_basis' => $line->costing_basis?->value,
+                'costing_variant_id' => $line->costing_variant_id,
+            ]))->all(),
+            array_map($signature, $details),
         );
         $pairedExisting = array_flip($pairs);
 
-        $existing->each(function (FormulaDetail $line, int $index) use ($pairedExisting, $materials): void {
+        $existing->each(function (FormulaDetail $line, int $index) use ($pairedExisting, $ingredients): void {
             if (! isset($pairedExisting[$index])) {
-                $this->prepareLineForAudit($line, $materials);
+                $this->prepareLineForAudit($line, $ingredients);
                 $line->delete();
             }
         });
@@ -174,13 +190,8 @@ class Formula extends Model
         foreach ($details as $index => $detail) {
             $line = isset($pairs[$index]) ? $existing[$pairs[$index]] : new FormulaDetail(['formula_id' => $this->id]);
 
-            $line->fill([
-                'raw_material_id' => $detail['raw_material_id'],
-                'quantity' => $detail['quantity'],
-                'unit_of_measure_id' => $detail['unit_of_measure_id'],
-                'step_order' => $index + 1,
-            ]);
-            $this->prepareLineForAudit($line, $materials);
+            $line->fill([...$detail, 'step_order' => $index + 1]);
+            $this->prepareLineForAudit($line, $ingredients);
             $line->save();
         }
     }
@@ -191,7 +202,7 @@ class Formula extends Model
      * materia prima (más que todas las idénticas juntas, así que nunca se sacrifica una pareja) y 1 más si además es
      * idéntica.
      *
-     * @param  array<int, array{0: int, 1: string}>  $old  [materia prima, firma completa] de cada línea vieja, por posición
+     * @param  array<int, array{0: string, 1: string}>  $old  [ingrediente, firma completa] de cada línea vieja, por posición
      * @param  array<int, array{0: int, 1: string}>  $new  lo mismo de cada línea nueva
      * @return array<int, int> posición nueva => posición vieja, solo las emparejadas
      */
@@ -240,42 +251,75 @@ class Formula extends Model
     public function deleteDetails(): void
     {
         $lines = $this->details()->get();
-        $materials = $this->auditMaterials($lines->pluck('raw_material_id')->all());
+        $ingredients = $this->auditIngredients($lines->map(fn (FormulaDetail $line): array => [
+            'raw_material_id' => $line->raw_material_id,
+            'product_id' => $line->product_id,
+        ])->all());
 
-        $lines->each(function (FormulaDetail $line) use ($materials): void {
-            $this->prepareLineForAudit($line, $materials);
+        $lines->each(function (FormulaDetail $line) use ($ingredients): void {
+            $this->prepareLineForAudit($line, $ingredients);
             $line->delete();
         });
     }
 
     /**
-     * Las materias primas de las líneas, en una sola consulta, para la descripción de la auditoría.
+     * Una línea como se guarda: materia prima **o** producto, y la forma de costeo solo en la de producto (P14). Una línea
+     * de materia prima deja vacías las columnas del producto, aunque el formulario mande algo en ellas.
      *
-     * @param  array<int, int|string|null>  $ids
-     * @return Collection<int, RawMaterial>
+     * @param  array<string, mixed>  $detail
+     * @return array{raw_material_id: int|null, product_id: int|null, costing_basis: string|null, costing_variant_id: int|null, quantity: mixed, unit_of_measure_id: int}
      */
-    private function auditMaterials(array $ids): Collection
+    private static function normalizedLine(array $detail): array
     {
-        // El producto completo, no solo id y nombre: queda pegado a la fórmula que devuelven las acciones, y un producto a
-        // medias daría null sin error a quien lea después otro campo (p. ej. `is_active`). Es la misma consulta.
-        $this->loadMissing('product');
+        $productId = isset($detail['product_id']) && $detail['product_id'] !== '' ? (int) $detail['product_id'] : null;
+        $basis = $productId !== null && isset($detail['costing_basis']) && $detail['costing_basis'] !== ''
+            ? FormulaLineCostingBasis::from((string) $detail['costing_basis'])
+            : null;
 
-        return RawMaterial::query()
-            ->whereKey(array_values(array_unique(array_filter($ids))))
-            ->get(['id', 'code'])
-            ->keyBy('id');
+        return [
+            'raw_material_id' => $productId === null ? (int) $detail['raw_material_id'] : null,
+            'product_id' => $productId,
+            'costing_basis' => $basis?->value,
+            'costing_variant_id' => $basis === FormulaLineCostingBasis::Presentation ? (int) $detail['costing_variant_id'] : null,
+            'quantity' => $detail['quantity'],
+            'unit_of_measure_id' => (int) $detail['unit_of_measure_id'],
+        ];
     }
 
     /**
-     * Le da a la línea su fórmula (con el producto) y su materia prima ya cargadas: la descripción de la auditoría no
+     * Las materias primas y los productos de las líneas, una consulta para cada uno, para la descripción de la auditoría.
+     *
+     * @param  array<int, array{raw_material_id?: int|string|null, product_id?: int|string|null}>  $lines
+     * @return array{materials: Collection<int, RawMaterial>, products: Collection<int, Product>}
+     */
+    private function auditIngredients(array $lines): array
+    {
+        // El producto de la fórmula completo, no solo id y nombre: queda pegado a la fórmula que devuelven las acciones, y
+        // un producto a medias daría null sin error a quien lea después otro campo (p. ej. `is_active`).
+        $this->loadMissing('product');
+
+        $ids = fn (string $key): array => array_values(array_unique(array_filter(array_map(
+            fn (array $line): int => (int) ($line[$key] ?? 0),
+            $lines,
+        ))));
+
+        return [
+            'materials' => RawMaterial::query()->whereKey($ids('raw_material_id'))->get(['id', 'code'])->keyBy('id'),
+            'products' => Product::query()->whereKey($ids('product_id'))->get(['id', 'name'])->keyBy('id'),
+        ];
+    }
+
+    /**
+     * Le da a la línea su fórmula (con el producto) y su ingrediente ya cargados: la descripción de la auditoría no
      * consulta nada por línea.
      *
-     * @param  Collection<int, RawMaterial>  $materials
+     * @param  array{materials: Collection<int, RawMaterial>, products: Collection<int, Product>}  $ingredients
      */
-    private function prepareLineForAudit(FormulaDetail $line, Collection $materials): void
+    private function prepareLineForAudit(FormulaDetail $line, array $ingredients): void
     {
         $line->setRelation('formula', $this);
-        $line->setRelation('rawMaterial', $materials->get((int) $line->raw_material_id));
+        $line->setRelation('rawMaterial', $ingredients['materials']->get((int) $line->raw_material_id));
+        $line->setRelation('product', $ingredients['products']->get((int) $line->product_id));
     }
 
     private function productHasOtherPriceReference(): bool

@@ -15,9 +15,11 @@ use App\Http\Requests\Formulas\IndexFormulaRequest;
 use App\Http\Requests\Formulas\StoreFormulaRequest;
 use App\Http\Requests\Formulas\UpdateFormulaRequest;
 use App\Models\Formula;
+use App\Models\FormulaDetail;
 use App\Models\Product;
 use App\Models\RawMaterial;
 use App\Models\UnitOfMeasure;
+use App\Services\Pricing\ProductLineTheoreticalCost;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,7 @@ class FormulaController extends Controller
         private readonly SetPriceReferenceFormulaAction $setPriceReference,
         private readonly ChangeFormulaActiveAction $changeActive,
         private readonly UpdateFormulaAction $updateFormula,
+        private readonly ProductLineTheoreticalCost $productLineCost,
     ) {}
 
     public function index(IndexFormulaRequest $request): Response
@@ -91,22 +94,55 @@ class FormulaController extends Controller
             'product.unitOfMeasure:id,name,symbol',
             'details.rawMaterial:id,code',
             'details.unitOfMeasure:id,name,symbol',
+            'details.product',
+            'details.costingVariant:id,presentation_label',
             'createdBy:id,name',
         ]);
+
+        $canViewCosts = $request->user()?->can(Permission::CostsView->value) ?? false;
 
         return Inertia::render('Formulas/Show', [
             'formula' => [
                 ...$formula->toArray(),
+                // El producto de cada línea solo con id y nombre: su costo y su CIF viajan aparte, y solo con costs.view.
+                'details' => $formula->details->map(fn (FormulaDetail $detail): array => [
+                    ...$detail->only(['id', 'step_order', 'raw_material_id', 'product_id', 'quantity', 'unit_of_measure_id']),
+                    'costing_basis' => $detail->costing_basis?->value,
+                    'raw_material' => $detail->rawMaterial?->only(['id', 'code']),
+                    'product' => $detail->product?->only(['id', 'name']),
+                    'costing_variant' => $detail->costingVariant?->only(['id', 'presentation_label']),
+                    'unit_of_measure' => $detail->unitOfMeasure?->only(['id', 'name', 'symbol']),
+                ])->all(),
                 'has_production_orders' => $formula->productionOrders()->exists(),
             ],
+            // Costo teórico por kilo de cada línea de producto (P13), con su desglose o el motivo: solo con costs.view.
+            'productLineCosts' => $canViewCosts ? $this->productLineCosts($formula) : [],
             'returnTo' => $this->resolveReturnTo($request),
             'can' => [
                 'update' => Gate::allows('update', $formula),
                 'activate' => Gate::allows('activate', $formula),
                 'delete' => Gate::allows('delete', $formula),
                 'viewProduct' => $request->user()?->can(Permission::ProductsView->value) ?? false,
+                'viewCosts' => $canViewCosts,
             ],
         ]);
+    }
+
+    /**
+     * @return array<int, array{cost_per_kg: string|null, bulk_per_kg: string|null, packaging_per_kg: string|null, density: string|null, density_source: string|null, density_order_number: string|null, reason: string|null}>
+     */
+    private function productLineCosts(Formula $formula): array
+    {
+        $costs = $this->productLineCost->forLines($formula->details);
+
+        foreach ($costs as $lineId => $cost) {
+            if ($cost['reason'] !== null) {
+                $line = $formula->details->firstWhere('id', $lineId);
+                $costs[$lineId]['reason'] = $this->productLineCost->reasonLabel($cost['reason'], (string) $line?->product?->name);
+            }
+        }
+
+        return $costs;
     }
 
     public function edit(Formula $formula): Response|RedirectResponse
@@ -122,7 +158,7 @@ class FormulaController extends Controller
 
         $formula->load([
             'product:id,name',
-            'details:id,formula_id,raw_material_id,quantity,unit_of_measure_id,step_order',
+            'details:id,formula_id,raw_material_id,product_id,costing_basis,costing_variant_id,quantity,unit_of_measure_id,step_order',
         ]);
 
         return Inertia::render('Formulas/Edit', [
@@ -251,12 +287,32 @@ class FormulaController extends Controller
                 ->select('id', 'code')
                 ->orderBy('code')
                 ->get(),
-            // StoreFormulaRequest solo acepta unidades activas: el desplegable ofrece las mismas.
+            // Un producto como ingrediente (PT consumible): activo, con sus presentaciones activas para «Se costea como» (P14).
+            // El formulario quita el producto de la propia fórmula.
+            'ingredientProducts' => Product::query()
+                ->where('is_active', true)
+                ->with(['variants' => fn ($query) => $query->where('is_active', true)->orderBy('presentation_value')->select('id', 'product_id', 'presentation_label')])
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Product $product): array => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'variants' => $product->variants->map(fn ($variant): array => ['id' => $variant->id, 'label' => $variant->presentation_label])->all(),
+                ])
+                ->all(),
+            // StoreFormulaRequest solo acepta unidades activas: el desplegable ofrece las mismas. `is_mass`: un producto
+            // solo va en una unidad de peso.
             'units' => UnitOfMeasure::query()
                 ->selectable()
-                ->select('id', 'name', 'symbol')
                 ->orderBy('name')
-                ->get(),
+                ->get(['id', 'name', 'symbol', 'to_kg_conversion'])
+                ->map(fn (UnitOfMeasure $unit): array => [
+                    'id' => $unit->id,
+                    'name' => $unit->name,
+                    'symbol' => $unit->symbol,
+                    'is_mass' => $unit->to_kg_conversion !== null,
+                ])
+                ->all(),
         ];
     }
 }

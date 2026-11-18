@@ -42,6 +42,8 @@ class CreateFormulaAction
             }
 
             $this->lockLineMaterialsAndCheckUnits($data['details']);
+            // Nace activa: sus productos entran en la cadena desde ya.
+            $this->ensureNoProductCycle((int) $data['product_id'], $data['details']);
 
             $formula = Formula::create([
                 'product_id' => $data['product_id'],

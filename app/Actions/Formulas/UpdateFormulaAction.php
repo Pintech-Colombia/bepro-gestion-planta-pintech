@@ -48,6 +48,11 @@ class UpdateFormulaAction
 
             $this->lockLineMaterialsAndCheckUnits($data['details']);
 
+            // Una fórmula inactiva no forma parte de la cadena: se revisa al activarla.
+            if ($locked->is_active) {
+                $this->ensureNoProductCycle((int) $locked->product_id, $data['details'], (int) $locked->id);
+            }
+
             $locked->update([
                 'name' => $data['name'] ?? null,
                 'notes' => $data['notes'] ?? null,
