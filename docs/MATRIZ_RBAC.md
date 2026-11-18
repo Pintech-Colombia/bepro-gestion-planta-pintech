@@ -246,13 +246,13 @@ Para comunicar a los usuarios antes de desplegar.
 | `quotations.delete` | Hoy no tiene ruta. Se rechaza por estado; borrarla dejaría un hueco en el consecutivo. |
 | `products.desactive` | Typo → `products.deactivate`. |
 
-**Permisos que propuse en el plan y descarté tras tus notas:** `users.deactivate` y `users.manage_signatures`
-(se quedan en `users.edit`), `roles.assign_permissions` (redundante: roles es 100 % SuperAdmin),
-`alerts.receive_notifications` (sigue descartado: la campana se muestra a todos y sus avisos personales no dependen de
-permisos; `alerts.view` solo decide si se ven las alertas; `sales_orders.receive_approval_requests` **elige
-destinatarios** de un aviso, no da visibilidad), `finished_inventory.view_costs` (el costo de
-traslado de los lotes lo decide `costs.view`, principio 1), `quotations.view_costs` (quien ve cotizaciones ya puede ver precios), `profile.delete_own` (se elimina la
-función), `inventory_movements.edit/delete` (inmutables), `production_orders.delete` (no existe).
+**Permisos que propuse en el plan y descarté tras tus notas:** `users.deactivate` y `users.manage_signatures` (se quedan
+en `users.edit`), `roles.assign_permissions` (redundante: roles es 100 % SuperAdmin), `alerts.receive_notifications`
+(sigue descartado: la campana se muestra a todos y sus avisos personales no dependen de permisos; `alerts.view` solo
+decide si se ven las alertas; `sales_orders.receive_approval_requests` **elige destinatarios** de un aviso, no da
+visibilidad), `finished_inventory.view_costs` (el costo de traslado de los lotes lo decide `costs.view`, principio 1),
+`quotations.view_costs` (quien ve cotizaciones ya puede ver precios), `profile.delete_own` (se elimina la función),
+`inventory_movements.edit/delete` (inmutables), `production_orders.delete` (no existe).
 
 ## 7. Decisiones
 

@@ -8,7 +8,7 @@ use App\Enums\Permission;
 use App\Filters\FinishedInventoryFilter;
 use App\Http\Requests\Inventory\IndexFinishedInventoryRequest;
 use App\Models\FinishedInventory;
-use App\Models\FinishedProductBatchStock;
+use App\Models\FinishedProductBatch;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -166,26 +166,29 @@ class FinishedInventoryQueryService
         }
 
         $rowKeys = $rows
-            ->mapWithKeys(fn (FinishedInventory $row): array => [$this->lotKey($row->product_variant_id, $row->warehouse_id) => true])
+            ->mapWithKeys(fn (FinishedInventory $row): array => [$this->lotKey((int) $row->product_variant_id, $row->warehouse_id) => true])
             ->all();
 
-        $stocks = FinishedProductBatchStock::query()
-            ->join('finished_product_batches', 'finished_product_batches.id', '=', 'finished_product_batch_stocks.finished_product_batch_id')
+        // Desde el lote, en el orden en que se despacha (`fifoOrder`, la misma regla de las salidas). El producto entra en
+        // el filtro para que use el índice del lote (`product_id`, `product_variant_id`, `entry_date`).
+        $stocks = FinishedProductBatch::query()
+            ->join('finished_product_batch_stocks', 'finished_product_batch_stocks.finished_product_batch_id', '=', 'finished_product_batches.id')
             ->join('production_orders', 'production_orders.id', '=', 'finished_product_batches.production_order_id')
+            // Con stock en esa bodega: la condición de `FinishedProductBatchStock::available()`, sobre la tabla unida.
             ->where('finished_product_batch_stocks.quantity', '>', 0)
-            ->whereIn('finished_product_batch_stocks.warehouse_id', $rows->pluck('warehouse_id')->unique()->values()->all())
+            ->whereIn('finished_product_batches.product_id', $rows->pluck('product_id')->unique()->values()->all())
             ->whereIn('finished_product_batches.product_variant_id', $rows->pluck('product_variant_id')->unique()->values()->all())
-            ->orderBy('finished_product_batches.entry_date')
-            ->orderBy('finished_product_batches.id')
+            ->whereIn('finished_product_batch_stocks.warehouse_id', $rows->pluck('warehouse_id')->unique()->values()->all())
+            ->fifoOrder()
             ->select([
-                'finished_product_batch_stocks.id',
+                'finished_product_batch_stocks.id as stock_id',
                 'finished_product_batch_stocks.warehouse_id',
                 'finished_product_batch_stocks.quantity',
                 'finished_product_batches.product_variant_id',
+                'finished_product_batches.production_order_id',
                 'finished_product_batches.entry_date',
                 'finished_product_batches.transfer_unit_cost',
                 'finished_product_batches.transfer_cost_estimated',
-                'production_orders.id as production_order_id',
                 'production_orders.order_number',
                 'production_orders.lot_number',
                 // El color de la OP (productos genéricos a pedido): en una misma fila puede haber lotes de colores
@@ -193,9 +196,10 @@ class FinishedInventoryQueryService
                 'production_orders.color',
             ])
             ->withCasts([
+                'stock_id' => 'integer',
+                'warehouse_id' => 'integer',
+                'quantity' => 'integer',
                 'entry_date' => 'date',
-                'transfer_unit_cost' => 'decimal:4',
-                'transfer_cost_estimated' => 'boolean',
                 'production_order_id' => 'integer',
                 'lot_number' => 'integer',
             ])
@@ -204,7 +208,7 @@ class FinishedInventoryQueryService
         $lots = [];
 
         foreach ($stocks as $stock) {
-            $key = $this->lotKey((int) $stock->getAttribute('product_variant_id'), $stock->warehouse_id);
+            $key = $this->lotKey((int) $stock->product_variant_id, (int) $stock->getAttribute('warehouse_id'));
 
             // Las dos listas de ids cruzan presentaciones y bodegas: solo cuentan las parejas de la página.
             if (! isset($rowKeys[$key])) {
@@ -212,20 +216,20 @@ class FinishedInventoryQueryService
             }
 
             $lot = [
-                'id' => $stock->id,
+                'id' => $stock->getAttribute('stock_id'),
                 'lot_number' => $stock->getAttribute('lot_number'),
                 'color' => $stock->getAttribute('color'),
                 'entry_date' => $stock->getAttribute('entry_date')?->format('Y-m-d'),
-                'quantity' => $stock->quantity,
+                'quantity' => $stock->getAttribute('quantity'),
                 'production_order' => [
-                    'id' => $stock->getAttribute('production_order_id'),
+                    'id' => $stock->production_order_id,
                     'order_number' => $stock->getAttribute('order_number'),
                 ],
             ];
 
             if ($canViewCosts) {
-                $lot['transfer_unit_cost'] = $stock->getAttribute('transfer_unit_cost');
-                $lot['transfer_cost_estimated'] = $stock->getAttribute('transfer_cost_estimated');
+                $lot['transfer_unit_cost'] = $stock->transfer_unit_cost;
+                $lot['transfer_cost_estimated'] = $stock->transfer_cost_estimated;
             }
 
             $lots[$key][] = $lot;
@@ -234,7 +238,7 @@ class FinishedInventoryQueryService
         return $lots;
     }
 
-    private function lotKey(?int $variantId, int $warehouseId): string
+    private function lotKey(int $variantId, int $warehouseId): string
     {
         return $variantId.':'.$warehouseId;
     }

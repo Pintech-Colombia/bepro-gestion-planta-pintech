@@ -13,6 +13,7 @@ import Pagination from '@/components/pagination';
 import { RecordLink } from '@/components/record-link';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
+import { finishedLotLabel } from '@/lib/finished-lot';
 import { withReturnTo } from '@/lib/navigation';
 import { variantPresentationLabel } from '@/lib/variant-label';
 import { index as finishedInventoryIndex } from '@/routes/finished-inventory';
@@ -84,8 +85,7 @@ function LotList({ lots, can }: { lots: InventoryLot[]; can: Props['can'] }) {
                 >
                     <div className="flex items-baseline justify-between gap-3">
                         <span className="font-medium text-foreground">
-                            Lote {lot.lot_number}
-                            {lot.color && ` · ${lot.color}`}
+                            Lote {finishedLotLabel(lot.lot_number, lot.color)}
                         </span>
                         <span className="font-medium text-foreground tabular-nums">
                             <FormattedNumber
