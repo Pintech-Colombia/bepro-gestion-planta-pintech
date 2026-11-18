@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\Production\BuildProductionOrderExportDataAction;
 use App\Enums\ProductionOrderStatus;
+use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
 use App\Enums\SystemRole;
 use App\Models\Formula;
@@ -595,6 +596,37 @@ it('completing the order draws down the remnant and records the real gallons and
         ->and($line->applied_at)->not->toBeNull()
         // Costo a granel: 150 de ingredientes + 22 del saldo.
         ->and(round((float) ProductionCost::where('production_order_id', $this->targetOrder->id)->value('cost'), 2))->toBe(172.0);
+});
+
+it('completar escribe un movimiento de consumo por línea y los kilos que quedan cuadran con el saldo', function () {
+    planRemnant($this, $this->targetOrder, $this->remnant, 20)->assertSessionHasNoErrors();
+    planRemnant($this, $this->targetOrder, $this->remnant, '12.5')->assertSessionHasNoErrors();
+
+    completeTargetOrder($this)->assertSessionHasNoErrors();
+
+    $this->remnant->refresh();
+    $movements = $this->remnant->movements()->orderBy('id')->get();
+    $lines = $this->remnant->consumptions()->orderBy('id')->get();
+
+    expect($movements)->toHaveCount(2)
+        ->and($movements->pluck('type')->all())->toBe([RemnantMovementType::Consumption, RemnantMovementType::Consumption])
+        ->and($movements->pluck('quantity_kg')->all())->toBe(['20.0000', '12.5000'])
+        ->and($movements->pluck('balance_after_kg')->all())->toBe(['30.0000', '17.5000'])
+        ->and($movements->last()->balance_after_kg)->toBe($this->remnant->available_quantity_kg)
+        ->and($movements->pluck('remnant_consumption_id')->all())->toBe($lines->pluck('id')->all())
+        ->and($movements->pluck('production_order_id')->unique()->all())->toBe([$this->targetOrder->id])
+        // A nombre de quien completa la orden.
+        ->and($movements->pluck('user_id')->unique()->all())->toBe([$this->user->id]);
+});
+
+it('un saldo que no alcanza al completar no deja movimientos', function () {
+    planRemnant($this, $this->targetOrder, $this->remnant, 20)->assertSessionHasNoErrors();
+    // Otro camino lo dejó en 10 kg después de planear (con su propio movimiento, que aquí no interesa).
+    $this->remnant->update(['available_quantity_kg' => 10, 'available_quantity_gallons' => 2]);
+
+    completeTargetOrder($this)->assertSessionHasErrors(RemnantDrawdown::APPLY_ERROR_KEY);
+
+    expect($this->remnant->movements()->count())->toBe(0);
 });
 
 it('completing with the whole remnant leaves it consumed', function () {

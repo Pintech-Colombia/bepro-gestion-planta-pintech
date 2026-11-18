@@ -13,6 +13,7 @@ export type ToneEnumName =
     | 'PaintDevelopmentRequestStatus'
     | 'ProductionOrderStatus'
     | 'QuotationStatus'
+    | 'RemnantMovementType'
     | 'RemnantStatus'
     | 'SalesOrderPriority'
     | 'SalesOrderStatus'

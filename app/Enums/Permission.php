@@ -81,6 +81,7 @@ enum Permission: string
 
     // Saldos de producción
     case ProductionRemnantsView = 'production_remnants.view';
+    case ProductionRemnantsAdjust = 'production_remnants.adjust';
 
     // Termoencogido
     case ShrinkWrapsView = 'shrink_wraps.view';
@@ -200,6 +201,7 @@ enum Permission: string
             self::ProductionOrdersExport => __('Exportar órdenes de producción'),
             self::ProductionOrdersPrintLabels => __('Imprimir estampitas de lote'),
             self::ProductionRemnantsView => __('Ver saldos de producción'),
+            self::ProductionRemnantsAdjust => __('Ajustar saldos'),
             self::ShrinkWrapsView => __('Ver termoencogidos'),
             self::ShrinkWrapsCreate => __('Registrar termoencogido'),
             self::ShrinkWrapTypesManage => __('Gestionar tipos de termoencogido'),
@@ -298,7 +300,8 @@ enum Permission: string
             self::ProductionOrdersCancel,
             self::ProductionOrdersExport,
             self::ProductionOrdersPrintLabels => PermissionModule::ProductionOrders,
-            self::ProductionRemnantsView => PermissionModule::ProductionRemnants,
+            self::ProductionRemnantsView,
+            self::ProductionRemnantsAdjust => PermissionModule::ProductionRemnants,
             self::ShrinkWrapsView,
             self::ShrinkWrapsCreate,
             self::ShrinkWrapTypesManage => PermissionModule::ShrinkWraps,
@@ -428,6 +431,7 @@ enum Permission: string
             self::ProductionOrdersExport,
             self::ProductionOrdersPrintLabels,
             self::ProductionRemnantsView,
+            self::ProductionRemnantsAdjust,
             self::ShrinkWrapsView,
             self::ShrinkWrapsCreate,
             self::ShrinkWrapTypesManage,
@@ -502,6 +506,8 @@ enum Permission: string
             // Viven en Configuración → Catálogos, cuya pestaña se ve con catalogs.view.
             self::SuppliersManage => [self::CatalogsView],
             self::ShrinkWrapsCreate => [self::ShrinkWrapsView],
+            // Los diálogos viven en el listado de saldos y en su detalle.
+            self::ProductionRemnantsAdjust => [self::ProductionRemnantsView],
             self::ProductsCreate,
             self::ProductsEdit,
             self::ProductsDelete,
@@ -708,6 +714,9 @@ enum Permission: string
             self::ProductionOrdersSubmitForReview,
             self::ProductionOrdersExport,
             self::ProductionRemnantsView,
+            // Dar de baja y corregir saldos: los maneja el operario, que sabe cuál se secó o cuánto pesa (decisión del
+            // 2026-11-18). Siempre con nota y en el historial con su nombre.
+            self::ProductionRemnantsAdjust,
             self::InventoryMovementsView,
             // Termoencogido (3.8): lo registra quien lo hace en planta.
             self::ShrinkWrapsView,

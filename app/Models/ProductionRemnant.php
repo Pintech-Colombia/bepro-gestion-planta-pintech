@@ -38,6 +38,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read Warehouse $warehouse
  * @property-read User $createdBy
  * @property-read Collection|RemnantConsumption[] $consumptions
+ * @property-read Collection|ProductionRemnantMovement[] $movements
  */
 #[Fillable([
     'source_order_id',
@@ -66,12 +67,11 @@ class ProductionRemnant extends Model
         return LogOptions::defaults()
             ->useLogName('saldos_produccion')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            // Sin kilos ni estado: cada cambio de kilos ya queda en `production_remnant_movements` (y en su auditoría),
+            // con quién, cuándo y por qué. Auditarlos aquí también los dejaba dos veces.
             ->logOnly([
                 'source_order_id',
                 'product_id',
-                'available_quantity_gallons',
-                'available_quantity_kg',
-                'status',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
@@ -121,5 +121,11 @@ class ProductionRemnant extends Model
     public function consumptions(): HasMany
     {
         return $this->hasMany(RemnantConsumption::class, 'remnant_id');
+    }
+
+    /** Su historial: lo escribe solo `RemnantLedger`. */
+    public function movements(): HasMany
+    {
+        return $this->hasMany(ProductionRemnantMovement::class, 'production_remnant_id');
     }
 }

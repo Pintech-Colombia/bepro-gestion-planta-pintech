@@ -63,6 +63,7 @@ export type Permission =
     | 'production_orders.print_labels'
     // Saldos de producción
     | 'production_remnants.view'
+    | 'production_remnants.adjust'
     // Termoencogido
     | 'shrink_wraps.view'
     | 'shrink_wraps.create'

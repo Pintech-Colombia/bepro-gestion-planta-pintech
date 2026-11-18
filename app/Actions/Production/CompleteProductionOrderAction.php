@@ -25,6 +25,7 @@ use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
 use App\Services\Production\RemnantDrawdown;
+use App\Services\Production\RemnantLedger;
 use App\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +43,7 @@ class CompleteProductionOrderAction
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
+        private readonly RemnantLedger $remnantLedger,
     ) {}
 
     /**
@@ -137,7 +139,7 @@ class CompleteProductionOrderAction
                 ), 4);
             }
 
-            $this->applyPlannedRemnants($lockedOrder);
+            $this->applyPlannedRemnants($lockedOrder, $userId);
 
             foreach ($lockedOrder->remnantConsumptions as $consumption) {
                 if ($consumption->consumed_cost !== null) {
@@ -318,7 +320,7 @@ class CompleteProductionOrderAction
      * transacción espera en el orden contrario. Si un saldo ya no alcanza, 422 y la transacción no deja nada escrito.
      * Las líneas ya aplicadas (registradas antes de que los saldos se planearan) solo suman su costo.
      */
-    private function applyPlannedRemnants(ProductionOrder $lockedOrder): void
+    private function applyPlannedRemnants(ProductionOrder $lockedOrder, int $userId): void
     {
         $plannedByRemnant = $lockedOrder->remnantConsumptions
             ->reject(fn ($consumption) => $consumption->isApplied())
@@ -332,7 +334,7 @@ class CompleteProductionOrderAction
                 ->findOrFail($remnantId);
 
             foreach ($lines as $line) {
-                $this->remnantDrawdown->apply($line, $lockedRemnant);
+                $this->remnantDrawdown->apply($line, $lockedRemnant, $userId);
             }
         }
     }
@@ -371,8 +373,8 @@ class CompleteProductionOrderAction
     }
 
     /**
-     * Si quedó sobrante, crear un registro de saldo de PT. Los kilos son los pesados, tal cual: reconstruirlos desde los
-     * galones calculados perdería decimales.
+     * Si quedó sobrante, crear un registro de saldo de PT con su movimiento de nacimiento (`RemnantLedger`). Los kilos
+     * son los pesados, tal cual: reconstruirlos desde los galones calculados perdería decimales.
      *
      * @param  ?string  $remnantGallons  null si no quedó saldo
      * @param  array<string, mixed>  $data
@@ -392,7 +394,7 @@ class CompleteProductionOrderAction
 
         $costPerGallon = $this->productionCostCalculator->transferCost($bulkCostPerUnit ?? '0', $cifPercentage);
 
-        ProductionRemnant::create([
+        $this->remnantLedger->born([
             'source_order_id' => $order->id,
             'product_id' => $order->product_id,
             'warehouse_id' => $order->warehouse_id,
@@ -405,6 +407,6 @@ class CompleteProductionOrderAction
             'status' => RemnantStatus::Available,
             'notes' => $data['remnant_notes'] ?? null,
             'created_by' => $userId,
-        ]);
+        ], $userId);
     }
 }

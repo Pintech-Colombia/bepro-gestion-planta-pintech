@@ -38,6 +38,7 @@ final class NumberTypeColumns
             'production_remnants.original_quantity_gallons', 'production_remnants.original_quantity_kg',
             'production_remnants.available_quantity_gallons', 'production_remnants.available_quantity_kg',
             'remnant_consumptions.quantity_gallons', 'remnant_consumptions.quantity_kg',
+            'production_remnant_movements.quantity_kg', 'production_remnant_movements.balance_after_kg',
             'raw_materials.minimum_stock',
             'product_variants.presentation_value',
             'shrink_wrap_items.quantity_per_application', 'shrink_wrap_items.quantity',

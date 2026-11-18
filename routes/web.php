@@ -82,6 +82,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('production/remnants', [RemnantController::class, 'index'])
         ->middleware('can:'.Permission::ProductionRemnantsView->value)
         ->name('production.remnants.index');
+    Route::get('production/remnants/{remnant}', [RemnantController::class, 'show'])
+        ->middleware('can:'.Permission::ProductionRemnantsView->value)
+        ->name('production.remnants.show');
+    // Baja y corrección (con nota): cada una deja su movimiento en el historial del saldo.
+    Route::post('production/remnants/{remnant}/write-off', [RemnantController::class, 'writeOff'])
+        ->middleware('can:'.Permission::ProductionRemnantsAdjust->value)
+        ->name('production.remnants.write-off');
+    Route::post('production/remnants/{remnant}/correct', [RemnantController::class, 'correct'])
+        ->middleware('can:'.Permission::ProductionRemnantsAdjust->value)
+        ->name('production.remnants.correct');
 
     // Termoencogido (3.8): registros inmutables, sin editar ni eliminar.
     Route::prefix('production')->name('production.')->group(function () {
