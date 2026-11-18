@@ -4,16 +4,12 @@ import { es } from 'date-fns/locale';
 import type { ComponentProps } from 'react';
 import AuditLogController from '@/actions/App/Http/Controllers/Admin/AuditLogController';
 
+import { CountPopover } from '@/components/count-popover';
 import { DataListing } from '@/components/data-listing';
 import type { DataListingColumn } from '@/components/data-listing';
 import { DataTableFilters } from '@/components/data-table-filters';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
 import { useFilters } from '@/hooks/use-filters';
 import { pillClasses, toneClasses } from '@/lib/tones';
 import type { Tone } from '@/types/enums';
@@ -230,25 +226,12 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
 
         if (keys.length > 2) {
             return (
-                // Se abre con un toque o un clic (también en el celular) y se monta fuera de la tabla, dentro de la pantalla.
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            className="inline-flex items-center rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-muted"
-                        >
-                            {keys.length} atributos modificados
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                        aria-label="Atributos modificados"
-                        align="start"
-                        collisionPadding={8}
-                        className="max-h-(--radix-popover-content-available-height) w-72 overflow-y-auto p-3 sm:w-96"
-                    >
-                        {renderChangeList()}
-                    </PopoverContent>
-                </Popover>
+                <CountPopover
+                    label={`${keys.length} atributos modificados`}
+                    contentLabel="Atributos modificados"
+                >
+                    {renderChangeList()}
+                </CountPopover>
             );
         }
 

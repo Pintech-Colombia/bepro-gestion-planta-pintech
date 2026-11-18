@@ -201,6 +201,18 @@ módulo, lo envía el controlador en `can` y sin él se pinta el texto solo.
 
 ---
 
+## CountPopover (recuento que abre su lista)
+
+**Ubicación:** `resources/js/components/count-popover.tsx`.
+
+Un botón con un recuento («3 atributos modificados», «2 lotes») que abre la lista en una ventana (`ui/popover.tsx`): se
+abre con un toque o un clic, también en el celular, se monta fuera de la tabla y una lista larga se desplaza dentro de
+ella. `label` es el texto del botón y `contentLabel` el nombre de la ventana para el lector de pantalla. Lo usan la
+celda de cambios de Auditoría y la columna «Lotes» de Inventario PT. No es un enlace: la fila sigue abriéndose solo
+desde su identificador.
+
+---
+
 ## Alert (avisos)
 
 Los avisos de la aplicación, con la variante de su tono: `default` (neutro), `success`, `warning`, `info` o
