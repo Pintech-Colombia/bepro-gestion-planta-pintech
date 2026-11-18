@@ -25,6 +25,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $product_variant_id
  * @property int $production_order_id
  * @property int $initial_quantity
+ * @property string|null $transfer_unit_cost
+ * @property bool $transfer_cost_estimated
  * @property Carbon $entry_date
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -39,6 +41,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'product_variant_id',
     'production_order_id',
     'initial_quantity',
+    'transfer_unit_cost',
+    'transfer_cost_estimated',
     'entry_date',
 ])]
 class FinishedProductBatch extends Model
@@ -55,7 +59,7 @@ class FinishedProductBatch extends Model
         return LogOptions::defaults()
             ->useLogName('lotes_producto_terminado')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['product_id', 'product_variant_id', 'production_order_id', 'initial_quantity', 'entry_date'])
+            ->logOnly(['product_id', 'product_variant_id', 'production_order_id', 'initial_quantity', 'transfer_unit_cost', 'transfer_cost_estimated', 'entry_date'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -64,6 +68,10 @@ class FinishedProductBatch extends Model
     {
         return [
             'initial_quantity' => WholeUnits::class,
+            // Costo de traslado por unidad, con el CIF del producto, fijado al completar la OP. Estimado: calculado
+            // después, con el CIF que tenía el producto al migrar (lotes anteriores a la columna).
+            'transfer_unit_cost' => 'decimal:4',
+            'transfer_cost_estimated' => 'boolean',
             'entry_date' => 'date:Y-m-d',
         ];
     }

@@ -143,11 +143,7 @@ class PreviewProductionOrderCostsAction
 
         // La misma lectura de «hay saldo» que al completar: la vista previa no puede mostrar un costo y el cierre firmar otro.
         if ($this->completionLines->hasRemnant($remnantGallons) && $globalBulkCostPerUnit !== null) {
-            $costPerGallon = $globalBulkCostPerUnit;
-
-            if ($cifPercentage !== null && $this->calculator->cmp($cifPercentage, '0', 4) > 0) {
-                $costPerGallon = $this->productionCostCalculator->applyCifToCost($costPerGallon, $cifPercentage);
-            }
+            $costPerGallon = $this->productionCostCalculator->transferCost($globalBulkCostPerUnit, $cifPercentage);
 
             $remnantBulkCost = $this->calculator->mul($costPerGallon, $remnantGallons, 4);
         }

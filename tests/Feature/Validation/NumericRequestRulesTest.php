@@ -76,6 +76,7 @@ function numericRequestFields(): array
         'StoreProductRequest|UpdateProductRequest' => [
             'cif_percentage' => 'products.cif_percentage',
             'price_threshold' => 'products.price_threshold',
+            'reference_density_kg_per_gallon' => 'products.reference_density_kg_per_gallon',
             'quality_viscosity_lower' => 'products.quality_viscosity_lower',
             'quality_viscosity_upper' => 'products.quality_viscosity_upper',
             'quality_fineness_lower' => 'products.quality_fineness_lower',

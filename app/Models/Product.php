@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\NumberType;
 use App\Enums\TextFormat;
 use App\Models\Concerns\HasAuditDescription;
 use Database\Factories\ProductFactory;
@@ -30,6 +31,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string|null $sales_margin
  * @property string|null $current_price
  * @property string $price_threshold
+ * @property string|null $reference_density_kg_per_gallon
  * @property string|null $quality_viscosity_lower
  * @property string|null $quality_viscosity_upper
  * @property string|null $quality_fineness_lower
@@ -61,6 +63,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'sales_margin',
     'current_price',
     'price_threshold',
+    'reference_density_kg_per_gallon',
     'quality_viscosity_lower',
     'quality_viscosity_upper',
     'quality_fineness_lower',
@@ -83,7 +86,8 @@ class Product extends Model
         return LogOptions::defaults()
             ->useLogName('productos')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['name', 'category_id', 'is_active'])
+            // El peso de referencia mueve el precio cuando el producto va dentro de la fórmula de otro.
+            ->logOnly(['name', 'category_id', 'reference_density_kg_per_gallon', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -97,6 +101,7 @@ class Product extends Model
             'sales_margin' => 'decimal:2',
             'current_price' => 'decimal:4',
             'price_threshold' => 'decimal:2',
+            'reference_density_kg_per_gallon' => NumberType::Density->cast(),
             'quality_viscosity_lower' => 'decimal:1',
             'quality_viscosity_upper' => 'decimal:1',
             'quality_fineness_lower' => 'decimal:1',

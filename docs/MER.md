@@ -242,6 +242,7 @@ Productos terminados.
 | `sales_margin` | DECIMAL(5,2) | sí |  |
 | `current_price` | DECIMAL(16,4) | sí |  |
 | `price_threshold` | DECIMAL(5,2) |  | default `3` |
+| `reference_density_kg_per_gallon` | DECIMAL(10,4) | sí | Peso por galón de referencia (kg/gal), para la lista de precios cuando el producto va dentro de la fórmula de otro. Vacío: se usa el peso del último lote. La OP siempre pide el peso real. No es un costo: viaja sin `costs.view` |
 | `quality_viscosity_lower` | DECIMAL(4,1) | sí |  |
 | `quality_viscosity_upper` | DECIMAL(4,1) | sí |  |
 | `quality_fineness_lower` | DECIMAL(4,1) | sí |  |
@@ -572,6 +573,8 @@ Lotes de producto terminado.
 | `product_variant_id` | BIGINT |  | FK → `product_variants` (RESTRICT). La presentación de la fila del plan de envasado |
 | `production_order_id` | BIGINT |  | FK → `production_orders` (RESTRICT). Todo lote nace al completar una OP |
 | `initial_quantity` | INTEGER |  |  |
+| `transfer_unit_cost` | DECIMAL(16,4) | sí | Costo de traslado por unidad: el costo de la entrada «Producción» con el CIF del producto (sin CIF, el mismo costo), fijo desde que se completa la OP. Es el costo con el que el lote entra a otra OP. Nulo en un lote anterior a la columna sin entrada de producción |
+| `transfer_cost_estimated` | BOOLEAN |  | default `false`. `true` en los lotes anteriores a la columna: costo calculado después, con el CIF que tenía el producto al migrar |
 | `entry_date` | DATE |  | Fecha de planta en que se completó la OP |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |

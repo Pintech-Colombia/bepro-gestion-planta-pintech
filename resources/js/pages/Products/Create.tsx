@@ -29,6 +29,7 @@ export default function ProductsCreate({ categories, units, can }: Props) {
             unit_of_measure_id: '',
             cif_percentage: '0',
             price_threshold: '0',
+            reference_density_kg_per_gallon: '',
             quality_viscosity_lower: '',
             quality_viscosity_upper: '',
             quality_fineness_lower: '',

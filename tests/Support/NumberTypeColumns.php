@@ -61,6 +61,7 @@ final class NumberTypeColumns
             'inventory_batches.unit_price',
             'inventory_movements.cost_price',
             'finished_inventory_movements.cost_price',
+            'finished_product_batches.transfer_unit_cost',
             'raw_materials.current_price', 'raw_materials.previous_price',
             'products.current_cost', 'products.current_price',
             'product_variants.current_cost', 'product_variants.current_price',
@@ -89,6 +90,7 @@ final class NumberTypeColumns
         $add(NumberType::Density, [
             'production_orders.density_kg_per_gallon',
             'production_remnants.density_kg_per_gallon',
+            'products.reference_density_kg_per_gallon',
         ]);
 
         $add(NumberType::Quality, [

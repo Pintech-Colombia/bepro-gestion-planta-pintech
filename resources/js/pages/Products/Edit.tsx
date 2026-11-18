@@ -26,6 +26,7 @@ type Props = {
         cif_percentage?: string | null;
         current_price?: string | null;
         price_threshold?: string | null;
+        reference_density_kg_per_gallon: string | null;
         quality_viscosity_lower: number | string | null;
         quality_viscosity_upper: number | string | null;
         quality_fineness_lower: number | string | null;
@@ -62,6 +63,9 @@ export default function ProductsEdit({
                 : '',
             cif_percentage: product.cif_percentage ?? '0',
             price_threshold: product.price_threshold ?? '0',
+            reference_density_kg_per_gallon: toInput(
+                product.reference_density_kg_per_gallon,
+            ),
             quality_viscosity_lower: toInput(product.quality_viscosity_lower),
             quality_viscosity_upper: toInput(product.quality_viscosity_upper),
             quality_fineness_lower: toInput(product.quality_fineness_lower),
