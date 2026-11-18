@@ -228,7 +228,9 @@ class CompleteProductionOrderAction
                 NumberType::Money->ensureFits(
                     $transferUnitCost,
                     'packaging',
-                    __('El costo por unidad con CIF no cabe en el registro. Revisa las unidades envasadas.'),
+                    __('El costo por unidad con CIF de :presentation no cabe en el registro: revisa el CIF del producto y las unidades envasadas.', [
+                        'presentation' => $plan->productVariant->presentation_label,
+                    ]),
                 );
 
                 $batch = FinishedProductBatch::create([

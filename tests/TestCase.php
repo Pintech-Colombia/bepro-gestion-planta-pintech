@@ -7,6 +7,7 @@ namespace Tests;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use Laravel\Fortify\Features;
+use Tests\Support\PartialReadAuditGuard;
 use Tests\Support\TestDatabaseGuard;
 
 abstract class TestCase extends BaseTestCase
@@ -24,6 +25,13 @@ abstract class TestCase extends BaseTestCase
         TestDatabaseGuard::ensureSafe($connection->getDriverName(), $connection->getDatabaseName());
 
         return parent::setUpTraits();
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        PartialReadAuditGuard::register($this->app['events']);
     }
 
     protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void

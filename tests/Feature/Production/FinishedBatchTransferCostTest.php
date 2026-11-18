@@ -195,3 +195,29 @@ it('con dos presentaciones en la misma OP cada lote guarda el suyo', function ()
         ->and($batches[$this->gallon->id]->transfer_unit_cost)->toBe('1179.9000')
         ->and($batches[$bucket->id]->transfer_unit_cost)->toBe('149.5000');
 });
+
+it('si el costo por unidad con CIF no cabe, el aviso nombra la presentación y la causa', function () {
+    // Una etiqueta de 900.000 millones: con el envase y el granel cabe sin CIF, pero con el 15 % pasa del billón.
+    $this->label->update(['current_price' => '900000000000']);
+    $plan = transferCostPlanFor($this->order, $this->gallon, 1);
+
+    $this->post(route('production-orders.complete', $this->order), [
+        'responsible_name' => 'Operario',
+        'density_kg_per_gallon' => 5,
+        'quality_responsible_user_id' => $this->admin->id,
+        'line_adjustment_ids' => [],
+        'remnant_consumption_ids' => [],
+        'ingredients' => [['id' => $this->detail->id, 'actual_quantity' => 52]],
+        'packaging' => [[
+            'id' => $plan->id,
+            'actual_units' => 1,
+            'new_containers_used' => 1,
+            'label_raw_material_id' => $this->label->id,
+            'labels_used' => 1,
+        ]],
+    ])->assertSessionHasErrors([
+        'packaging' => 'El costo por unidad con CIF de Galón no cabe en el registro: revisa el CIF del producto y las unidades envasadas.',
+    ]);
+
+    expect(FinishedProductBatch::query()->where('production_order_id', $this->order->id)->exists())->toBeFalse();
+});
