@@ -34,7 +34,12 @@ La tabla muestra algunos ejemplos. Todo modelo nuevo se audita o se justifica en
 | `ProductionOrder` | Cambios de estado (Pendiente -> Finalizada). |
 | `InventoryMovement` | Registro de trazabilidad de entradas/salidas. |
 
-### 3.2 Eventos Especiales
+### 3.2 No guardar lo leído a medias
+Un modelo auditado **no se guarda** (`update`, `save`, `increment`) después de leerlo con columnas parciales (`select([...])`, `get([...])`, una relación `rawMaterial:id,code`). La auditoría compara lo leído contra la fila guardada y registraría cada atributo auditado que no se leyó como cambio («código: vacío → MP-01»). Si se va a guardar, se lee la fila completa; si la escritura no debe auditarse, se usa `Model::query()->update()` sin instanciar el modelo. Leer a medias para mostrar o calcular sí está bien.
+
+En las pruebas lo vigila `tests/Support/PartialReadAuditGuard.php` (registrada en `tests/TestCase.php`): si se actualiza un modelo con `LogsActivity` que vino de la base sin alguno de los atributos de su `logOnly`, lanza `LogicException` con el modelo y el atributo.
+
+### 3.3 Eventos Especiales
 Además de los cambios en modelos, se registran eventos de seguridad:
 - **Inicios de sesión fallidos**: Capturados mediante listener `LogFailedLoginAttempt`. Registra IP y navegador.
 - **Cambios de Roles**: Registrados explícitamente en el `UserController` cuando se modifica el rol de un usuario.

@@ -17,8 +17,9 @@ class RawMaterialReferencePriceService
     public function syncRawMaterialCurrentPrice(int $rawMaterialId): bool
     {
         return DB::transaction(function () use ($rawMaterialId): bool {
+            // Fila completa: se guarda después y la auditoría compara contra lo leído. Con columnas parciales registraría
+            // como cambio cada atributo auditado que no se leyó (código, unidad, stock mínimo, activo).
             $rawMaterial = RawMaterial::query()
-                ->select(['id', 'current_price', 'previous_price', 'tracks_inventory'])
                 ->lockForUpdate()
                 ->find($rawMaterialId);
 

@@ -11,6 +11,7 @@ use App\Models\Warehouse;
 use App\Services\InventoryService;
 use App\Services\RawMaterialReferencePriceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Activitylog\Models\Activity;
 
 uses(RefreshDatabase::class);
 
@@ -236,4 +237,31 @@ test('reference price sync ignores differences smaller than rounded float precis
     $this->rawMaterial->refresh();
     expect((float) $this->rawMaterial->current_price)->toBe(2500.1234);
     expect((float) $this->rawMaterial->previous_price)->toBe(2000.0);
+});
+
+test('cambiar el precio de referencia solo deja en la auditoría el precio actual', function () {
+    config(['production.raw_material_reference_price_policy' => 'conservative_max']);
+
+    InventoryBatch::create([
+        'raw_material_id' => $this->rawMaterial->id,
+        'warehouse_id' => $this->warehouse->id,
+        'initial_quantity' => 5,
+        'remaining_quantity' => 5,
+        'unit_price' => 5000,
+        'entry_date' => now()->toDateString(),
+        'expiry_date' => null,
+        'lot_number' => 'LOT-AUD-01',
+    ]);
+    Activity::query()->delete();
+
+    $changed = app(RawMaterialReferencePriceService::class)
+        ->syncRawMaterialCurrentPrice((int) $this->rawMaterial->id);
+
+    expect($changed)->toBeTrue();
+
+    // Una fila leída a medias registraría código, unidad, stock mínimo y activo como «vacío → valor».
+    $activity = Activity::query()->where('log_name', 'materias_primas')->where('event', 'updated')->sole();
+    expect(array_keys($activity->properties['attributes']))->toBe(['current_price'])
+        ->and($activity->properties['attributes']['current_price'])->toBe('5000.0000')
+        ->and($activity->properties['old'])->toBe(['current_price' => '3000.0000']);
 });
