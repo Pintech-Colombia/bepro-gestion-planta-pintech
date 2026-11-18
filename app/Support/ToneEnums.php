@@ -12,6 +12,7 @@ use App\Enums\InventoryMovementType;
 use App\Enums\PaintDevelopmentRequestStatus;
 use App\Enums\ProductionOrderStatus;
 use App\Enums\QuotationStatus;
+use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
 use App\Enums\SalesOrderPriority;
 use App\Enums\SalesOrderStatus;
@@ -35,6 +36,7 @@ final class ToneEnums
         PaintDevelopmentRequestStatus::class,
         ProductionOrderStatus::class,
         QuotationStatus::class,
+        RemnantMovementType::class,
         RemnantStatus::class,
         SalesOrderPriority::class,
         SalesOrderStatus::class,

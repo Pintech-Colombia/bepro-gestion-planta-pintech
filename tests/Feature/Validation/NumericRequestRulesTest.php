@@ -70,6 +70,9 @@ function numericRequestFields(): array
         'PlanRemnantConsumptionRequest' => [
             'quantity_kg' => 'remnant_consumptions.quantity_kg',
         ],
+        'CorrectRemnantRequest' => [
+            'quantity_kg' => 'production_remnants.available_quantity_kg',
+        ],
         'StoreFormulaRequest|UpdateFormulaRequest' => [
             'details.*.quantity' => 'formula_details.quantity',
         ],

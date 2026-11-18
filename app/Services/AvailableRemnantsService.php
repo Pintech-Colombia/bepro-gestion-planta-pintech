@@ -8,6 +8,9 @@ use App\Enums\ProductionOrderStatus;
 use App\Models\ProductionOrder;
 use App\Models\ProductionRemnant;
 use App\Models\RemnantConsumption;
+use App\Support\NumberFormat;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Cuánto de cada saldo se puede todavía planear en una OP. El inventario de un saldo se mueve al completar la orden que
@@ -79,16 +82,96 @@ class AvailableRemnantsService
             return [];
         }
 
-        return RemnantConsumption::query()
-            ->planned()
-            ->whereIn('remnant_id', $remnantIds)
-            ->whereHas('targetOrder', fn ($query) => $query->whereIn('status', ProductionOrderStatus::open()))
+        return $this->plannedLines($remnantIds)
             ->groupBy('remnant_id')
             ->selectRaw('remnant_id, SUM(quantity_kg) AS planned_kg')
             ->pluck('planned_kg', 'remnant_id')
             // SQLite suma en coma flotante: se redondea a la escala de la columna (en PostgreSQL ya es exacta).
             ->map(fn (string|int|float $kilos): string => $this->calculator->round($kilos, 4))
             ->all();
+    }
+
+    /**
+     * Que el saldo, bloqueado por quien llama, no quede con menos kilos que los planeados en órdenes abiertas: si no, una
+     * de ellas no podría completarse. 422 en `$errorKey` con `$message`, que recibe `:planned` (kilos) y `:orders`
+     * (las órdenes con lo suyo). Lo usan la baja (a 0 kg) y la corrección.
+     */
+    public function ensureCoversPlanned(ProductionRemnant $lockedRemnant, string $quantityKg, string $errorKey, string $message): void
+    {
+        $orders = $this->plannedOrders([$lockedRemnant->id])[$lockedRemnant->id] ?? [];
+        $plannedKg = $this->plannedTotal($orders);
+
+        if ($plannedKg === null || $this->calculator->cmp($quantityKg, $plannedKg, 4) >= 0) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            $errorKey => __($message, [
+                'planned' => NumberFormat::quantity($plannedKg),
+                'orders' => collect($orders)
+                    ->map(fn (array $order): string => $order['order_number'].' ('.NumberFormat::quantity($order['quantity_kg']).' kg)')
+                    ->implode(', '),
+            ]),
+        ]);
+    }
+
+    /**
+     * Las órdenes abiertas que tienen kilos planeados y sin aplicar de cada saldo, con cuántos, de la más antigua a la más
+     * nueva, en una sola consulta. Lo usan la baja y la corrección (no se baja de lo planeado y el error nombra las OP) y
+     * sus diálogos.
+     *
+     * @param  list<int>  $remnantIds
+     * @return array<int, list<array{order_id: int, order_number: string, quantity_kg: string}>> id del saldo => órdenes
+     */
+    public function plannedOrders(array $remnantIds): array
+    {
+        if ($remnantIds === []) {
+            return [];
+        }
+
+        $planned = [];
+
+        $this->plannedLines($remnantIds)
+            ->join('production_orders', 'production_orders.id', '=', 'remnant_consumptions.target_order_id')
+            ->groupBy('remnant_consumptions.remnant_id', 'production_orders.id', 'production_orders.order_number')
+            ->orderBy('production_orders.id')
+            ->selectRaw('remnant_consumptions.remnant_id, production_orders.id AS order_id, production_orders.order_number, SUM(remnant_consumptions.quantity_kg) AS planned_kg')
+            ->get()
+            ->each(function (RemnantConsumption $row) use (&$planned): void {
+                $planned[(int) $row->getAttribute('remnant_id')][] = [
+                    'order_id' => (int) $row->getAttribute('order_id'),
+                    'order_number' => (string) $row->getAttribute('order_number'),
+                    'quantity_kg' => $this->calculator->round($row->getAttribute('planned_kg'), 4),
+                ];
+            });
+
+        return $planned;
+    }
+
+    /**
+     * La suma de lo planeado en las órdenes de un saldo (`plannedOrders`), o null si no hay nada planeado. La única suma
+     * de esa lista: la usan la regla de la baja y la corrección, y las pantallas de saldos.
+     *
+     * @param  list<array{order_id: int, order_number: string, quantity_kg: string}>  $orders
+     */
+    public function plannedTotal(array $orders): ?string
+    {
+        return $orders === [] ? null : $this->calculator->sum(array_column($orders, 'quantity_kg'), 4);
+    }
+
+    /**
+     * Las líneas planeadas y sin aplicar de órdenes abiertas: una orden cancelada o completada ya no reserva nada. La
+     * única definición de «comprometido» para las sumas por saldo y por orden.
+     *
+     * @param  list<int>  $remnantIds
+     * @return Builder<RemnantConsumption>
+     */
+    private function plannedLines(array $remnantIds): Builder
+    {
+        return RemnantConsumption::query()
+            ->planned()
+            ->whereIn('remnant_consumptions.remnant_id', $remnantIds)
+            ->whereHas('targetOrder', fn ($query) => $query->whereIn('status', ProductionOrderStatus::open()));
     }
 
     private function free(ProductionRemnant $remnant, string $plannedKg): string

@@ -25,7 +25,17 @@ class RemnantDrawdown
 
     public function __construct(
         private readonly DecimalCalculator $calculator,
+        private readonly RemnantLedger $ledger,
     ) {}
+
+    /**
+     * Los galones de `$quantityKg` con el peso por galón del saldo: la conversión de todo lo que cambia sus kilos
+     * (descontar y corregir). Puede ser 0 si los kilos no alcanzan 0,0001 gal.
+     */
+    public function gallonsFor(ProductionRemnant $remnant, string $quantityKg): string
+    {
+        return $this->calculator->div($quantityKg, (string) $remnant->density_kg_per_gallon, 4);
+    }
 
     /**
      * Lo que pasaría si se descontaran `$quantityKg` del saldo tal como está ahora, sin escribir nada. `quantity_gallons`
@@ -37,7 +47,7 @@ class RemnantDrawdown
     {
         $availableKg = (string) $remnant->available_quantity_kg;
         $remainingKg = $this->calculator->sub($availableKg, $quantityKg, 4);
-        $remainingGallons = $this->calculator->div($remainingKg, (string) $remnant->density_kg_per_gallon, 4);
+        $remainingGallons = $this->gallonsFor($remnant, $remainingKg);
 
         $exhausted = $this->calculator->isZero($remainingGallons);
 
@@ -83,9 +93,10 @@ class RemnantDrawdown
 
     /**
      * Descuenta una línea planeada del saldo, ya bloqueado por quien llama, y la marca como aplicada con los kilos,
-     * galones y costo reales. 422 si el saldo ya no alcanza para los kilos planeados.
+     * galones y costo reales; el consumo queda en el historial del saldo a nombre de quien completa la orden. 422 si el
+     * saldo ya no alcanza para los kilos planeados.
      */
-    public function apply(RemnantConsumption $line, ProductionRemnant $lockedRemnant): void
+    public function apply(RemnantConsumption $line, ProductionRemnant $lockedRemnant, int $userId): void
     {
         $plannedKg = (string) $line->quantity_kg;
         $availableKg = (string) $lockedRemnant->available_quantity_kg;
@@ -102,18 +113,22 @@ class RemnantDrawdown
             ]);
         }
 
-        $lockedRemnant->update([
-            'available_quantity_gallons' => $drawdown['remaining_gallons'],
-            'available_quantity_kg' => $drawdown['remaining_kg'],
-            'status' => $drawdown['exhausted'] ? RemnantStatus::Consumed : RemnantStatus::PartiallyConsumed,
-        ]);
-
         $line->update([
             'quantity_kg' => $drawdown['quantity_kg'],
             'quantity_gallons' => $drawdown['quantity_gallons'],
             'consumed_cost' => $drawdown['consumed_cost'],
             'applied_at' => now(),
         ]);
+
+        $this->ledger->consume(
+            $lockedRemnant,
+            $line,
+            consumedKg: $drawdown['quantity_kg'],
+            remainingKg: $drawdown['remaining_kg'],
+            remainingGallons: $drawdown['remaining_gallons'],
+            exhausted: $drawdown['exhausted'],
+            userId: $userId,
+        );
     }
 
     /**

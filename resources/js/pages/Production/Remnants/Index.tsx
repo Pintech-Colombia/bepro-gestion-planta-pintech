@@ -1,4 +1,6 @@
 import { Head } from '@inertiajs/react';
+import { Ban, Scale } from 'lucide-react';
+import { useState } from 'react';
 import type { ComponentProps } from 'react';
 
 import { DataListing } from '@/components/data-listing';
@@ -7,10 +9,17 @@ import { DataTableFilters } from '@/components/data-table-filters';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
+import {
+    CorrectRemnantDialog,
+    WriteOffRemnantDialog,
+} from '@/components/production/remnant-adjust-dialogs';
+import type { RemnantPlannedOrder } from '@/components/production/remnant-adjust-dialogs';
 import { StatusBadge } from '@/components/status-badge';
 import { useFilters } from '@/hooks/use-filters';
-import { index as remnantsIndex } from '@/routes/production/remnants';
-import { show as productionOrderShow } from '@/routes/production-orders';
+import {
+    index as remnantsIndex,
+    show as remnantShow,
+} from '@/routes/production/remnants';
 import type { Paginated } from '@/types/ui';
 
 type RemnantItem = {
@@ -25,6 +34,8 @@ type RemnantItem = {
     available_quantity_kg: number;
     /** Kilos planeados en órdenes abiertas que todavía no se descontaron; null si no hay. */
     committed_quantity_kg: number | null;
+    /** Las órdenes abiertas con kilos planeados del saldo, para los diálogos de baja y corrección. */
+    planned_orders: RemnantPlannedOrder[];
     density_kg_per_gallon: number;
     cost_per_gallon: number | null;
     status: string;
@@ -44,7 +55,8 @@ type Props = {
     warehouseOptions: Option[];
     can: {
         viewCosts: boolean;
-        viewProductionOrders: boolean;
+        /** Dar de baja y corregir kilos (`production_remnants.adjust`). */
+        adjust: boolean;
     };
 };
 
@@ -55,6 +67,13 @@ export default function RemnantsIndex({
     warehouseOptions,
     can,
 }: Props) {
+    const [correctTarget, setCorrectTarget] = useState<RemnantItem | null>(
+        null,
+    );
+    const [writeOffTarget, setWriteOffTarget] = useState<RemnantItem | null>(
+        null,
+    );
+
     const {
         filters: filterState,
         setFilter,
@@ -220,20 +239,48 @@ export default function RemnantsIndex({
                 <DataListing
                     rows={remnants.data}
                     rowKey={(remnant) => remnant.id}
-                    // Los saldos no tienen detalle: la orden de origen abre su OP, si se tiene permiso de verla.
+                    // La orden de origen abre el detalle del saldo, con su historial; desde ahí se llega a la OP.
                     rowHref={(remnant) =>
-                        can.viewProductionOrders
-                            ? productionOrderShow({
-                                  production_order: remnant.source_order_id,
-                              }).url
-                            : undefined
+                        remnantShow({ remnant: remnant.id }).url
                     }
+                    rowLabel={(remnant) => remnant.source_order_number}
                     columns={columns}
+                    actions={(remnant) => [
+                        {
+                            label: 'Corregir kilos',
+                            icon: Scale,
+                            onSelect: () => setCorrectTarget(remnant),
+                            hidden: !can.adjust,
+                        },
+                        {
+                            label: 'Dar de baja',
+                            icon: Ban,
+                            destructive: true,
+                            onSelect: () => setWriteOffTarget(remnant),
+                            hidden: !can.adjust,
+                            // Lo mismo que rechaza el servidor, antes de llenar el formulario.
+                            disabledReason:
+                                remnant.status === 'consumed'
+                                    ? 'No disponible: el saldo está agotado'
+                                    : remnant.planned_orders.length > 0
+                                      ? `No disponible: lo tienen planeado ${remnant.planned_orders.map((order) => order.order_number).join(', ')}`
+                                      : undefined,
+                        },
+                    ]}
                     empty="No hay saldos registrados."
                 />
 
                 <Pagination paginator={remnants} />
             </div>
+
+            <CorrectRemnantDialog
+                remnant={correctTarget}
+                onClose={() => setCorrectTarget(null)}
+            />
+            <WriteOffRemnantDialog
+                remnant={writeOffTarget}
+                onClose={() => setWriteOffTarget(null)}
+            />
         </>
     );
 }

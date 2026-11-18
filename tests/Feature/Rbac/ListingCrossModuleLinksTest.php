@@ -8,6 +8,8 @@ use App\Enums\QuotationStatus;
 use App\Enums\SystemRole;
 use App\Models\Formula;
 use App\Models\PaintDevelopmentRequest;
+use App\Models\ProductionOrder;
+use App\Models\ProductionRemnant;
 use App\Models\QrCode;
 use App\Models\Quotation;
 use App\Models\User;
@@ -48,12 +50,21 @@ it('enlaza el producto de Inventario PT para el admin', function (): void {
         ->assertInertia(fn (AssertableInertia $page) => $page->where('can.viewProducts', true));
 });
 
-it('enlaza la orden de origen de los saldos solo con permiso de ver órdenes', function (User $user, bool $expected): void {
+it('enlaza la orden de origen de un saldo solo con permiso de ver órdenes', function (User $user, bool $expected): void {
+    // El identificador del listado abre el detalle del saldo; la orden de origen se enlaza desde ahí.
+    $order = ProductionOrder::factory()->create(['created_by' => $this->admin->id]);
+    $remnant = ProductionRemnant::factory()->create([
+        'source_order_id' => $order->id,
+        'product_id' => $order->product_id,
+        'warehouse_id' => $order->warehouse_id,
+        'created_by' => $this->admin->id,
+    ]);
+
     $this->actingAs($user)
-        ->get(route('production.remnants.index'))
+        ->get(route('production.remnants.show', $remnant))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Production/Remnants/Index')
+            ->component('Production/Remnants/Show')
             ->where('can.viewProductionOrders', $expected)
         );
 })->with([

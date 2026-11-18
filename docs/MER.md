@@ -442,7 +442,8 @@ Restricciones: `UNIQUE (production_order_id, product_variant_id)`: una presentac
 
 ### 2.5.5 `production_remnants`
 
-Saldos de producción sobrantes de una orden.
+Saldos de producción sobrantes de una orden. Sus kilos disponibles solo cambian con un movimiento de su historial
+(§2.5.7): un saldo agotado por baja queda `consumed` igual que uno usado, y el historial dice cuál fue.
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
@@ -484,7 +485,28 @@ cancelada conserva sus líneas como historial, sin reservar nada.
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
 
-### 2.5.7 `production_costs`
+### 2.5.7 `production_remnant_movements`
+
+Historial de cada saldo de PT: un libro que no se edita ni se borra (un error se corrige con otro movimiento y una
+nota). Lo escribe solo `RemnantLedger`: el nacimiento al completar la OP de origen, un consumo por cada línea aplicada al
+completar otra OP, la baja y la corrección (`production_remnants.adjust`). Los saldos anteriores a la tabla se
+rellenaron con su nacimiento y sus consumos aplicados (`RemnantMovementBackfill`).
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | BIGINT |  | PK |
+| `production_remnant_id` | BIGINT |  | FK → `production_remnants` (RESTRICT). Índice (`production_remnant_id`, `created_at`) |
+| `type` | VARCHAR(20) |  | `RemnantMovementType`: birth, consumption, write_off, correction. Texto, sin CHECK: un tipo nuevo no rehace la restricción |
+| `quantity_kg` | DECIMAL(12,4) |  | Sin signo (el tipo dice si entran o salen), salvo en la corrección: la diferencia con signo entre los kilos pesados y los que tenía |
+| `balance_after_kg` | DECIMAL(12,4) |  | Los kilos disponibles del saldo después del movimiento |
+| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT). La OP donde nació o donde se usó; nula en la baja y la corrección |
+| `remnant_consumption_id` | BIGINT | sí | FK → `remnant_consumptions` (RESTRICT). La línea aplicada, en un consumo |
+| `notes` | TEXT | sí | Obligatoria en la baja y la corrección (10 a 1.000 caracteres) |
+| `user_id` | BIGINT | sí | FK → `users` (RESTRICT). Quién completó la OP, dio de baja o corrigió. Nulo solo en el ajuste que dejó el relleno si los kilos viejos no cuadraban |
+| `created_at` | TIMESTAMP | sí | La fecha del movimiento |
+| `updated_at` | TIMESTAMP | sí |  |
+
+### 2.5.8 `production_costs`
 
 Historial de costos calculados.
 
@@ -501,7 +523,7 @@ Historial de costos calculados.
 | `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT); UNIQUE |
 | `unit_cost` | DECIMAL(16,4) | sí |  |
 
-### 2.5.8 `shrink_wraps`
+### 2.5.9 `shrink_wraps`
 
 Registros de termoencogido (3.8), auditados (`termoencogidos`; sin el costo, que se calcula después de crear el
 registro). El operario elige una OP **completada en los últimos 6 meses** (`ShrinkWrap::ORDER_WINDOW_MONTHS`), un tipo
@@ -526,7 +548,7 @@ lote. Inmutables: un error se corrige con un movimiento opuesto y una nota.
 
 Índices: `wrapped_at` · `production_order_id` · `shrink_wrap_type_id`.
 
-### 2.5.9 `shrink_wrap_items`
+### 2.5.10 `shrink_wrap_items`
 
 Lo que gastó un termoencogido de cada materia prima: **copia** de la receta del tipo al registrarlo (editar el tipo
 después no cambia el historial), lo descontado y su costo.
@@ -1009,6 +1031,7 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 | `FinishedInventoryMovementReason` | `finished_inventory_movements.reason` | production, return, adjustment, sale, sample, transfer, transformation, deterioration |
 | `ProductionOrderStatus` | `production_orders.status` | pending, in_progress, pending_review, completed, cancelled |
 | `RemnantStatus` | `production_remnants.status` | available, partially_consumed, consumed |
+| `RemnantMovementType` | `production_remnant_movements.type` (texto, sin CHECK) | birth, consumption, write_off, correction |
 | `QrDocumentType` | `qr_documents.document_type`, `product_documents.document_type` | technical_data_sheet, safety_data_sheet, quality_certificate |
 | `QuotationStatus` | `quotations.status` | draft, sent, accepted, rejected |
 | `QuotationValidity` | `quotations.validity_days` | 30, 45, 60 |

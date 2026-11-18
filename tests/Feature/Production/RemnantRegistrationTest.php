@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\ProductionOrderStatus;
+use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
 use App\Models\FinishedInventoryMovement;
 use App\Models\Formula;
@@ -188,6 +189,22 @@ it('creates a remnant when surplus gallons are reported', function () {
         ->and($remnant->status)->toBe(RemnantStatus::Available)
         ->and($remnant->notes)->toBe('Quedó en el tanque')
         ->and($remnant->created_by)->toBe($this->user->id);
+});
+
+it('el saldo nace con su movimiento en el historial', function () {
+    $this->post(route('production-orders.complete', $this->order), completePayload($this, [
+        'remnant_quantity_kg' => '40.25',
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+
+    $remnant = ProductionRemnant::firstOrFail();
+    $movement = $remnant->movements()->sole();
+
+    expect($movement->type)->toBe(RemnantMovementType::Birth)
+        ->and($movement->quantity_kg)->toBe('40.2500')
+        ->and($movement->balance_after_kg)->toBe($remnant->available_quantity_kg)
+        ->and($movement->production_order_id)->toBe($this->order->id)
+        ->and($movement->user_id)->toBe($this->user->id)
+        ->and($movement->notes)->toBeNull();
 });
 
 it('calculates remnant gallons from the weighed kilos and the density', function () {
