@@ -216,7 +216,7 @@ it('si el costo por unidad con CIF no cabe, el aviso nombra la presentación y l
             'labels_used' => 1,
         ]],
     ])->assertSessionHasErrors([
-        'packaging' => 'El costo por unidad con CIF de Galón no cabe en el registro: revisa el CIF del producto y las unidades envasadas.',
+        'packaging' => 'El costo por unidad con CIF de Galón no cabe en el registro: revisa los precios del granel, el envase y la etiqueta, y el CIF del producto.',
     ]);
 
     expect(FinishedProductBatch::query()->where('production_order_id', $this->order->id)->exists())->toBeFalse();

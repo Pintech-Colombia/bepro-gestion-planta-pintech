@@ -22,9 +22,10 @@ final class PartialReadAuditGuard
 {
     public static function register(Dispatcher $events): void
     {
-        // Solo cuenta un modelo que vino de la base. `wasRecentlyCreated` no basta para saberlo: `actingAs()` lo apaga en
-        // el usuario de la prueba, y un modelo recién creado tiene como original solo lo que se le dio al crearlo (sin
-        // las columnas que quedaron en su valor por defecto), lo que no es una lectura parcial.
+        // Solo cuenta un modelo que vino de la base (evento `retrieved`). `wasRecentlyCreated` no sirve para saberlo:
+        // `actingAs()` lo apaga en el usuario de la prueba. Un modelo recién creado tiene como original solo lo que se le
+        // dio al crearlo; ese caso (crear y modificar en la misma petición) queda para el arreglo de fondo en producción
+        // (pendiente en «Auditoría de modelos»).
         $retrieved = new WeakMap;
 
         $events->listen('eloquent.retrieved: *', function (string $event, array $payload) use ($retrieved): void {
@@ -38,7 +39,7 @@ final class PartialReadAuditGuard
         $events->listen('eloquent.updating: *', function (string $event, array $payload) use ($retrieved): void {
             $model = $payload[0] ?? null;
 
-            if ($model instanceof Model && ! $model->wasRecentlyCreated && isset($retrieved[$model])) {
+            if ($model instanceof Model && isset($retrieved[$model])) {
                 self::ensureFullyRead($model);
             }
         });
@@ -52,8 +53,9 @@ final class PartialReadAuditGuard
 
         $original = $model->getRawOriginal();
 
+        // `attributesToBeLogged()` es la lista que usa Spatie: resuelve `logOnly`, `logFillable`, `logAll` y `logExcept`.
         /** @var LogsActivity&Model $model */
-        foreach ($model->getActivitylogOptions()->logAttributes as $attribute) {
+        foreach ($model->attributesToBeLogged() as $attribute) {
             // `*` y los atributos de una relación (`unidad.nombre`) no son columnas del modelo.
             if ($attribute === '*' || str_contains($attribute, '.')) {
                 continue;
