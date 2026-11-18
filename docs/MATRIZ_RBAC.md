@@ -118,7 +118,7 @@ combinación, se crea un rol nuevo.
 | | `shrink_wrap_types.manage` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 (3.8) Crear, editar, desactivar y eliminar los tipos de termoencogido y su receta, en Configuración → Catálogos (la pestaña se ve con `catalogs.view`, del que depende). No es reservado: a diferencia de `catalogs.*`, también lo tiene Admin. |
 | **Movimientos MP** | `inventory_movements.view` | [x] | [x] | [x] | [x] | [ ] | [ ] | ⚠️ hoy Operador no los ve. |
 | | `inventory_movements.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción puede crear. Inmutables: no existen `edit` ni `delete` (principio 5). |
-| **Inventario PT** | `finished_inventory.view` | [x] | [x] | [x] | [x] | [x] | [x] | ⚠️ hoy Operador no lo ve. La vista no muestra costos ni precios. |
+| **Inventario PT** | `finished_inventory.view` | [x] | [x] | [x] | [x] | [x] | [x] | ⚠️ hoy Operador no lo ve. Sin precios; el costo de traslado de cada lote solo con `costs.view` (principio 1) y la OP del lote enlaza solo con `production_orders.view`. |
 | | `finished_inventory_movements.view` | [x] | [x] | [x] | [ ] | [ ] | [x] | 🔁 key renombrada (`finished_inventory.movements.view` → dos segmentos, como el resto). |
 | | `finished_inventory_movements.create` | [x] | [x] | [x] | [ ] | [ ] | [x] | Inmutables (ya lo son hoy). |
 | **Cotizaciones** | `quotations.view_own` | [x] | [x] | [ ] | [ ] | [x] | [x] | Solo las propias (`created_by`). |
@@ -246,13 +246,13 @@ Para comunicar a los usuarios antes de desplegar.
 | `quotations.delete` | Hoy no tiene ruta. Se rechaza por estado; borrarla dejaría un hueco en el consecutivo. |
 | `products.desactive` | Typo → `products.deactivate`. |
 
-**Permisos que propuse en el plan y descarté tras tus notas:** `users.deactivate` y `users.manage_signatures`
-(se quedan en `users.edit`), `roles.assign_permissions` (redundante: roles es 100 % SuperAdmin),
-`alerts.receive_notifications` (sigue descartado: la campana se muestra a todos y sus avisos personales no dependen de
-permisos; `alerts.view` solo decide si se ven las alertas; `sales_orders.receive_approval_requests` **elige
-destinatarios** de un aviso, no da visibilidad), `finished_inventory.view_costs` (la vista no muestra
-costos), `quotations.view_costs` (quien ve cotizaciones ya puede ver precios), `profile.delete_own` (se elimina la
-función), `inventory_movements.edit/delete` (inmutables), `production_orders.delete` (no existe).
+**Permisos que propuse en el plan y descarté tras tus notas:** `users.deactivate` y `users.manage_signatures` (se quedan
+en `users.edit`), `roles.assign_permissions` (redundante: roles es 100 % SuperAdmin), `alerts.receive_notifications`
+(sigue descartado: la campana se muestra a todos y sus avisos personales no dependen de permisos; `alerts.view` solo
+decide si se ven las alertas; `sales_orders.receive_approval_requests` **elige destinatarios** de un aviso, no da
+visibilidad), `finished_inventory.view_costs` (el costo de traslado de los lotes lo decide `costs.view`, principio 1),
+`quotations.view_costs` (quien ve cotizaciones ya puede ver precios), `profile.delete_own` (se elimina la función),
+`inventory_movements.edit/delete` (inmutables), `production_orders.delete` (no existe).
 
 ## 7. Decisiones
 

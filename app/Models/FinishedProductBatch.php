@@ -116,6 +116,7 @@ class FinishedProductBatch extends Model
      */
     public function scopeFifoOrder(Builder $query): void
     {
-        $query->orderBy('entry_date')->orderBy('id');
+        // Columnas calificadas: el orden sirve también en consultas que unen el stock y la OP (el listado por lote).
+        $query->orderBy($query->qualifyColumn('entry_date'))->orderBy($query->qualifyColumn('id'));
     }
 }
