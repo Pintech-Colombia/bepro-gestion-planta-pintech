@@ -98,7 +98,9 @@ jobs:
     needs: [image, scan]
     if: github.ref == 'refs/heads/develop' || needs.image.outputs.built == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # pintech-deploy puede tardar hasta 10 min solo en la descarga (3 intentos de 3 min y sus pausas) más migración y dos
+    # esperas de salud: con 15 min, GitHub podía cortar un despliegue que el servidor sí termina.
+    timeout-minutes: 25
     environment:
       name: staging
       url: https://staging.beprocoatingserp.com
@@ -143,7 +145,8 @@ jobs:
       !cancelled() && github.ref == 'refs/heads/main' && needs.scan.result == 'success'
       && (needs.staging.result == 'success' || needs.staging.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Como staging, más la copia de la base antes de migrar (ver el comentario del job de staging).
+    timeout-minutes: 25
     # El entorno exige tu aprobación: el job espera tu clic en GitHub antes de empezar.
     environment:
       name: production

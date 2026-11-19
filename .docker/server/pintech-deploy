@@ -8,7 +8,8 @@
 # Pasos:
 #   1. Valida los argumentos con una lista cerrada. Cualquier otra cosa se rechaza.
 #   2. Un despliegue a la vez por entorno (candado).
-#   3. Baja la imagen por digest.
+#   3. Baja la imagen por digest. Hasta 3 intentos, con pausas de 15 y 45 s: un corte momentáneo de la red no aborta el
+#      despliegue. Cada intento fallido deja una línea en la salida y su error en el log del despliegue.
 #   4. Solo en producción: copia de la base (pintech-backup) antes de migrar.
 #   5. Migra y sincroniza roles y permisos en un contenedor de un solo uso con la imagen NUEVA. Si algo falla, se
 #      detiene: los contenedores viejos siguen atendiendo. PostgreSQL deshace la migración fallida.
@@ -19,8 +20,14 @@
 #      imagen anterior y termina con error.
 #   7. Anota la imagen en el `.env` del entorno (APP_IMAGE) y el resultado en deploys.log.
 #
-# Volver atrás a mano: `pintech-deploy <entorno> <digest anterior>` (está en deploys.log). Solo vuelve el código: la
-# base no se deshace. Por eso las migraciones son siempre compatibles hacia atrás.
+# Todo fallo después del candado también queda en deploys.log con su estado (fallo-descarga, fallo-postgres, fallo-copia,
+# fallo-migracion, fallo-salud, revertido, revertido-sin-salud, fallo-resto). Un error que ninguno de esos pasos prevé
+# (disco lleno, permisos) queda como fallo-inesperado. La salida completa de cada despliegue queda en deploy-logs/ (los
+# 30 más nuevos) y last-deploy.log es un enlace al último.
+#
+# Volver atrás a mano: `pintech-deploy <entorno> <digest>`, con el digest de la última fila `ok` u `ok-con-avisos` de
+# deploys.log anterior a la actual (las filas de fallo son imágenes que nunca quedaron en servicio). Solo vuelve el
+# código: la base no se deshace. Por eso las migraciones son siempre compatibles hacia atrás.
 set -Eeuo pipefail
 umask 077
 
@@ -28,6 +35,13 @@ umask 077
 readonly ROOT="${PINTECH_ROOT:-/srv/pintech}"
 readonly IMAGE_REPO="${PINTECH_IMAGE_REPO:-ghcr.io/pintech-colombia/pintech-os}"
 readonly HEALTH_TIMEOUT="${PINTECH_HEALTH_TIMEOUT:-90}"
+readonly PULL_ATTEMPTS="${PINTECH_PULL_ATTEMPTS:-3}"
+# Pausas entre intentos de descarga, en segundos: la primera va tras el intento 1. Si faltan, se repite la última.
+readonly PULL_DELAYS="${PINTECH_PULL_DELAYS:-15 45}"
+# Tope de cada intento, en segundos: una descarga colgada (sin error ni avance) se corta y se reintenta. Con los valores
+# por defecto el peor caso de la descarga es 3 × 180 + 15 + 45 = 600 s, dentro del límite del job en cd.yml.
+readonly PULL_TIMEOUT="${PINTECH_PULL_TIMEOUT:-180}"
+readonly DEPLOY_LOGS_KEPT=30
 readonly APP_SERVICES=(web queue scheduler)
 
 usage() {
@@ -46,6 +60,8 @@ esac
 readonly DIR="$ROOT/$ENVIRONMENT"
 readonly NEW_IMAGE="$IMAGE_REPO@$DIGEST"
 readonly DEPLOYS_LOG="$DIR/deploys.log"
+readonly DEPLOY_LOGS_DIR="$DIR/deploy-logs"
+readonly LAST_DEPLOY_LOG="$DIR/last-deploy.log"
 
 log() { printf '%s [%s] %s\n' "$(date -u +%FT%TZ)" "$ENVIRONMENT" "$*"; }
 die() {
@@ -56,6 +72,8 @@ die() {
 for file in compose.yaml .env tunnel.env; do
     [[ -f "$DIR/$file" ]] || die "falta $DIR/$file"
 done
+[[ "$PULL_ATTEMPTS" =~ ^[1-9][0-9]*$ && "$PULL_DELAYS" =~ ^[0-9]+( [0-9]+)*$ && "$PULL_TIMEOUT" =~ ^[1-9][0-9]*$ ]] ||
+    die "PINTECH_PULL_ATTEMPTS, PINTECH_PULL_DELAYS o PINTECH_PULL_TIMEOUT no válidos"
 
 # Docker Compose del entorno, con la imagen indicada (la variable del proceso manda sobre el `.env`).
 compose_with() {
@@ -64,10 +82,56 @@ compose_with() {
     APP_IMAGE="$image" docker compose --project-directory "$DIR" -f "$DIR/compose.yaml" -p "pintech-$ENVIRONMENT" "$@"
 }
 
+# 1 cuando este despliegue ya dejó su fila en deploys.log: on_exit no anota otra.
+RECORDED=0
+
 record() {
     local status="$1" revision
+    RECORDED=1
     revision="$(docker image inspect "$NEW_IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
     printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$DIGEST" "${revision:-?}" "$status" >>"$DEPLOYS_LOG"
+}
+
+# Si el script termina con error sin haber anotado su estado (un paso que falla por algo no previsto, como el disco lleno
+# o un permiso), deja la fila fallo-inesperado. Se instala después del candado: un despliegue rechazado porque ya hay
+# otro en curso no es un intento de esa imagen.
+on_exit() {
+    local code=$?
+    if ((code != 0 && RECORDED == 0)); then
+        record "fallo-inesperado" || true
+        log "ERROR: terminó con código $code sin registrar su estado: detalle en last-deploy.log" >&2 || true
+    fi
+}
+
+# Baja la imagen nueva hasta PULL_ATTEMPTS veces, cada intento con un tope de PULL_TIMEOUT s. La salida de `docker pull`
+# (también su error) queda en el log del despliegue; a GitHub solo llega la línea de log() de cada intento fallido.
+pull_with_retries() {
+    local attempt delay delays reason code
+    read -r -a delays <<<"$PULL_DELAYS"
+    for ((attempt = 1; ; attempt++)); do
+        code=0
+        timeout "$PULL_TIMEOUT" docker pull --quiet "$NEW_IMAGE" || code=$?
+        ((code == 0)) && return 0
+        # timeout devuelve 124 cuando corta el comando por tiempo.
+        reason=""
+        ((code == 124)) && reason=" (sin terminar en $PULL_TIMEOUT s)"
+        if ((attempt >= PULL_ATTEMPTS)); then
+            log "intento $attempt de $PULL_ATTEMPTS falló$reason"
+            return 1
+        fi
+        delay="${delays[attempt - 1]:-${delays[-1]}}"
+        log "intento $attempt de $PULL_ATTEMPTS falló$reason; reintento en $delay s"
+        sleep "$delay"
+    done
+}
+
+# Deja solo los DEPLOY_LOGS_KEPT logs más nuevos. Sus nombres empiezan por la fecha, así que el orden alfabético es el de
+# antigüedad. anterior.log (el último log del script viejo) no entra en la cuenta.
+prune_deploy_logs() {
+    local logs=("$DEPLOY_LOGS_DIR"/[0-9]*.log)
+    local excess=$((${#logs[@]} - DEPLOY_LOGS_KEPT))
+    ((excess > 0)) || return 0
+    rm -f -- "${logs[@]:0:excess}"
 }
 
 # Reemplaza la línea APP_IMAGE del `.env` sin tocar el resto, conservando dueño y permisos.
@@ -83,10 +147,23 @@ save_current_image() {
 
 exec 9>"$DIR/.deploy.lock"
 flock -n 9 || die "ya hay un despliegue en curso en $ENVIRONMENT"
+trap on_exit EXIT
 
-# La salida completa queda también aquí: GitHub solo muestra las líneas de log(), porque sus registros son públicos.
-# Si se corta la conexión con quien lo llamó, tee sigue escribiendo y el despliegue termina en vez de quedar a medias.
-exec > >(tee -i --output-error=warn-nopipe "$DIR/last-deploy.log") 2>&1
+# La salida completa queda también en un log propio de este despliegue: GitHub solo muestra las líneas de log(), porque
+# sus registros son públicos. Si se corta la conexión con quien lo llamó, tee sigue escribiendo y el despliegue termina
+# en vez de quedar a medias. last-deploy.log apunta al log nuevo antes de escribir nada: si algo falla temprano, el
+# enlace ya lleva a su detalle. El script anterior dejaba last-deploy.log como archivo: se guarda como anterior.log.
+mkdir -p "$DEPLOY_LOGS_DIR"
+if [[ -f "$LAST_DEPLOY_LOG" && ! -L "$LAST_DEPLOY_LOG" ]]; then
+    mv -f "$LAST_DEPLOY_LOG" "$DEPLOY_LOGS_DIR/anterior.log"
+fi
+DEPLOY_LOG_NAME="$(date -u +%Y%m%dT%H%M%SZ)-${DIGEST:7:12}.log"
+readonly DEPLOY_LOG_NAME
+# Se crea aquí y no lo deja a tee, que lo abre en paralelo: prune_deploy_logs tiene que contarlo.
+: >>"$DEPLOY_LOGS_DIR/$DEPLOY_LOG_NAME"
+ln -sfn "deploy-logs/$DEPLOY_LOG_NAME" "$LAST_DEPLOY_LOG"
+exec > >(tee -i -a --output-error=warn-nopipe "$DEPLOY_LOGS_DIR/$DEPLOY_LOG_NAME") 2>&1
+prune_deploy_logs
 
 PREVIOUS_IMAGE="$(grep -E '^APP_IMAGE=' "$DIR/.env" | tail -n 1 | cut -d= -f2- || true)"
 readonly PREVIOUS_IMAGE
@@ -94,14 +171,23 @@ log "imagen anterior: ${PREVIOUS_IMAGE:-ninguna (primer despliegue)}"
 log "imagen nueva:    $NEW_IMAGE"
 
 log "bajando la imagen"
-docker pull --quiet "$NEW_IMAGE" >/dev/null || die "no se pudo bajar $NEW_IMAGE"
+if ! pull_with_retries; then
+    record "fallo-descarga"
+    die "no se pudo bajar $NEW_IMAGE tras $PULL_ATTEMPTS intentos: detalle en last-deploy.log"
+fi
 
 log "levantando PostgreSQL (no cambia si ya corre)"
-compose_with "$NEW_IMAGE" up -d --wait --wait-timeout "$HEALTH_TIMEOUT" postgres || die "PostgreSQL no quedó sano"
+if ! compose_with "$NEW_IMAGE" up -d --wait --wait-timeout "$HEALTH_TIMEOUT" postgres; then
+    record "fallo-postgres"
+    die "PostgreSQL no quedó sano"
+fi
 
 if [[ "$ENVIRONMENT" == prod ]]; then
     log "copia de la base antes de migrar"
-    "$(dirname "$(readlink -f "$0")")/pintech-backup" prod predeploy || die "falló la copia previa: no se migró nada"
+    if ! "$(dirname "$(readlink -f "$0")")/pintech-backup" prod predeploy; then
+        record "fallo-copia"
+        die "falló la copia previa: no se migró nada"
+    fi
 fi
 
 log "migraciones, roles y permisos con la imagen nueva (los contenedores actuales siguen atendiendo)"
