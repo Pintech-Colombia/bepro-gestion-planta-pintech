@@ -120,9 +120,9 @@ test('crear una fórmula deja una actividad por línea con producto, versión, c
         ->and($created->every(fn (Activity $activity) => (int) $activity->causer_id === $this->admin->id))->toBeTrue();
 
     expect($created->map(fn (Activity $activity) => $activity->properties['attributes'])->all())->toBe([
-        ['formula_id' => $formula->id, 'raw_material_id' => $first->id, 'quantity' => '2.0000', 'unit_of_measure_id' => $this->unit->id],
-        ['formula_id' => $formula->id, 'raw_material_id' => $second->id, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id],
-        ['formula_id' => $formula->id, 'raw_material_id' => $third->id, 'quantity' => '0.2500', 'unit_of_measure_id' => $this->unit->id],
+        ['formula_id' => $formula->id, 'raw_material_id' => $first->id, 'product_id' => null, 'costing_basis' => null, 'costing_variant_id' => null, 'quantity' => '2.0000', 'unit_of_measure_id' => $this->unit->id],
+        ['formula_id' => $formula->id, 'raw_material_id' => $second->id, 'product_id' => null, 'costing_basis' => null, 'costing_variant_id' => null, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id],
+        ['formula_id' => $formula->id, 'raw_material_id' => $third->id, 'product_id' => null, 'costing_basis' => null, 'costing_variant_id' => null, 'quantity' => '0.2500', 'unit_of_measure_id' => $this->unit->id],
     ]);
 });
 
@@ -173,7 +173,7 @@ test('quitar un paso del medio deja un solo borrado, sin cambios en los pasos qu
         ->and($activities->first()->event)->toBe('deleted')
         ->and($activities->first()->description)->toBe('Línea de fórmula "PINTURA AUDITADA v1 · paso 2 · RM-AUD-02" eliminada')
         ->and($activities->first()->properties['old'])->toBe([
-            'formula_id' => $formula->id, 'raw_material_id' => $second->id, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id,
+            'formula_id' => $formula->id, 'raw_material_id' => $second->id, 'product_id' => null, 'costing_basis' => null, 'costing_variant_id' => null, 'quantity' => '3.5000', 'unit_of_measure_id' => $this->unit->id,
         ])
         // La tercera línea es la misma (se corrió al paso 2), no una nueva.
         ->and($formula->details()->get()->map(fn (FormulaDetail $line) => [$line->id === $thirdLineId, $line->step_order, $line->raw_material_id])->all())

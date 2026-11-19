@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Enums\ProductionOrderStatus;
 use App\Enums\RemnantStatus;
 use App\Models\FinishedInventory;
+use App\Models\FormulaDetail;
 use App\Models\InventoryBatch;
 use App\Models\Product;
 use App\Models\ProductionOrder;
@@ -56,6 +57,20 @@ class DeactivationGuardService
 
         if ($plannedInOpenOrder) {
             return __('No se puede desactivar la presentación: una orden de producción en curso la va a envasar.');
+        }
+
+        // Una fórmula activa la usa para costear su línea de producto (P14): sin ella, esa fórmula quedaría sin costo.
+        $costingFormula = FormulaDetail::query()
+            ->where('costing_variant_id', $variant->id)
+            ->whereHas('formula', fn ($query) => $query->where('is_active', true))
+            ->with('formula.product:id,name')
+            ->first();
+
+        if ($costingFormula !== null) {
+            return __('No se puede desactivar la presentación: la fórmula v:version de :product la usa para costear un ingrediente. Cámbiala allí primero.', [
+                'version' => $costingFormula->formula->version,
+                'product' => $costingFormula->formula->product?->name,
+            ]);
         }
 
         return null;

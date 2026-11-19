@@ -254,15 +254,21 @@ class ProductController extends Controller
             $product->update($validated);
 
             if ($product->wasChanged('cif_percentage') || $product->wasChanged('price_threshold')) {
-                $costRecord = $this->productionCostRecalculationService->recalculateForProduct(
+                // `OrLog`: con productos en su fórmula, una línea que no se puede costear (sin peso, sin costo del producto
+                // fuente) no tumba el guardado; queda en el log y se reprecia con el costo que ya tiene.
+                $costRecord = $this->productionCostRecalculationService->recalculateForProductOrLog(
                     (int) $product->id,
-                    forcePriceRefresh: true
+                    ['cif_or_threshold_changed' => (int) $product->id],
+                    forcePriceRefresh: true,
                 );
 
                 // Sin fórmula de referencia: el precio del producto y el de sus presentaciones con el costo que ya tiene.
                 if ($costRecord === null) {
                     $this->productionCostRecalculationService->repriceProductWithoutFormula($product);
                 }
+            } elseif ($product->wasChanged('reference_density_kg_per_gallon')) {
+                // El peso de referencia mueve el costo de los productos que lo llevan en su fórmula (P13).
+                $this->productionCostRecalculationService->dispatchDependentsOf((int) $product->id);
             }
 
             return null;

@@ -81,6 +81,20 @@ El plan de la OP no usa esta cuenta: calcula con el factor de 6 decimales que gu
 (`FormulaService::orderLineRequirement()`), el mismo con que el servidor convierte el consumo real
 (`ProductionOrderLineUnits`). Con L↔galón difiere un 0,0002 % del costo de lista.
 
+**Producto como ingrediente (PT consumible).** Una línea de producto vale sus kilos × su **costo teórico por kilo**
+(`ProductLineTheoreticalCost`): sale de la fórmula de referencia del producto fuente a precios de hoy, **con su CIF y sin
+su margen** (el margen se gana una vez, en la venta del producto final):
+- a granel: `current_cost` del producto (granel por galón) × (1 + CIF) ÷ peso por galón;
+- con una presentación: `current_cost` de la presentación (granel × galones + envase + etiqueta) × (1 + CIF) ÷
+  (galones × peso por galón).
+
+Peso por galón: el de referencia del producto (`reference_density_kg_per_gallon`); si no tiene, la densidad de su última
+OP completada. Si no se puede calcular (sin forma de costeo, sin peso o sin costo del producto fuente), el producto que la
+lleva conserva su costo (`recalculateForProductOrLog`) y la ficha de la fórmula muestra el motivo. Se recalcula **en
+cadena y en segundo plano** (`RecalculateProductDependentCosts`): MP → blanco → RAL 7016 → …; al cambiar el costo del
+producto fuente, sus presentaciones, su CIF, su peso de referencia o su último lote. Los ciclos se rechazan al guardar
+o activar la fórmula (`FormulaProductGraph`). Una fórmula con productos todavía no se produce (la OP llega en el PR E).
+
 Costo teórico de una presentación: `(granel × presentación + envase + etiqueta) × (1 + CIF)` (`VariantPricingService`).
 El precio solo cambia si el costo varía más que el umbral del producto.
 

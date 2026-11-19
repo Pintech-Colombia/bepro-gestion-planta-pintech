@@ -3,10 +3,15 @@ import type { FormEvent } from 'react';
 
 import { FormPage } from '@/components/form-page';
 import {
+    costingFromSaved,
     FormulaForm,
     formulaPayload,
 } from '@/components/formulas/formula-form';
-import type { FormulaFormData } from '@/components/formulas/formula-form';
+import type {
+    FormulaFormData,
+    IngredientProduct,
+    UnitOption,
+} from '@/components/formulas/formula-form';
 import { PageHeader } from '@/components/page-header';
 import { formatForInput } from '@/lib/formatters';
 import { formulaCrumb } from '@/lib/formula-name';
@@ -19,7 +24,6 @@ import {
 
 type RawMaterial = { id: number; code: string };
 type ProductOption = { id: number; name: string };
-type UnitOption = { id: number; name: string; symbol: string };
 
 type Props = {
     formula: {
@@ -32,13 +36,17 @@ type Props = {
             name: string;
         };
         details: Array<{
-            raw_material_id: number;
+            raw_material_id: number | null;
+            product_id: number | null;
+            costing_basis: string | null;
+            costing_variant_id: number | null;
             quantity: string;
             unit_of_measure_id: number;
         }>;
     };
     products: ProductOption[];
     rawMaterials: RawMaterial[];
+    ingredientProducts: IngredientProduct[];
     units: UnitOption[];
 };
 
@@ -46,6 +54,7 @@ export default function FormulasEdit({
     formula,
     products,
     rawMaterials,
+    ingredientProducts,
     units,
 }: Props) {
     const { data, setData, processing, errors, clearErrors } =
@@ -54,7 +63,17 @@ export default function FormulasEdit({
             name: formula.name ?? '',
             notes: formula.notes ?? '',
             details: formula.details.map((detail) => ({
-                raw_material_id: String(detail.raw_material_id),
+                kind: detail.product_id !== null ? 'product' : 'raw_material',
+                raw_material_id:
+                    detail.raw_material_id !== null
+                        ? String(detail.raw_material_id)
+                        : '',
+                product_id:
+                    detail.product_id !== null ? String(detail.product_id) : '',
+                costing: costingFromSaved(
+                    detail.costing_basis,
+                    detail.costing_variant_id,
+                ),
                 quantity: formatForInput(detail.quantity),
                 unit_of_measure_id: String(detail.unit_of_measure_id),
             })),
@@ -87,6 +106,7 @@ export default function FormulasEdit({
                     processing={processing}
                     products={products}
                     rawMaterials={rawMaterials}
+                    ingredientProducts={ingredientProducts}
                     units={units}
                     heading="Información General"
                     description="Ajusta los ingredientes por paso. Si esta fórmula ya fue usada en órdenes, la edición se bloquea para proteger el histórico."

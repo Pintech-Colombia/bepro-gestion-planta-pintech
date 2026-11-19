@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/hooks/use-confirm';
+import { formatNumber } from '@/lib/formatters';
 import { formulaCrumb } from '@/lib/formula-name';
 import { breadcrumbHref } from '@/lib/navigation';
 import {
@@ -33,8 +34,37 @@ type FormulaLine = {
     step_order: number;
     quantity: string;
     raw_material?: { id: number; code: string } | null;
+    /** Un producto como ingrediente (PT consumible), con cómo se costea (P14). */
+    product?: { id: number; name: string } | null;
+    costing_basis: string | null;
+    /** «Se costea como» armado en el servidor (enum o presentación); nulo si falta elegirlo. */
+    costing_label: string | null;
+    costing_variant?: { id: number; presentation_label: string } | null;
     unit_of_measure?: { name: string; symbol: string } | null;
 };
+
+/** Costo teórico por kilo de una línea de producto (P13): con su desglose, o el motivo por el que no se puede. */
+type ProductLineCost = {
+    cost_per_kg: string | null;
+    bulk_per_kg: string | null;
+    packaging_per_kg: string | null;
+    density: string | null;
+    density_source: 'reference' | 'last_lot' | null;
+    density_order_number: string | null;
+    reason: string | null;
+};
+
+function densityLabel(cost: ProductLineCost): string | null {
+    if (cost.density === null) {
+        return null;
+    }
+
+    const value = `${formatNumber(cost.density, { maxDecimals: 4, trimTrailingZeros: true })} kg/gal`;
+
+    return cost.density_source === 'reference'
+        ? `${value} · referencia`
+        : `${value} · último lote ${cost.density_order_number ?? ''}`.trim();
+}
 
 type Props = {
     returnTo?: string | null;
@@ -55,15 +85,25 @@ type Props = {
         created_by?: { name: string } | null;
         has_production_orders: boolean;
     };
+    /** Por id de línea; solo llega con `costs.view`. */
+    productLineCosts: Record<number, ProductLineCost>;
     can: {
         update: boolean;
         activate: boolean;
         delete: boolean;
         viewProduct: boolean;
+        viewCosts: boolean;
     };
 };
 
-export default function FormulasShow({ formula, can }: Props) {
+export default function FormulasShow({
+    formula,
+    productLineCosts,
+    can,
+}: Props) {
+    const hasProductLines = formula.details.some(
+        (detail) => detail.product != null,
+    );
     const confirm = useConfirm();
 
     const handleDelete = async () => {
@@ -268,11 +308,38 @@ export default function FormulasShow({ formula, can }: Props) {
                                 className: 'w-14 text-muted-foreground',
                             },
                             {
-                                key: 'code',
-                                header: 'Código MP',
+                                key: 'ingredient',
+                                header: 'Ingrediente',
                                 cell: (detail) =>
-                                    detail.raw_material?.code ?? null,
-                                className: 'font-mono font-medium',
+                                    detail.product ? (
+                                        <div className="space-y-0.5">
+                                            <div className="font-medium">
+                                                {can.viewProduct ? (
+                                                    <RecordLink
+                                                        href={
+                                                            productsShow(
+                                                                detail.product
+                                                                    .id,
+                                                            ).url
+                                                        }
+                                                    >
+                                                        {detail.product.name}
+                                                    </RecordLink>
+                                                ) : (
+                                                    detail.product.name
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                Se costea como:{' '}
+                                                {detail.costing_label ??
+                                                    'Sin elegir'}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <span className="font-mono font-medium">
+                                            {detail.raw_material?.code}
+                                        </span>
+                                    ),
                             },
                             {
                                 // La unidad va con la cifra («12,5 kg»): sin columna aparte, la tabla cabe a 390 px.
@@ -290,6 +357,62 @@ export default function FormulasShow({ formula, can }: Props) {
                                 ),
                                 align: 'right',
                             },
+                            ...(can.viewCosts && hasProductLines
+                                ? [
+                                      {
+                                          // Solo las líneas de producto: su costo por kilo con el desglose y el peso usado.
+                                          key: 'product_cost',
+                                          header: 'Costo por kg',
+                                          cell: (detail: FormulaLine) => {
+                                              const cost =
+                                                  productLineCosts[detail.id];
+
+                                              if (!detail.product || !cost) {
+                                                  return null;
+                                              }
+
+                                              if (cost.cost_per_kg === null) {
+                                                  return (
+                                                      <span className="text-xs text-destructive-text">
+                                                          {cost.reason}
+                                                      </span>
+                                                  );
+                                              }
+
+                                              return (
+                                                  <div className="space-y-0.5">
+                                                      <FormattedNumber
+                                                          value={
+                                                              cost.cost_per_kg
+                                                          }
+                                                          kind="unitCost"
+                                                      />
+                                                      <div className="text-xs text-muted-foreground">
+                                                          Granel{' '}
+                                                          <FormattedNumber
+                                                              value={
+                                                                  cost.bulk_per_kg
+                                                              }
+                                                              kind="unitCost"
+                                                          />{' '}
+                                                          + envase y etiqueta{' '}
+                                                          <FormattedNumber
+                                                              value={
+                                                                  cost.packaging_per_kg
+                                                              }
+                                                              kind="unitCost"
+                                                          />
+                                                      </div>
+                                                      <div className="text-xs text-muted-foreground">
+                                                          {densityLabel(cost)}
+                                                      </div>
+                                                  </div>
+                                              );
+                                          },
+                                          align: 'right' as const,
+                                      },
+                                  ]
+                                : []),
                         ]}
                         empty="Esta fórmula no tiene ingredientes registrados."
                     />

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Formulas\Concerns;
 
 use App\Models\Product;
+use App\Services\Formulas\FormulaProductGraph;
 use App\Services\FormulaService;
 use DomainException;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +56,29 @@ trait LocksFormulaProduct
             throw ValidationException::withMessages(collect($errors)
                 ->mapWithKeys(fn (string $message, int|string $index): array => ["details.{$index}.unit_of_measure_id" => $message])
                 ->all());
+        }
+    }
+
+    /**
+     * Que la fórmula activa de `$productId` con estas líneas no forme un ciclo de productos (D1): ni el producto en su
+     * propia fórmula ni a través de otro. 422 en `details` con el camino. Sin bloquear los productos ingrediente: dos
+     * guardados cruzados exactamente a la vez son un caso límite aceptado (CL-56); el recálculo en cadena tiene tope.
+     *
+     * @param  iterable<array<string, mixed>>  $details
+     *
+     * @throws ValidationException
+     */
+    private function ensureNoProductCycle(int $productId, iterable $details, ?int $exceptFormulaId = null): void
+    {
+        $ingredientIds = collect($details)->pluck('product_id')->filter(fn ($id): bool => is_numeric($id))->all();
+        $cycle = app(FormulaProductGraph::class)->cycleFor($productId, $ingredientIds, $exceptFormulaId);
+
+        if ($cycle !== null) {
+            throw ValidationException::withMessages([
+                'details' => __('Se formaría un ciclo: :path. Un producto no puede llevarse a sí mismo, ni a través de otro.', [
+                    'path' => implode(' → ', $cycle),
+                ]),
+            ]);
         }
     }
 

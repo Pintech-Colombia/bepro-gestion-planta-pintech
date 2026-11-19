@@ -26,6 +26,7 @@ use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
 use App\Services\Production\RemnantDrawdown;
 use App\Services\Production\RemnantLedger;
+use App\Services\ProductionCostRecalculationService;
 use App\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
 
@@ -169,6 +170,12 @@ class CompleteProductionOrderAction
             );
             $distributedBulkCosts = $costDistribution['distributedCosts'];
             $bulkCostPerUnit = $costDistribution['bulkCostPerUnit'];
+
+            // Sin peso de referencia, este lote pasa a ser el «último lote» del producto: su densidad mueve el costo teórico
+            // de los productos que lo llevan en su fórmula (P13). Se encola después de confirmar.
+            if (Product::query()->whereKey($lockedOrder->product_id)->whereNull('reference_density_kg_per_gallon')->exists()) {
+                app(ProductionCostRecalculationService::class)->dispatchDependentsOf((int) $lockedOrder->product_id);
+            }
 
             $productForPricing = Product::query()
                 ->select(['id', 'cif_percentage'])

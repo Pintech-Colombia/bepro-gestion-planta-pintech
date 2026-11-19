@@ -7,7 +7,11 @@ import {
     FormulaForm,
     formulaPayload,
 } from '@/components/formulas/formula-form';
-import type { FormulaFormData } from '@/components/formulas/formula-form';
+import type {
+    FormulaFormData,
+    IngredientProduct,
+    UnitOption,
+} from '@/components/formulas/formula-form';
 import { PageHeader } from '@/components/page-header';
 import { breadcrumbHref } from '@/lib/navigation';
 import {
@@ -22,7 +26,6 @@ import {
 
 type RawMaterial = { id: number; code: string };
 type ProductOption = { id: number; name: string };
-type UnitOption = { id: number; name: string; symbol: string };
 
 type FormulaCreateFormData = FormulaFormData & {
     return_to: string;
@@ -31,6 +34,7 @@ type FormulaCreateFormData = FormulaFormData & {
 type Props = {
     products: ProductOption[];
     rawMaterials: RawMaterial[];
+    ingredientProducts: IngredientProduct[];
     units: UnitOption[];
     selectedProductId?: string | null;
     returnTo?: string | null;
@@ -39,6 +43,7 @@ type Props = {
 export default function FormulasCreate({
     products,
     rawMaterials,
+    ingredientProducts,
     units,
     selectedProductId,
     returnTo,
@@ -73,6 +78,7 @@ export default function FormulasCreate({
                     processing={processing}
                     products={products}
                     rawMaterials={rawMaterials}
+                    ingredientProducts={ingredientProducts}
                     units={units}
                     heading="Información General"
                     description="Una fila por paso; el orden importa en planta. Cantidades por 1 galón (ej. 1.5 kg de resina por galón)."

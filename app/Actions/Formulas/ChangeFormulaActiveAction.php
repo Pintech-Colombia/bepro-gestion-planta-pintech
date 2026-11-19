@@ -9,6 +9,7 @@ use App\Models\Formula;
 use App\Services\ProductionCostRecalculationService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Activa o desactiva una sola fórmula: varias pueden estar activas a la vez (D-FOR1). La de referencia de precio no se
@@ -41,6 +42,19 @@ class ChangeFormulaActiveAction
 
             if (! $active && $locked->is_price_reference) {
                 throw new DomainException(__('Esta fórmula define el precio del producto: marca otra como referencia de precio antes de desactivarla.'));
+            }
+
+            if ($active && ! $locked->is_active) {
+                try {
+                    $this->ensureNoProductCycle(
+                        (int) $locked->product_id,
+                        $locked->details()->whereNotNull('product_id')->get(['product_id'])->toArray(),
+                        (int) $locked->id,
+                    );
+                } catch (ValidationException $exception) {
+                    // Activar no es un formulario: el aviso va como el resto de los de esta acción (flash de error).
+                    throw new DomainException((string) collect($exception->errors())->flatten()->first());
+                }
             }
 
             $wasReference = $locked->is_price_reference;

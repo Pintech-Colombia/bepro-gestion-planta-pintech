@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\NumberType;
+use App\Jobs\RecalculateProductDependentCosts;
 use App\Models\Formula;
+use App\Models\FormulaDetail;
 use App\Models\Product;
 use App\Models\ProductionCost;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Services\Pricing\ProductionCostCalculatorService;
+use App\Services\Pricing\ProductLineTheoreticalCost;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,15 +26,16 @@ class ProductionCostRecalculationService
         private readonly ProductionCostCalculatorService $productionCostCalculator,
         private readonly DecimalCalculator $calculator,
         private readonly FormulaService $formulaService,
+        private readonly ProductLineTheoreticalCost $productLineCost,
     ) {}
 
     /**
      * Costo de granel del producto con su fórmula de referencia de precio (D-FOR1): las demás activas sirven para
      * producir, pero no definen el precio de lista. Sin fórmula de referencia devuelve null y no toca nada.
      */
-    public function recalculateForProduct(int $productId, bool $forcePriceRefresh = false): ?ProductionCost
+    public function recalculateForProduct(int $productId, bool $forcePriceRefresh = false, int $chainDepth = 0): ?ProductionCost
     {
-        return DB::transaction(function () use ($productId, $forcePriceRefresh): ?ProductionCost {
+        return DB::transaction(function () use ($productId, $forcePriceRefresh, $chainDepth): ?ProductionCost {
             // Filas completas, aquí y en las presentaciones: el producto y sus variantes se guardan después, y la auditoría
             // compara contra lo leído. Con columnas parciales registraría como cambio cada atributo que no se leyó.
             $product = Product::query()
@@ -46,15 +50,25 @@ class ProductionCostRecalculationService
             $referenceFormula = Formula::query()
                 ->where('product_id', $productId)
                 ->priceReference()
-                ->with(['details.unitOfMeasure', 'details.rawMaterial:id,unit_of_measure_id,current_price', 'details.rawMaterial.unitOfMeasure'])
+                ->with(['details.unitOfMeasure', 'details.rawMaterial:id,unit_of_measure_id,current_price', 'details.rawMaterial.unitOfMeasure', 'details.product', 'details.costingVariant'])
                 ->first();
 
             if ($referenceFormula === null) {
                 return null;
             }
 
+            // Un producto como ingrediente (PT consumible) vale su costo teórico por kilo (P13): de su propia fórmula, con su
+            // CIF y sin su margen. Si no se puede calcular, el producto conserva su costo (lo deja en el log `OrLog`).
+            $productLineCosts = $this->productLineCost->forLines($referenceFormula->details);
+
             $calculatedCost = '0';
             foreach ($referenceFormula->details as $detail) {
+                if ($detail->isProductLine()) {
+                    $calculatedCost = $this->calculator->add($calculatedCost, $this->productLineItemCost($detail, $productLineCosts[(int) $detail->id] ?? null), 4);
+
+                    continue;
+                }
+
                 // La línea va en su propia unidad (g, kg, gal…) y el precio es por la unidad de la materia prima: se
                 // convierte igual que al crear la OP (FOR-06).
                 $quantityInMaterialUnit = $this->formulaService->convertQuantity((string) $detail->quantity, $detail->unitOfMeasure, $detail->rawMaterial->unitOfMeasure);
@@ -119,6 +133,9 @@ class ProductionCostRecalculationService
                 forcePriceRefresh: $forcePriceRefresh,
             );
 
+            // Los productos que llevan este en su fórmula de referencia se recalculan después, en segundo plano (D-7).
+            $this->dispatchDependentsOf($productId, $chainDepth + 1);
+
             return ProductionCost::create([
                 'product_id' => $productId,
                 'formula_id' => (int) $referenceFormula->id,
@@ -139,10 +156,10 @@ class ProductionCostRecalculationService
      *
      * @param  array<string, int>  $context  Lo que disparó el recálculo (materia prima, unidad, fórmula), para el log.
      */
-    public function recalculateForProductOrLog(int $productId, array $context = []): ?ProductionCost
+    public function recalculateForProductOrLog(int $productId, array $context = [], int $chainDepth = 0, bool $forcePriceRefresh = false): ?ProductionCost
     {
         try {
-            return $this->recalculateForProduct($productId);
+            return $this->recalculateForProduct($productId, $forcePriceRefresh, $chainDepth);
         } catch (DomainException $exception) {
             Log::warning('No se pudo recalcular el costo del producto: se deja como estaba.', [
                 'product_id' => $productId,
@@ -152,6 +169,75 @@ class ProductionCostRecalculationService
 
             return null;
         }
+    }
+
+    /**
+     * Recalcula los productos cuya fórmula **de referencia** lleva `$productId` como ingrediente. Lo llama el trabajo de la
+     * cadena (`RecalculateProductDependentCosts`); cada recálculo despacha el siguiente nivel.
+     */
+    public function recalculateDependentsOf(int $productId, int $depth): int
+    {
+        $productIds = Formula::query()
+            ->priceReference()
+            ->where('product_id', '!=', $productId)
+            ->whereHas('details', fn ($query) => $query->where('product_id', $productId))
+            ->pluck('product_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $recalculated = 0;
+        foreach ($productIds as $dependentId) {
+            if ($this->recalculateForProductOrLog((int) $dependentId, ['source_product_id' => $productId], $depth) !== null) {
+                $recalculated++;
+            }
+        }
+
+        return $recalculated;
+    }
+
+    /**
+     * Encola el recálculo de los productos que llevan `$productId`: para los cambios que no pasan por
+     * `recalculateForProduct` (presentaciones, peso de referencia, último lote, CIF sin fórmula).
+     */
+    public function dispatchDependentsOf(int $productId, int $depth = 1): void
+    {
+        // Solo si alguna fórmula de referencia lo lleva: la mayoría de los productos no es ingrediente de nadie, y un
+        // recorrido por materia prima no debe dejar un trabajo vacío por cada producto.
+        $hasDependents = FormulaDetail::query()
+            ->where('product_id', $productId)
+            ->whereHas('formula', fn ($query) => $query->priceReference()->where('product_id', '!=', $productId))
+            ->exists();
+
+        if ($hasDependents) {
+            RecalculateProductDependentCosts::dispatch($productId, $depth)->afterCommit();
+        }
+    }
+
+    /**
+     * El costo de una línea de producto en la fórmula: kilos por galón × costo teórico por kilo.
+     *
+     * @param  array{cost_per_kg: string|null, reason: string|null}|null  $cost
+     *
+     * @throws DomainException si no se puede costear (sin forma de costeo, sin peso o sin costo del producto fuente).
+     */
+    private function productLineItemCost(FormulaDetail $detail, ?array $cost): string
+    {
+        $productName = $detail->product?->name ?? '#'.$detail->product_id;
+
+        if ($cost === null || $cost['cost_per_kg'] === null) {
+            throw new DomainException($this->productLineCost->reasonLabel($cost['reason'] ?? ProductLineTheoreticalCost::REASON_MISSING_SOURCE_COST, $productName));
+        }
+
+        $toKg = $detail->unitOfMeasure?->to_kg_conversion;
+
+        if ($toKg === null) {
+            throw new DomainException(__('La línea de :product no está en una unidad de peso.', ['product' => $productName]));
+        }
+
+        $kilos = $this->calculator->mul((string) $detail->quantity, (string) $toKg, 10);
+
+        return $this->calculator->round($this->calculator->mul($kilos, $cost['cost_per_kg'], 10), 4);
     }
 
     public function recalculateForRawMaterial(int $rawMaterialId): int
@@ -245,6 +331,8 @@ class ProductionCostRecalculationService
                 priceThreshold: (string) ($product->price_threshold ?? '0'),
                 unitPrices: $unitPrices,
             ));
+
+            $this->dispatchDependentsOf((int) $productId);
         }
 
         return $variants->count();
@@ -266,6 +354,7 @@ class ProductionCostRecalculationService
                 $product->update(['current_price' => $this->productionCostCalculator->applyCifToCost((string) $product->current_cost, (string) $product->cif_percentage)]);
             }
 
+            // Ya despacha la cadena: el CIF también cambia el costo teórico de este producto como ingrediente.
             $this->repriceVariantsOfProduct($product, forcePriceRefresh: true);
         });
     }
@@ -288,6 +377,9 @@ class ProductionCostRecalculationService
             priceThreshold: (string) ($product->price_threshold ?? '0'),
             forcePriceRefresh: $forcePriceRefresh,
         );
+
+        // Una línea que lo costea «con presentación» usa el costo de la presentación.
+        $this->dispatchDependentsOf((int) $product->id);
     }
 
     /**
