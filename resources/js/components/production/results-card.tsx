@@ -21,6 +21,7 @@ import type {
     ProductionOrderFormData,
     ProductionOrderIngredientFormRow,
     ProductionOrderLineAdjustment,
+    ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
     ProductionOrderSetData,
     RawMaterialOption,
@@ -34,6 +35,8 @@ type ResultsCardProps = {
     errors: ProductionOrderErrors;
     ingredientRows: ProductionOrderIngredientFormRow[];
     packagingRows: ProductionOrderPackagingFormRow[];
+    /** Costo de cada presentación por id del plan, del resumen de costos. */
+    packagingCosts?: ReadonlyMap<number, ProductionOrderPackagingCost>;
     lineAdjustments: ProductionOrderLineAdjustment[];
     rawMaterials: RawMaterialOption[];
     labelMaterials: LabelMaterialOption[];
@@ -55,6 +58,7 @@ export function ResultsCard({
     errors,
     ingredientRows,
     packagingRows,
+    packagingCosts,
     lineAdjustments,
     rawMaterials,
     labelMaterials,
@@ -209,6 +213,7 @@ export function ResultsCard({
                     labelMaterials={labelMaterials}
                     isReadOnly={isReadOnly}
                     showCosts={showCosts}
+                    costs={packagingCosts}
                     canPrintLabels={canPrintLabels}
                 />
             </CardContent>

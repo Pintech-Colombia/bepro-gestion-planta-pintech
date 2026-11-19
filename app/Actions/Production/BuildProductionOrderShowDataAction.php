@@ -12,6 +12,7 @@ use App\Models\ProductionOrderPackagingPlan;
 use App\Models\RemnantConsumption;
 use App\Services\AvailableRemnantsService;
 use App\Services\DecimalCalculator;
+use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\RemnantDrawdown;
 
@@ -22,6 +23,7 @@ class BuildProductionOrderShowDataAction
         private readonly AvailableRemnantsService $availableRemnants,
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
+        private readonly ProductionOrderCostSummary $costSummary,
     ) {}
 
     /**
@@ -64,29 +66,8 @@ class BuildProductionOrderShowDataAction
         $lineFactors = $this->lineUnits->conversionFactors($productionOrder);
         $orderIsOpen = in_array($productionOrder->status, ProductionOrderStatus::open(), true);
 
-        $finishedCostByVariant = $includeCosts
-            ? $productionOrder->finishedInventoryMovements->keyBy('product_variant_id')
-            : collect();
-
-        $totalFinishedCostStr = '0';
-        $totalBulkCostStr = '0';
-
-        if ($includeCosts) {
-            $totalFinishedCostStr = $productionOrder->finishedInventoryMovements
-                ->reduce(function ($carry, $movement) {
-                    $qty = (string) $movement->quantity;
-                    $costPrice = (string) ($movement->cost_price ?? '0');
-                    $itemTotal = $this->calculator->mul($qty, $costPrice, 4);
-
-                    return $this->calculator->add((string) $carry, $itemTotal, 4);
-                }, '0');
-            $totalBulkCostStr = $productionOrder->details
-                ->reduce(function ($carry, ProductionOrderDetail $detail) {
-                    $detailCost = (string) ($detail->total_cost ?? '0');
-
-                    return $this->calculator->add((string) $carry, $detailCost, 4);
-                }, '0');
-        }
+        // Una sola cuenta para la tarjeta, la vista previa, el PDF y el Excel (null si la orden está cancelada).
+        $costSummary = $includeCosts ? $this->costSummary->forOrder($productionOrder) : null;
 
         // La página pública vive en el dominio del QR: va absoluta. La imagen sale del ERP, con la sesión de quien ve la OP.
         $qrCode = $productionOrder->qrCode;
@@ -149,9 +130,6 @@ class BuildProductionOrderShowDataAction
             'product' => $productionOrder->product ? [
                 'id' => $productionOrder->product->id,
                 'name' => $productionOrder->product->name,
-                ...($includeCosts ? [
-                    'cif_percentage' => $productionOrder->product->cif_percentage !== null ? (float) $productionOrder->product->cif_percentage : null,
-                ] : []),
                 'quality_viscosity_lower' => $productionOrder->product->quality_viscosity_lower !== null
                     ? (float) $productionOrder->product->quality_viscosity_lower
                     : null,
@@ -182,8 +160,7 @@ class BuildProductionOrderShowDataAction
                 'name' => $productionOrder->warehouse->name,
             ] : null,
             ...($includeCosts ? [
-                'total_bulk_cost' => $totalBulkCostStr,
-                'total_finished_cost' => $totalFinishedCostStr,
+                'cost_summary' => $costSummary,
             ] : []),
             'details' => $productionOrder->details->map(function (ProductionOrderDetail $detail) use ($formulaDetailsByKey, $lineFactors, $productionOrder, $includeCosts) {
                 $formulaDetail = $formulaDetailsByKey->get($detail->step_order.'-'.$detail->raw_material_id);
@@ -226,7 +203,7 @@ class BuildProductionOrderShowDataAction
 
                 return $row;
             })->values(),
-            'packaging_plans' => $productionOrder->packagingPlans->map(function (ProductionOrderPackagingPlan $plan) use ($finishedCostByVariant, $includeCosts, $productionOrder) {
+            'packaging_plans' => $productionOrder->packagingPlans->map(function (ProductionOrderPackagingPlan $plan) use ($productionOrder) {
                 $presentationValue = (float) ($plan->productVariant?->presentation_value ?? 1);
                 // Completada, vale solo el envase guardado al completar (vacío si la presentación no tenía): el documento
                 // cerrado no cambia si después se cambia el de la presentación. Antes de completar, el de la presentación.
@@ -254,12 +231,7 @@ class BuildProductionOrderShowDataAction
                     ] : null,
                 ];
 
-                if ($includeCosts) {
-                    $costMovement = $finishedCostByVariant->get($plan->product_variant_id);
-
-                    $row['cost_price'] = $costMovement?->cost_price !== null ? (string) $costMovement->cost_price : null;
-                }
-
+                // El costo de cada presentación va en `cost_summary.packaging`, con la misma cuenta que la tarjeta.
                 return $row;
             })->values(),
             'line_adjustments' => $productionOrder->lineAdjustments->map(fn (ProductionOrderLineAdjustment $adj) => [

@@ -193,7 +193,7 @@ it('la vista previa calcula el costo con los envases nuevos y las etiquetas usad
             'label_raw_material_id' => $this->label->id,
             'labels_used' => '12',
         ]],
-    ])->assertOk()->assertJsonPath('packaging.0.cost_price', '1086.0000');
+    ])->assertOk()->assertJsonPath('summary.packaging.0.unit_cost', '1086.0000');
 });
 
 it('guarda el empaque del plan al guardar el avance y lo muestra en la orden', function () {

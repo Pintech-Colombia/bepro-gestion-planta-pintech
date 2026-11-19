@@ -9,7 +9,6 @@ use App\Actions\Production\BuildProductionOrderShowDataAction;
 use App\Actions\Production\CancelProductionOrderAction;
 use App\Actions\Production\CompleteProductionOrderAction;
 use App\Actions\Production\CreateProductionOrderAction;
-use App\Actions\Production\PreviewProductionOrderCostsAction;
 use App\Actions\Production\RejectProductionOrderReviewAction;
 use App\Actions\Production\StartProductionOrderAction;
 use App\Actions\Production\SubmitProductionOrderForReviewAction;
@@ -38,6 +37,7 @@ use App\Models\RawMaterial;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\Production\ProductionOrderCompletionLines;
+use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\TimezoneService;
 use App\Support\EnumOptions;
 use App\Support\ImageDataUri;
@@ -60,7 +60,7 @@ class ProductionOrderController extends Controller
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly CompleteProductionOrderAction $completeProductionOrder,
         private readonly CancelProductionOrderAction $cancelProductionOrder,
-        private readonly PreviewProductionOrderCostsAction $previewProductionOrderCosts,
+        private readonly ProductionOrderCostSummary $productionOrderCostSummary,
         private readonly BuildProductionOrderShowDataAction $buildProductionOrderShowData,
         private readonly BuildProductionOrderExportDataAction $buildProductionOrderExportData,
         private readonly SubmitProductionOrderForReviewAction $submitProductionOrderForReview,
@@ -447,18 +447,20 @@ class ProductionOrderController extends Controller
     }
 
     /**
-     * Vista previa de costos estimados durante el cierre de la orden.
+     * Vista previa de costos estimados durante el cierre de la orden: el costo de cada línea y el resumen de la tarjeta.
      */
     public function previewCosts(PreviewProductionOrderCostsRequest $request, ProductionOrder $productionOrder): JsonResponse
     {
         $validated = $request->validated();
+        $density = isset($validated['density_kg_per_gallon']) ? (string) $validated['density_kg_per_gallon'] : null;
 
         return response()->json(
-            $this->previewProductionOrderCosts->execute(
+            $this->productionOrderCostSummary->preview(
                 order: $productionOrder,
                 ingredients: $validated['ingredients'],
                 packaging: $validated['packaging'] ?? [],
-                remnantGallons: $this->completionLines->remnantGallons($validated['remnant_quantity_kg'] ?? null, $validated['density_kg_per_gallon'] ?? null)
+                remnantGallons: $this->completionLines->remnantGallons($validated['remnant_quantity_kg'] ?? null, $density),
+                density: $density,
             )
         );
     }

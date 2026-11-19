@@ -1483,7 +1483,7 @@ test('it previews fifo costs from backend endpoint using multiple batches', func
     expect(round((float) $response->json('ingredients.0.unit_cost'), 4))->toBe(5.3333);
     // Float precision tolerance: total_cost should be ~320.0
     expect(abs((float) $response->json('ingredients.0.total_cost') - 320.0))->toBeLessThan(0.01);
-    expect(abs((float) $response->json('total_bulk_cost') - 320.0))->toBeLessThan(0.01);
+    expect(abs((float) $response->json('summary.bulk.total') - 320.0))->toBeLessThan(0.01);
 });
 
 test('it rejects completion when ingredient detail ids are duplicated', function () {

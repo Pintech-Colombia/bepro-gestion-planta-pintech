@@ -51,6 +51,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string|null $remnant_quantity_kg
  * @property string|null $remnant_notes
  * @property string|null $density_kg_per_gallon
+ * @property string|null $cif_percentage CIF del producto el día en que se completó
+ * @property bool $cif_percentage_estimated
  * @property int $lot_number
  * @property int $created_by
  * @property int|null $submitted_by
@@ -105,6 +107,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'remnant_quantity_kg',
     'remnant_notes',
     'density_kg_per_gallon',
+    'cif_percentage',
+    'cif_percentage_estimated',
     'created_by',
     'submitted_by',
     'submitted_at',
@@ -172,6 +176,8 @@ class ProductionOrder extends Model
             'remnant_quantity_gallons' => 'decimal:4',
             'remnant_quantity_kg' => 'decimal:4',
             'density_kg_per_gallon' => 'decimal:4',
+            'cif_percentage' => 'decimal:2',
+            'cif_percentage_estimated' => 'boolean',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];

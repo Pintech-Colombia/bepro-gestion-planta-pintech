@@ -71,6 +71,7 @@ export default function ProductionOrderShow({
     );
 
     const isCompleted = order.status === 'completed';
+    const isCancelled = order.status === 'cancelled';
     const isPending = order.status === 'pending';
     const isPendingReview = order.status === 'pending_review';
     const isFormReadOnly =
@@ -160,7 +161,8 @@ export default function ProductionOrderShow({
             remnantQuantityKg: data.remnant_quantity_kg,
             density: data.density_kg_per_gallon,
             isCompleted,
-            enabled: can.previewCosts,
+            // Cancelada: sin costos (lo digitado ya no los cambia).
+            enabled: can.previewCosts && !isCancelled,
         });
 
     // Absoluta desde el servidor: la página pública vive en el dominio del QR, no en el del ERP.
@@ -201,13 +203,20 @@ export default function ProductionOrderShow({
         );
     }, [previewCosts]);
 
-    const previewPackagingById = useMemo(() => {
-        if (!previewCosts) {
-            return new Map<number, PreviewCostData['packaging'][number]>();
-        }
+    // Una sola cuenta, la del servidor: la vista previa mientras se digita y, si aún no llega (o la orden está
+    // completada), el resumen que trajo la página. Cancelada: null.
+    const costSummary =
+        isCompleted || isCancelled
+            ? (order.cost_summary ?? null)
+            : (previewCosts?.summary ?? order.cost_summary ?? null);
 
-        return new Map(previewCosts.packaging.map((pack) => [pack.id, pack]));
-    }, [previewCosts]);
+    const packagingCosts = useMemo(
+        () =>
+            new Map(
+                (costSummary?.packaging ?? []).map((pack) => [pack.id, pack]),
+            ),
+        [costSummary],
+    );
 
     const ingredientRows = isFormReadOnly
         ? orderDetails.map(mapDetailToIngredientFormRow)
@@ -225,13 +234,7 @@ export default function ProductionOrderShow({
 
     const packagingRows = isFormReadOnly
         ? orderPackagingPlans.map((pack) => mapPackagingPlanToFormRow(pack))
-        : data.packaging.map((pack) => ({
-              ...pack,
-              cost_price:
-                  previewPackagingById.get(pack.id)?.cost_price ??
-                  pack.cost_price ??
-                  0,
-          }));
+        : data.packaging;
 
     // Solo para mostrar: el rendimiento real que se guarda lo calcula el servidor (lo envasado más el sobrante). Con la
     // orden cerrada a la edición se muestra el guardado. Lo digitado se lee con parseDecimal, como en el resto de los
@@ -262,29 +265,6 @@ export default function ProductionOrderShow({
         realYield !== null && plannedQuantity > 0
             ? (realYield / plannedQuantity) * 100
             : null;
-
-    const pendingBulkCost = previewCosts?.total_bulk_cost ?? 0;
-    const pendingFinishedCost = previewCosts?.total_finished_cost ?? 0;
-    const cifPercentage = Number(
-        previewCosts?.cif_percentage ?? order.product?.cif_percentage ?? 0,
-    );
-    const activeFinishedCost = isCompleted
-        ? Number(order.total_finished_cost || 0)
-        : Number(pendingFinishedCost || 0);
-    const estimatedCifValue = activeFinishedCost * (cifPercentage / 100);
-    const estimatedTotalCost = activeFinishedCost + estimatedCifValue;
-    const bulkCostPerUnit = previewCosts?.bulk_cost_per_unit ?? null;
-    const remnantBulkCost = previewCosts?.remnant_bulk_cost ?? null;
-
-    const consumedRemnantCost = useMemo(() => {
-        const consumptions = order.remnant_consumptions ?? [];
-
-        return consumptions.reduce((sum, consumption) => {
-            const cost = Number(consumption.consumed_cost ?? 0);
-
-            return sum + (Number.isFinite(cost) ? cost : 0);
-        }, 0);
-    }, [order.remnant_consumptions]);
 
     const showSubmit = can.submitForReview || can.complete;
     const showReject = can.rejectReview && isPendingReview;
@@ -403,6 +383,7 @@ export default function ProductionOrderShow({
                             errors={errors}
                             ingredientRows={ingredientRows}
                             packagingRows={packagingRows}
+                            packagingCosts={packagingCosts}
                             lineAdjustments={lineAdjustments}
                             rawMaterials={rawMaterials}
                             labelMaterials={labelMaterials}
@@ -465,23 +446,8 @@ export default function ProductionOrderShow({
                             }
                             realYield={realYield}
                             yieldPercentage={yieldPercentage}
-                            bulkCost={
-                                isCompleted
-                                    ? (order.total_bulk_cost ?? 0)
-                                    : pendingBulkCost
-                            }
-                            finishedCost={
-                                isCompleted
-                                    ? (order.total_finished_cost ?? 0)
-                                    : pendingFinishedCost
-                            }
-                            cifPercentage={cifPercentage}
-                            estimatedCifValue={estimatedCifValue}
-                            estimatedTotalCost={estimatedTotalCost}
-                            bulkCostPerUnit={bulkCostPerUnit}
                             remnantQuantityGallons={remnantGallons}
-                            remnantBulkCost={remnantBulkCost}
-                            consumedRemnantCost={consumedRemnantCost}
+                            costSummary={costSummary}
                             showCosts={can.previewCosts}
                         />
                     </div>

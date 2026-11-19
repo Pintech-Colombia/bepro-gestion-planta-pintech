@@ -24,7 +24,6 @@ export function mapPackagingPlanToFormRow(
         actual_units: edited
             ? edited.actual_units
             : formatForInput(pack.actual_units ?? pack.planned_units),
-        cost_price: pack.cost_price ?? null,
         package_code: pack.package_code ?? null,
         new_containers_used: edited
             ? edited.new_containers_used
@@ -85,7 +84,6 @@ export function usePackagingSync({
                         nextItem.presentation_value &&
                     currentItem.planned_units === nextItem.planned_units &&
                     currentItem.actual_units === nextItem.actual_units &&
-                    currentItem.cost_price === nextItem.cost_price &&
                     currentItem.package_code === nextItem.package_code &&
                     currentItem.new_containers_used ===
                         nextItem.new_containers_used &&

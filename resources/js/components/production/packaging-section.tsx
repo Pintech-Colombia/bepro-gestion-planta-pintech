@@ -24,6 +24,7 @@ import { variantPresentationLabel } from '@/lib/variant-label';
 import type {
     LabelMaterialOption,
     ProductionOrderFormData,
+    ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
     ProductionOrderSetData,
     VariantOption,
@@ -41,6 +42,8 @@ type PackagingSectionProps = {
     labelMaterials: LabelMaterialOption[];
     isReadOnly: boolean;
     showCosts?: boolean;
+    /** Costo de cada fila por id del plan, del resumen del servidor (sin y con CIF). */
+    costs?: ReadonlyMap<number, ProductionOrderPackagingCost>;
     /** Estampitas de lote: también con la orden en solo lectura (reimprimir una completada). */
     canPrintLabels?: boolean;
 };
@@ -54,11 +57,12 @@ export function PackagingSection({
     labelMaterials,
     isReadOnly,
     showCosts = true,
+    costs,
     canPrintLabels = false,
 }: PackagingSectionProps) {
     const confirm = useConfirm();
     const showActions = !isReadOnly || canPrintLabels;
-    const columnCount = (showCosts ? 6 : 4) + (showActions ? 1 : 0);
+    const columnCount = (showCosts ? 7 : 4) + (showActions ? 1 : 0);
 
     const updateRow = (
         index: number,
@@ -93,10 +97,13 @@ export function PackagingSection({
                                 {showCosts && (
                                     <>
                                         <th className="p-3 text-right">
-                                            Costo Unit.
+                                            Costo unit.
                                         </th>
                                         <th className="p-3 text-right">
-                                            Costo Total
+                                            Costo unit. con CIF
+                                        </th>
+                                        <th className="p-3 text-right">
+                                            Costo total
                                         </th>
                                     </>
                                 )}
@@ -143,25 +150,32 @@ export function PackagingSection({
                                         </td>
                                         {showCosts && (
                                             <>
-                                                <td className="p-3 text-right text-muted-foreground">
-                                                    <FormattedNumber
-                                                        value={pack.cost_price}
-                                                        currency
-                                                        maxDecimals={2}
-                                                    />
-                                                </td>
-                                                <td className="p-3 text-right font-medium">
+                                                {/* La misma cuenta que la tarjeta de costos: nada se calcula aquí. */}
+                                                <td className="p-3 text-right text-muted-foreground tabular-nums">
                                                     <FormattedNumber
                                                         value={
-                                                            (Number(
-                                                                pack.actual_units,
-                                                            ) || 0) *
-                                                            (Number(
-                                                                pack.cost_price,
-                                                            ) || 0)
+                                                            costs?.get(pack.id)
+                                                                ?.unit_cost
                                                         }
-                                                        currency
-                                                        maxDecimals={2}
+                                                        kind="cost"
+                                                    />
+                                                </td>
+                                                <td className="p-3 text-right text-muted-foreground tabular-nums">
+                                                    <FormattedNumber
+                                                        value={
+                                                            costs?.get(pack.id)
+                                                                ?.unit_cost_with_cif
+                                                        }
+                                                        kind="cost"
+                                                    />
+                                                </td>
+                                                <td className="p-3 text-right font-medium tabular-nums">
+                                                    <FormattedNumber
+                                                        value={
+                                                            costs?.get(pack.id)
+                                                                ?.total_cost
+                                                        }
+                                                        kind="cost"
                                                     />
                                                 </td>
                                             </>
