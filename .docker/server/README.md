@@ -17,7 +17,8 @@ un proyecto de Docker Compose aparte, con su base, sus archivos, su túnel y sus
   .env                             server.env.example completado (permisos 600)
   tunnel.env                       TUNNEL_TOKEN=<token del túnel de ese entorno> (permisos 600)
   deploys.log                      un renglón por despliegue: fecha, digest, commit y resultado
-  last-deploy.log                  salida completa del último despliegue
+  deploy-logs/                     salida completa de cada despliegue (<fecha UTC>-<digest>.log, los 30 más nuevos)
+  last-deploy.log                  enlace al log del último despliegue
   backups/                         daily/, weekly/ (solo prod) y predeploy/ (solo prod)
 ```
 
@@ -50,20 +51,58 @@ hotfix); `production`, solo desde `main`, con aprobación obligatoria. Cada uno 
 
 **Qué se ve en GitHub:** solo las líneas propias de `pintech-deploy`, porque los registros de un repositorio público los
 puede leer cualquiera. El resultado sale en el resumen de la corrida: `ok-con-avisos` como advertencia, un fallo como
-error (y GitHub avisa por correo). La salida completa queda en `/srv/pintech/<entorno>/last-deploy.log`:
+error (y GitHub avisa por correo). La salida completa de cada despliegue queda en `/srv/pintech/<entorno>/deploy-logs/`
+(se guardan los 30 más nuevos), y `last-deploy.log` apunta siempre al último:
 
 ```bash
 sudo tail -n 100 /srv/pintech/staging/last-deploy.log
+sudo ls /srv/pintech/staging/deploy-logs/            # los anteriores, por fecha y digest: relanzar no borra el detalle
 ```
+
+El primer despliegue con esta versión del script guarda el `last-deploy.log` de la versión anterior como
+`deploy-logs/anterior.log`.
 
 ### Qué hace `pintech-deploy`
 
-Baja la imagen, migra con la imagen nueva en un contenedor de un solo uso (los contenedores actuales siguen atendiendo),
+Baja la imagen (hasta 3 intentos de máximo 3 minutos cada uno, con pausas de 15 y 45 segundos: un corte momentáneo o una
+descarga colgada no abortan el despliegue; cada intento fallido se ve en GitHub y su error queda en el log), migra con la imagen nueva en un contenedor de un solo uso (los contenedores actuales siguen atendiendo),
 sincroniza roles y permisos, reemplaza web, queue y scheduler, y espera su revisión de salud. Si `roles:audit` encuentra
 un rol personalizado mal armado, el despliegue sigue y lo deja como ADVERTENCIA en la salida y como `ok-con-avisos` en
 `deploys.log`: se corrige desde la pantalla de roles. Si la migración falla, no reemplaza nada. Si la imagen nueva no
 queda sana en 90 segundos, vuelve sola a la anterior. En producción hace además una copia de la base antes de migrar. Si
 se corta la conexión con GitHub, el despliegue termina igual en el servidor.
+
+Cada despliegue deja un renglón en `deploys.log`, también si falla:
+
+| Estado | Qué pasó |
+|---|---|
+| `ok` / `ok-con-avisos` | Desplegado (con avisos: `roles:audit` encontró roles mal armados) |
+| `fallo-descarga` | No bajó la imagen tras los 3 intentos. Nada cambió |
+| `fallo-postgres` | PostgreSQL no quedó sano. Nada cambió |
+| `fallo-copia` | Solo prod: falló la copia previa. No se migró nada |
+| `fallo-migracion` | Falló la migración o la sincronización de permisos. No se reemplazó ningún contenedor |
+| `fallo-salud` | La imagen nueva no quedó sana y no había imagen anterior |
+| `revertido` / `revertido-sin-salud` | La imagen nueva no quedó sana y se volvió a la anterior (que en el segundo caso tampoco quedó sana: revisar a mano) |
+| `fallo-resto` | La app quedó con la imagen nueva, pero no se pudo levantar el resto (el túnel) |
+| `fallo-inesperado` | Falló algo que ningún paso prevé (disco lleno, un permiso): ver el log de ese despliegue para saber en qué paso quedó |
+
+### Actualizar los scripts
+
+El CD no instala `pintech-deploy` ni `pintech-backup`: cuando cambian en el repositorio (ya fusionados), se copian a mano.
+Se instalan con el mismo dueño y permisos; no afecta a los contenedores que están corriendo. Se copia el que cambió (o
+los dos): `pintech-deploy` llama al `pintech-backup` de su misma carpeta, así que uno viejo seguiría en uso sin aviso.
+
+```bash
+# Mac, en la carpeta del proyecto (con develop o main al día)
+scp .docker/server/pintech-deploy .docker/server/pintech-backup contabo:~/
+# Servidor
+sudo install -o root -g root -m 755 ~/pintech-deploy ~/pintech-backup /usr/local/bin/ && rm ~/pintech-deploy ~/pintech-backup
+sudo -u deploy sudo -n /usr/local/bin/pintech-deploy   # «Uso: pintech-deploy…»: instalado y no despliega nada
+```
+
+Volver atrás es reinstalar la versión anterior del archivo (está en git). Si se vuelve a una versión sin `deploy-logs/`,
+antes se borra el enlace (`sudo rm /srv/pintech/<entorno>/last-deploy.log`): si no, esa versión escribiría encima del
+último log a través del enlace.
 
 ### Desplegar a mano y volver atrás
 
@@ -73,7 +112,8 @@ despliegue y se borra en otro posterior.
 
 - **Desde GitHub:** Actions → la corrida de `cd` del commit al que se quiere volver → volver a lanzar el job
   «desplegar en staging» o «desplegar en producción» (producción pide otra vez la aprobación).
-- **En el servidor,** con el digest que está en `deploys.log`:
+- **En el servidor,** con el digest de la **última fila `ok` u `ok-con-avisos` anterior a la actual** de `deploys.log`
+  (las filas de fallo son imágenes que nunca quedaron en servicio):
 
 ```bash
 sudo tail -n 5 /srv/pintech/staging/deploys.log
