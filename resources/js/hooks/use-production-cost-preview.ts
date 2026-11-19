@@ -85,9 +85,10 @@ export function useProductionCostPreview({
                       // Como texto: el servidor calcula los galones con bcmath. Sin peso por galón, calcula sin sobrante.
                       remnant_quantity_kg:
                           toDecimalPayload(remnantQuantityKg) || '0',
-                      // Solo con sobrante: sin él no se usa, y un valor inválido no debe invalidar toda la vista previa.
+                      // Lo digitado, para el costo por kg y los galones del sobrante; vacío o no positivo va como null
+                      // (el servidor usa el guardado) para que no invalide toda la vista previa.
                       density_kg_per_gallon:
-                          (parseDecimal(remnantQuantityKg) ?? 0) > 0
+                          (parseDecimal(density) ?? 0) > 0
                               ? toDecimalPayload(density) || null
                               : null,
                   },

@@ -79,6 +79,7 @@ final class NumberTypeColumns
             'quotation_items.price_adjustment_pct',
             'raw_materials.price_variation_threshold',
             'production_orders.yield_percentage',
+            'production_orders.cif_percentage',
         ]);
 
         $add(NumberType::ComputedPercentage, ['production_costs.variation_percentage']);

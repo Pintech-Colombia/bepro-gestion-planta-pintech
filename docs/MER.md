@@ -378,6 +378,8 @@ Ingredientes de cada fórmula: una materia prima **o** un producto (PT consumibl
 | `remnant_quantity_kg` | DECIMAL(12,4) | sí | Sobrante pesado, tal como se digitó, al enviar a revisión o al completar; el saldo de PT (`production_remnants`) nace al completar |
 | `remnant_notes` | TEXT | sí | Observaciones del saldo sobrante |
 | `density_kg_per_gallon` | DECIMAL(10,4) | sí |  |
+| `cif_percentage` | DECIMAL(5,2) | sí | CIF del producto el día en que se completó: el de sus lotes y su saldo. Nulo mientras está abierta (usa el del producto) |
+| `cif_percentage_estimated` | BOOLEAN |  | Default false. true = completada antes de la columna, sin lote ni saldo que fijara el CIF: se tomó el del producto al migrar |
 | `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
 | `submitted_by` | BIGINT | sí | FK → `users` (RESTRICT) |
 | `submitted_at` | TIMESTAMP | sí |  |

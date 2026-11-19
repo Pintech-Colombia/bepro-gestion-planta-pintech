@@ -109,8 +109,7 @@ test('operator show payload does not expose cost fields', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Production/Orders/Show')
             ->where('can.previewCosts', false)
-            ->missing('order.total_bulk_cost')
-            ->missing('order.total_finished_cost')
+            ->missing('order.cost_summary')
             ->missing('order.details.0.unit_cost')
             ->missing('order.details.0.total_cost')
             ->missing('order.packaging_plans.0.cost_price'));
@@ -126,7 +125,7 @@ test('production user show payload does not expose cost fields', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Production/Orders/Show')
             ->where('can.previewCosts', false)
-            ->missing('order.total_bulk_cost')
+            ->missing('order.cost_summary')
             ->missing('order.details.0.unit_cost')
             ->missing('order.details.0.total_cost'));
 });
@@ -140,7 +139,8 @@ test('admin show payload includes cost fields', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Production/Orders/Show')
             ->where('can.previewCosts', true)
-            ->where('order.total_bulk_cost', '1000.0000')
+            ->where('order.cost_summary.basis', 'estimated')
+            ->where('order.cost_summary.bulk.total', '1000.0000')
             ->where('order.details.0.unit_cost', '10.0000')
             ->where('order.details.0.total_cost', '1000.0000'));
 });
@@ -190,14 +190,15 @@ test('roles without costs.view do not receive remnant costs or CIF in the order 
             ->missing('order.remnant_consumptions.0.consumed_cost'));
 })->with([SystemRole::Production, SystemRole::Operator]);
 
-test('admin receives remnant costs and CIF in the order detail', function () {
+test('admin receives remnant costs in the order detail, and the CIF only inside the costs', function () {
     attachRemnantWithConsumption($this->productionOrder);
 
     $this->actingAs(userWithRole(SystemRole::Admin, ['email_verified_at' => now()]))
         ->get(route('production-orders.show', $this->productionOrder))
         ->assertSuccessful()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('order.product.cif_percentage', 25)
+            // El CIF se usa en las cuentas del resumen; no viaja como dato suelto.
+            ->missing('order.product.cif_percentage')
             ->where('order.remnant.cost_per_gallon', 5.5)
             ->where('order.remnant_consumptions.0.consumed_cost', 11));
 });
@@ -221,8 +222,7 @@ test('operator export payload does not expose cost fields', function () {
     $payload = app(BuildProductionOrderExportDataAction::class)
         ->execute($this->productionOrder, includeCosts: false);
 
-    expect($payload)->not->toHaveKey('total_bulk_cost');
-    expect($payload)->not->toHaveKey('total_finished_cost');
+    expect($payload)->not->toHaveKey('cost_summary');
     expect($payload['details'][0])->not->toHaveKey('unit_cost');
     expect($payload['details'][0])->not->toHaveKey('total_cost');
     expect($payload['packaging_plans'][0])->not->toHaveKey('cost_price');

@@ -345,18 +345,16 @@ it('preview costs distributes correctly when remnant is present', function () {
     // Costo por gal con CIF (50%): 10.00 * 1.50 = 15.00
     // Costo saldo con CIF: 15.00 * 5 = 75.00
 
-    $packaging = $data['packaging'];
-    expect($packaging)->toHaveCount(1);
-    expect(round((float) $packaging[0]['cost_price'], 2))->toBe(10.00);
+    $summary = $data['summary'];
+    expect($summary['packaging'])->toHaveCount(1);
+    expect($summary['packaging'][0]['unit_cost'])->toBe('10.0000');
+    // El CIF (50 %) entra en las cuentas, no como dato suelto.
+    expect($summary['packaging'][0]['unit_cost_with_cif'])->toBe('15.0000');
 
-    expect($data)->toHaveKey('bulk_cost_per_unit');
-    expect(round((float) $data['bulk_cost_per_unit'], 2))->toBe(10.00);
+    expect($summary['cost_per_gallon'])->toBe('10.0000');
+    expect($summary['cost_per_gallon_with_cif'])->toBe('15.0000');
 
-    expect($data)->toHaveKey('cif_percentage');
-    expect((float) $data['cif_percentage'])->toBe(50.0);
-
-    expect($data)->toHaveKey('remnant_bulk_cost');
-    expect(round((float) $data['remnant_bulk_cost'], 2))->toBe(75.00);
+    expect($summary['remnant']['cost_with_cif'])->toBe('75.0000');
 });
 
 it('preview costs rejects invalid remnant_quantity_kg', function () {
@@ -555,8 +553,8 @@ it('la vista previa reparte el costo con los kilos y el peso por galón', functi
     ])->assertOk()->json();
 
     // 50 × 5 = 250, entre 20 envasados + 0,5319 de sobrante.
-    expect($data['bulk_cost_per_unit'])->toBe('12.1762')
-        ->and($data['remnant_bulk_cost'])->not->toBeNull();
+    expect($data['summary']['cost_per_gallon'])->toBe('12.1762')
+        ->and($data['summary']['remnant']['cost_with_cif'])->not->toBeNull();
 });
 
 it('la vista previa sin peso por galón responde bien y calcula sin sobrante', function () {
@@ -568,8 +566,8 @@ it('la vista previa sin peso por galón responde bien y calcula sin sobrante', f
         'remnant_quantity_kg' => '2.5',
     ])->assertOk()->json();
 
-    expect($data['bulk_cost_per_unit'])->toBe('12.5000')
-        ->and($data['remnant_bulk_cost'])->toBeNull();
+    expect($data['summary']['cost_per_gallon'])->toBe('12.5000')
+        ->and($data['summary']['remnant'])->toBeNull();
 });
 
 it('los errores nombran el peso por galón, el sobrante pesado y el derrame en kilos', function () {

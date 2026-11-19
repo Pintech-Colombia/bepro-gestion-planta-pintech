@@ -62,7 +62,6 @@ export type ProductionOrderPackagingPlan = {
     product_variant?: ProductionOrderProductVariant | null;
     planned_units: FormNumberValue;
     actual_units?: FormNumberValue | null;
-    cost_price?: FormNumberValue | null;
     /** Envase de la presentación: el que se descuenta al completar. */
     package_code?: string | null;
     /** Vacío = tantos como unidades envasadas. */
@@ -153,8 +152,8 @@ export type ProductionOrder = {
     remnant_notes?: string | null;
     notes?: string | null;
     completion_date?: string | null;
-    total_bulk_cost?: FormNumberValue | null;
-    total_finished_cost?: FormNumberValue | null;
+    /** Solo con «Ver costos»; null si la orden está cancelada. */
+    cost_summary?: ProductionOrderCostSummary | null;
     qr_landing_url?: string | null;
     qr_image_url?: string | null;
     submitted_at?: string | null;
@@ -170,7 +169,6 @@ export type ProductionOrder = {
     } | null;
     product?: {
         name?: string | null;
-        cif_percentage?: FormNumberValue | null;
         quality_solids_lower?: FormNumberValue | null;
         quality_solids_upper?: FormNumberValue | null;
     } | null;
@@ -236,7 +234,6 @@ export type ProductionOrderPackagingFormRow = {
     presentation_value: number;
     planned_units: FormNumberValue;
     actual_units: FormNumberValue;
-    cost_price: FormNumberValue | null;
     package_code: string | null;
     /** '' = tantos como unidades envasadas. */
     new_containers_used: FormNumberValue;
@@ -277,6 +274,65 @@ export type ProductionOrderSetData = SetDataAction<ProductionOrderFormData>;
 
 export type ProductionOrderErrors = FormDataErrors<ProductionOrderFormData>;
 
+/**
+ * Resumen de costos de la OP (`ProductionOrderCostSummary` en el servidor): la tarjeta, la tabla de envasado, el PDF y el
+ * Excel salen de él. Montos como texto decimal, sin CIF salvo los `*_with_cif`; la pantalla solo los pinta.
+ */
+export type ProductionOrderCostSummary = {
+    /** estimated: pendiente o abierta (lo planeado o lo digitado) · actual: completada (lo guardado). */
+    basis: 'estimated' | 'actual';
+    /** Completada antes de que la OP guardara su CIF, sin lote ni saldo que lo fijara: CIF del producto al migrar. */
+    cif_estimated: boolean;
+    bulk: {
+        total: string;
+        raw_materials: string;
+        line_adjustments: string;
+        remnants_used: string;
+    };
+    yield_gallons: string;
+    cost_per_gallon: string | null;
+    cost_per_gallon_with_cif: string | null;
+    cost_per_kg: string | null;
+    packaged: {
+        total: string;
+        bulk: string;
+        packaging_materials: string;
+        total_with_cif: string;
+    };
+    remnant: {
+        gallons: string;
+        cost_with_cif: string | null;
+        total_with_remnant: string | null;
+    } | null;
+    /** Por fila del plan de envasado con unidades. */
+    packaging: Array<{
+        id: number;
+        units: string;
+        unit_cost: string;
+        unit_cost_with_cif: string;
+        total_cost: string;
+    }>;
+    /** Contra la lista de precios de hoy. */
+    comparison: {
+        reference_cost_per_gallon: string | null;
+        reference_difference_percentage: string | null;
+        uses_reference_formula: boolean;
+        /** null: el producto no tiene margen en la lista. */
+        list_margin_percentage: string | null;
+        presentations: Array<{
+            id: number;
+            presentation_label: string | null;
+            unit_cost_with_cif: string;
+            list_price: string | null;
+            list_difference_percentage: string | null;
+            real_margin_percentage: string | null;
+        }>;
+    };
+};
+
+export type ProductionOrderPackagingCost =
+    ProductionOrderCostSummary['packaging'][number];
+
 export type PreviewCostData = {
     ingredients: Array<{
         id: number;
@@ -284,17 +340,5 @@ export type PreviewCostData = {
         total_cost: FormNumberValue;
         actual_quantity: number;
     }>;
-    packaging: Array<{
-        id: number;
-        cost_price: FormNumberValue;
-        total_cost: FormNumberValue;
-        equivalent: FormNumberValue;
-        actual_units: number;
-    }>;
-    total_bulk_cost: FormNumberValue;
-    total_finished_cost: FormNumberValue;
-    total_equivalent: FormNumberValue;
-    bulk_cost_per_unit?: FormNumberValue | null;
-    cif_percentage?: FormNumberValue | null;
-    remnant_bulk_cost?: FormNumberValue | null;
+    summary: ProductionOrderCostSummary | null;
 };

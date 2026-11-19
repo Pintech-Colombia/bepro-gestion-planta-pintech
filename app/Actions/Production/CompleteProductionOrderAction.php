@@ -276,6 +276,9 @@ class CompleteProductionOrderAction
                 'yield_theoretical_quantity' => $yieldTheoreticalQuantity,
                 'yield_variance_quantity' => $yieldVarianceQuantity,
                 'yield_percentage' => $yieldPercentage,
+                // El CIF con que se fijaron los lotes y el saldo: la OP completada lo muestra aunque el producto cambie.
+                'cif_percentage' => $productCifPercentage,
+                'cif_percentage_estimated' => false,
             ]);
 
             // TODO: Revisar si estas comparaciones con scale 4 deberían usar

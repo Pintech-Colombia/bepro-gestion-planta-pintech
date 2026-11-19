@@ -14,12 +14,14 @@
 
         $lineAdjustmentsCount = count($order['line_adjustments'] ?? []);
         $remnantsCount = count($order['remnant_consumptions'] ?? []);
-        $hasFinancialSummary = ($order['status'] ?? '') === 'completed' && isset($order['total_bulk_cost']);
+        // El mismo resumen de la tarjeta del detalle (ProductionOrderCostSummary): solo con «Ver costos».
+        $costSummary = $order['cost_summary'] ?? null;
+        $hasFinancialSummary = ($order['status'] ?? '') === 'completed' && $costSummary !== null;
 
         $effectiveLoad = count($pdfRows)
             + ($lineAdjustmentsCount > 0 ? $lineAdjustmentsCount + 2 : 0)
             + ($remnantsCount > 0 ? $remnantsCount + 2 : 0)
-            + ($hasFinancialSummary ? 4 : 0);
+            + ($hasFinancialSummary ? 5 : 0);
 
         // Escala adaptable para que la OP quepa siempre en 1 sola hoja carta sin recortar materias primas.
         $compactPass = (bool) ($compactPass ?? false);
@@ -640,9 +642,15 @@
             </tr>
             <tr class="compact-row">
                 <td class="label" style="width: 25%;">COSTO TOTAL GRANEL</td>
-                <td class="value" style="width: 25%;">{{ NumberFormat::cost($order['total_bulk_cost']) }}</td>
-                <td class="label" style="width: 25%;">COSTO TOTAL TERMINADO</td>
-                <td class="value" style="width: 25%;">{{ NumberFormat::cost($order['total_finished_cost']) }}</td>
+                <td class="value" style="width: 25%;">{{ NumberFormat::cost($costSummary['bulk']['total']) }}</td>
+                <td class="label" style="width: 25%;">COSTO DE LO ENVASADO</td>
+                <td class="value" style="width: 25%;">{{ NumberFormat::cost($costSummary['packaged']['total']) }}</td>
+            </tr>
+            <tr class="compact-row">
+                <td class="label">COSTO POR GALÓN (SIN CIF)</td>
+                <td class="value">{{ $costSummary['cost_per_gallon'] !== null ? NumberFormat::cost($costSummary['cost_per_gallon']) : 'N/A' }}</td>
+                <td class="label">COSTO CON CIF (ENVASADO)</td>
+                <td class="value">{{ NumberFormat::cost($costSummary['packaged']['total_with_cif']) }}</td>
             </tr>
             @if($order['yield_percentage'] !== null)
                 <tr class="compact-row">

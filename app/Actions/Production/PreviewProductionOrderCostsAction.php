@@ -24,24 +24,42 @@ class PreviewProductionOrderCostsAction
     ) {}
 
     /**
+     * Lo digitado en la pantalla: las cantidades vienen en la unidad de cada línea.
+     *
      * @param  array<int, array{id:int,actual_quantity:string|int|float}>  $ingredients  lo digitado, en la unidad de la línea
-     * @param  array<int, array{id:int,actual_units:float|int,new_containers_used?:string|int|float|null,labels_used?:string|int|float|null,label_raw_material_id?:int|null}>  $packaging
-     * @return array{
-     *   ingredients: array<int, array{id:int,unit_cost:string,total_cost:string,actual_quantity:float}>,
-     *   packaging: array<int, array{id:int,cost_price:string,total_cost:string,equivalent:string,actual_units:float}>,
-     *   total_bulk_cost: string,
-     *   total_finished_cost: string,
-     *   total_equivalent: string,
-     *   bulk_cost_per_unit: string|null,
-     *   cif_percentage: string|null,
-     *   remnant_bulk_cost: string|null
-     * }
+     * @param  array<int, array{id:int,actual_units:float|int|string,new_containers_used?:string|int|float|null,labels_used?:string|int|float|null,label_raw_material_id?:int|null}>  $packaging
+     * @return array<string, mixed> ver calculate()
      */
     public function execute(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
     {
-        $order->loadMissing(['details', 'packagingPlans.productVariant', 'product', 'remnantConsumptions.remnant']);
+        return $this->calculate($order, $this->lineUnits->ingredientsInMaterialUnit($order, $ingredients), $packaging, $remnantGallons);
+    }
 
-        $ingredients = $this->lineUnits->ingredientsInMaterialUnit($order, $ingredients);
+    /**
+     * La cuenta, con las cantidades ya en la unidad de la materia prima (lo guardado en la orden, o lo digitado ya
+     * convertido). La usan la vista previa y el resumen de costos de una orden abierta o pendiente.
+     *
+     * @param  array<int, array{id:int,actual_quantity:string|int|float}>  $ingredients  en la unidad de la materia prima
+     * @param  array<int, array{id:int,actual_units:float|int|string,new_containers_used?:string|int|float|null,labels_used?:string|int|float|null,label_raw_material_id?:int|null}>  $packaging
+     * @return array{
+     *   ingredients: array<int, array{id:int,unit_cost:string,total_cost:string,actual_quantity:float}>,
+     *   packaging: array<int, array{id:int,product_variant_id:int,actual_units:string,bulk_unit_cost:string,cost_price:string,total_cost:string,equivalent:string}>,
+     *   raw_materials_cost: string,
+     *   line_adjustments_cost: string,
+     *   remnants_cost: string,
+     *   total_bulk_cost: string,
+     *   total_finished_cost: string,
+     *   total_equivalent: string,
+     *   real_yield: string,
+     *   bulk_cost_per_unit: string|null,
+     *   cif_percentage: string|null,
+     *   remnant_gallons: string|null,
+     *   remnant_bulk_cost: string|null
+     * }
+     */
+    public function calculate(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
+    {
+        $order->loadMissing(['details', 'packagingPlans.productVariant', 'product', 'remnantConsumptions.remnant']);
 
         $detailsById = $order->details->keyBy('id');
         $ingredientRequirements = [];
@@ -78,11 +96,13 @@ class PreviewProductionOrderCostsAction
         );
 
         $ingredientResults = [];
+        $rawMaterialsCost = '0';
 
         foreach ($ingredientRows as $row) {
             $unitCost = (string) ($ingredientUnitCosts[$row['raw_material_id']] ?? '0');
             $totalCostStr = $this->calculator->mul($row['actual_quantity'], $unitCost, 4);
             $totalBulkCost = $this->calculator->add($totalBulkCost, $totalCostStr, 4);
+            $rawMaterialsCost = $this->calculator->add($rawMaterialsCost, $totalCostStr, 4);
 
             $ingredientResults[] = [
                 'id' => $row['id'],
@@ -94,6 +114,7 @@ class PreviewProductionOrderCostsAction
 
         $order->loadMissing('lineAdjustments');
         $adjustmentRequirements = [];
+        $lineAdjustmentsCost = '0';
 
         foreach ($order->lineAdjustments as $adjustment) {
             $adjustmentMaterialId = (int) $adjustment->raw_material_id;
@@ -114,15 +135,19 @@ class PreviewProductionOrderCostsAction
                 $unitCost = (string) ($adjustmentUnitCosts[$materialId] ?? '0');
                 $adjustmentCostStr = $this->calculator->mul((string) $quantity, $unitCost, 4);
                 $totalBulkCost = $this->calculator->add($totalBulkCost, $adjustmentCostStr, 4);
+                $lineAdjustmentsCost = $this->calculator->add($lineAdjustmentsCost, $adjustmentCostStr, 4);
             }
         }
 
         // Una línea planeada todavía no tiene costo: se estima con la misma regla con que se aplicará al completar.
+        $remnantsCost = '0';
+
         foreach ($order->remnantConsumptions as $consumption) {
             $remnantCost = $this->remnantDrawdown->lineCost($consumption);
 
             if ($remnantCost !== null) {
                 $totalBulkCost = $this->calculator->add($totalBulkCost, (string) $remnantCost, 4);
+                $remnantsCost = $this->calculator->add($remnantsCost, (string) $remnantCost, 4);
             }
         }
 
@@ -216,7 +241,10 @@ class PreviewProductionOrderCostsAction
 
             $packagingResults[] = [
                 'id' => $row['id'],
-                'actual_units' => (float) $row['actual_units'],
+                'product_variant_id' => $row['product_variant_id'],
+                'actual_units' => $row['actual_units'],
+                // El granel de una unidad: el resto del costo unitario son el envase y la etiqueta.
+                'bulk_unit_cost' => $variantBulkCost,
                 'cost_price' => $costPrice,
                 'total_cost' => $totalCostStr,
                 'equivalent' => $equivalentStr,
@@ -226,11 +254,16 @@ class PreviewProductionOrderCostsAction
         return [
             'ingredients' => $ingredientResults,
             'packaging' => $packagingResults,
+            'raw_materials_cost' => $rawMaterialsCost,
+            'line_adjustments_cost' => $lineAdjustmentsCost,
+            'remnants_cost' => $remnantsCost,
             'total_bulk_cost' => $totalBulkCost,
             'total_finished_cost' => $totalFinishedCost,
             'total_equivalent' => $this->completionLines->packagedEquivalent($order, $packaging),
+            'real_yield' => $this->completionLines->realYield($order, $packaging, $remnantGallons),
             'bulk_cost_per_unit' => $globalBulkCostPerUnit,
             'cif_percentage' => $cifPercentage,
+            'remnant_gallons' => $this->completionLines->hasRemnant($remnantGallons) ? $remnantGallons : null,
             'remnant_bulk_cost' => $remnantBulkCost,
         ];
     }

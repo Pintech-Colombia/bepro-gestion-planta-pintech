@@ -199,7 +199,9 @@ test('production order payload keeps calculated costs as decimal strings', funct
     $this->actingAs($user);
     $payload = app(BuildProductionOrderExportDataAction::class)->execute($order);
 
-    expect($payload['total_bulk_cost'])->toBe('1000.0000');
+    // Pendiente: el resumen es un estimado con lo planeado (100 × $10 de referencia).
+    expect($payload['cost_summary']['basis'])->toBe('estimated');
+    expect($payload['cost_summary']['bulk']['total'])->toBe('1000.0000');
     expect($payload['details'][0]['unit_cost'])->toBe('10.0000');
     expect($payload['details'][0]['total_cost'])->toBe('1000.0000');
     expect($payload)->toHaveKey('pdf_materials');
@@ -269,8 +271,8 @@ test('the order pdf renders formatted numbers for costs, quantities and yield pe
 
     $this->actingAs($user);
     $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
-    $payload['total_bulk_cost'] = '12345.50';
-    $payload['total_finished_cost'] = '15678.90';
+    $payload['cost_summary']['bulk']['total'] = '12345.50';
+    $payload['cost_summary']['packaged']['total'] = '15678.90';
 
     $pdfHtml = view('pdf.production-order', [
         'order' => $payload,
