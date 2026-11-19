@@ -37,6 +37,8 @@ type FormulaLine = {
     /** Un producto como ingrediente (PT consumible), con cómo se costea (P14). */
     product?: { id: number; name: string } | null;
     costing_basis: string | null;
+    /** «Se costea como» armado en el servidor (enum o presentación); nulo si falta elegirlo. */
+    costing_label: string | null;
     costing_variant?: { id: number; presentation_label: string } | null;
     unit_of_measure?: { name: string; symbol: string } | null;
 };
@@ -51,14 +53,6 @@ type ProductLineCost = {
     density_order_number: string | null;
     reason: string | null;
 };
-
-function costingLabel(line: FormulaLine): string {
-    if (line.costing_basis === 'bulk') {
-        return 'Granel (sin envase)';
-    }
-
-    return line.costing_variant?.presentation_label ?? 'Sin elegir';
-}
 
 function densityLabel(cost: ProductLineCost): string | null {
     if (cost.density === null) {
@@ -337,7 +331,8 @@ export default function FormulasShow({
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                                 Se costea como:{' '}
-                                                {costingLabel(detail)}
+                                                {detail.costing_label ??
+                                                    'Sin elegir'}
                                             </div>
                                         </div>
                                     ) : (

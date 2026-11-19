@@ -9,6 +9,7 @@ use App\Actions\Formulas\CreateFormulaAction;
 use App\Actions\Formulas\DeleteFormulaAction;
 use App\Actions\Formulas\SetPriceReferenceFormulaAction;
 use App\Actions\Formulas\UpdateFormulaAction;
+use App\Enums\FormulaLineCostingBasis;
 use App\Enums\Permission;
 use App\Filters\FormulaFilter;
 use App\Http\Requests\Formulas\IndexFormulaRequest;
@@ -108,6 +109,10 @@ class FormulaController extends Controller
                 'details' => $formula->details->map(fn (FormulaDetail $detail): array => [
                     ...$detail->only(['id', 'step_order', 'raw_material_id', 'product_id', 'quantity', 'unit_of_measure_id']),
                     'costing_basis' => $detail->costing_basis?->value,
+                    // «Se costea como», ya armado: el texto de granel sale del enum, no se repite en la pantalla.
+                    'costing_label' => $detail->isProductLine()
+                        ? ($detail->costing_basis === FormulaLineCostingBasis::Presentation ? $detail->costingVariant?->presentation_label : $detail->costing_basis?->label())
+                        : null,
                     'raw_material' => $detail->rawMaterial?->only(['id', 'code']),
                     'product' => $detail->product?->only(['id', 'name']),
                     'costing_variant' => $detail->costingVariant?->only(['id', 'presentation_label']),

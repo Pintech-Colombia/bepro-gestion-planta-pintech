@@ -24,6 +24,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Role;
@@ -380,3 +381,36 @@ it('la ficha envía el costo por kilo de las líneas de producto solo con costs.
             ->where('productLineCosts', fn ($costs) => $withCosts ? count($costs) === 1 : count($costs) === 0)
         );
 })->with(['con costos' => [true], 'sin costos' => [false]]);
+
+it('la ficha costea una línea «con presentación» aunque la pantalla cargue la presentación con pocas columnas', function () {
+    $formula = ralWithWhite('presentation', $this->whiteGallon->id);
+    $lineId = $formula->details->firstWhere('product_id', $this->white->id)->id;
+
+    $this->get(route('formulas.show', $formula))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('formula.details.0.costing_label', 'Galón')
+            ->where("productLineCosts.{$lineId}.cost_per_kg", '11400.0000')
+            ->where("productLineCosts.{$lineId}.reason", null)
+        );
+});
+
+it('una presentación sin valor cuenta como 1 galón, como en la lista de precios', function () {
+    DB::table('product_variants')->where('id', $this->whiteGallon->id)->update(['presentation_value' => null]);
+    $line = new FormulaDetail([
+        'product_id' => $this->white->id,
+        'costing_basis' => FormulaLineCostingBasis::Presentation,
+        'costing_variant_id' => $this->whiteGallon->id,
+    ]);
+    $line->id = 998;
+
+    expect(app(ProductLineTheoreticalCost::class)->forLines([$line])[998]['cost_per_kg'])->toBe('11400.0000');
+});
+
+it('no encola la cadena para un producto que no es ingrediente de nadie', function () {
+    Queue::fake();
+
+    app(ProductionCostRecalculationService::class)->dispatchDependentsOf($this->paste->id + 1000);
+    app(ProductionCostRecalculationService::class)->dispatchDependentsOf($this->third->id);
+
+    Queue::assertNothingPushed();
+});

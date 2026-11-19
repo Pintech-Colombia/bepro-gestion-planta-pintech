@@ -134,7 +134,7 @@ class ProductionCostRecalculationService
             );
 
             // Los productos que llevan este en su fórmula de referencia se recalculan después, en segundo plano (D-7).
-            RecalculateProductDependentCosts::dispatch($productId, $chainDepth + 1)->afterCommit();
+            $this->dispatchDependentsOf($productId, $chainDepth + 1);
 
             return ProductionCost::create([
                 'product_id' => $productId,
@@ -200,9 +200,18 @@ class ProductionCostRecalculationService
      * Encola el recálculo de los productos que llevan `$productId`: para los cambios que no pasan por
      * `recalculateForProduct` (presentaciones, peso de referencia, último lote, CIF sin fórmula).
      */
-    public function dispatchDependentsOf(int $productId): void
+    public function dispatchDependentsOf(int $productId, int $depth = 1): void
     {
-        RecalculateProductDependentCosts::dispatch($productId)->afterCommit();
+        // Solo si alguna fórmula de referencia lo lleva: la mayoría de los productos no es ingrediente de nadie, y un
+        // recorrido por materia prima no debe dejar un trabajo vacío por cada producto.
+        $hasDependents = FormulaDetail::query()
+            ->where('product_id', $productId)
+            ->whereHas('formula', fn ($query) => $query->priceReference()->where('product_id', '!=', $productId))
+            ->exists();
+
+        if ($hasDependents) {
+            RecalculateProductDependentCosts::dispatch($productId, $depth)->afterCommit();
+        }
     }
 
     /**

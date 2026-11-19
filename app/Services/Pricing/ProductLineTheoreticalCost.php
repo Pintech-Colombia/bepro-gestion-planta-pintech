@@ -9,6 +9,7 @@ use App\Enums\ProductionOrderStatus;
 use App\Models\FormulaDetail;
 use App\Models\Product;
 use App\Models\ProductionOrder;
+use App\Models\ProductVariant;
 use App\Services\DecimalCalculator;
 use Illuminate\Support\Collection;
 
@@ -41,7 +42,8 @@ class ProductLineTheoreticalCost
 
     /**
      * El costo por kilo de cada línea de producto, por id de línea, con su desglose o el motivo por el que no se puede.
-     * Carga lo que falte en una consulta por tipo (productos, presentaciones, últimas densidades), no por línea.
+     * Lee **sus propios** productos y presentaciones (filas completas, una consulta para cada uno): no confía en las
+     * relaciones que traiga la línea, que quien llama pudo cargar con pocas columnas para la pantalla.
      *
      * @param  iterable<FormulaDetail>  $lines
      * @return array<int, array{cost_per_kg: string|null, bulk_per_kg: string|null, packaging_per_kg: string|null, density: string|null, density_source: string|null, density_order_number: string|null, reason: string|null}>
@@ -55,13 +57,19 @@ class ProductLineTheoreticalCost
             return [];
         }
 
-        $productLines->each(fn (FormulaDetail $line) => $line->loadMissing(['product', 'costingVariant']));
-        $lastLots = $this->lastLotDensities($productLines->pluck('product_id')->unique()->values()->all());
+        $products = Product::query()->whereKey($productLines->pluck('product_id')->unique()->all())->get()->keyBy('id');
+        $variants = ProductVariant::query()->whereKey($productLines->pluck('costing_variant_id')->filter()->unique()->all())->get()->keyBy('id');
+        $lastLots = $this->lastLotDensities($products->filter(fn (Product $product): bool => $product->reference_density_kg_per_gallon === null)->keys()->all());
 
         $costs = [];
 
         foreach ($productLines as $line) {
-            $costs[(int) $line->id] = $this->costFor($line, $lastLots);
+            $costs[(int) $line->id] = $this->costFor(
+                $line,
+                $products->get((int) $line->product_id),
+                $line->costing_variant_id !== null ? $variants->get((int) $line->costing_variant_id) : null,
+                $lastLots,
+            );
         }
 
         return $costs;
@@ -85,9 +93,8 @@ class ProductLineTheoreticalCost
      * @param  array<int, array{density: string, order_number: string}>  $lastLots
      * @return array{cost_per_kg: string|null, bulk_per_kg: string|null, packaging_per_kg: string|null, density: string|null, density_source: string|null, density_order_number: string|null, reason: string|null}
      */
-    private function costFor(FormulaDetail $line, array $lastLots): array
+    private function costFor(FormulaDetail $line, ?Product $product, ?ProductVariant $variant, array $lastLots): array
     {
-        $product = $line->product;
         $lastLot = $lastLots[(int) $line->product_id] ?? null;
         $density = $product?->reference_density_kg_per_gallon !== null
             ? (string) $product->reference_density_kg_per_gallon
@@ -127,8 +134,6 @@ class ProductLineTheoreticalCost
             return [...$result, 'cost_per_kg' => $bulkPerKg, 'bulk_per_kg' => $bulkPerKg, 'packaging_per_kg' => '0.0000'];
         }
 
-        $variant = $line->costingVariant;
-
         if ($variant === null || ! $variant->is_active) {
             return [...$result, 'reason' => self::REASON_INACTIVE_PRESENTATION];
         }
@@ -137,7 +142,8 @@ class ProductLineTheoreticalCost
             return [...$result, 'reason' => self::REASON_MISSING_SOURCE_COST];
         }
 
-        $kilosPerUnit = $this->calculator->mul((string) $variant->presentation_value, $density, self::SCALE);
+        // Sin valor de presentación, 1 galón: la misma regla que `VariantPricingService`.
+        $kilosPerUnit = $this->calculator->mul((string) ($variant->presentation_value ?? 1), $density, self::SCALE);
 
         if (! $this->calculator->isPositive($kilosPerUnit)) {
             return [...$result, 'reason' => self::REASON_MISSING_DENSITY];
@@ -159,35 +165,33 @@ class ProductLineTheoreticalCost
     }
 
     /**
-     * La densidad de la última OP completada de cada producto, con su número, en una consulta.
+     * La densidad de la última OP completada de cada producto (sin peso de referencia), con su número: una consulta por
+     * producto que trae **una** fila. Una fórmula lleva pocos productos; traer todas sus OP para quedarse con la primera
+     * crecería con el tiempo.
      *
      * @param  list<int>  $productIds
      * @return array<int, array{density: string, order_number: string}>
      */
     private function lastLotDensities(array $productIds): array
     {
-        $productsWithReference = Product::query()->whereKey($productIds)->whereNotNull('reference_density_kg_per_gallon')->pluck('id')->all();
-        $missing = array_values(array_diff($productIds, $productsWithReference));
-
-        if ($missing === []) {
-            return [];
-        }
-
         $densities = [];
 
-        ProductionOrder::query()
-            ->whereIn('product_id', $missing)
-            ->where('status', ProductionOrderStatus::Completed)
-            ->whereNotNull('density_kg_per_gallon')
-            ->orderByDesc('completion_date')
-            ->orderByDesc('id')
-            ->get(['id', 'product_id', 'order_number', 'density_kg_per_gallon'])
-            ->each(function (ProductionOrder $order) use (&$densities): void {
-                $densities[(int) $order->product_id] ??= [
+        foreach ($productIds as $productId) {
+            $order = ProductionOrder::query()
+                ->where('product_id', $productId)
+                ->where('status', ProductionOrderStatus::Completed)
+                ->whereNotNull('density_kg_per_gallon')
+                ->orderByDesc('completion_date')
+                ->orderByDesc('id')
+                ->first(['id', 'order_number', 'density_kg_per_gallon']);
+
+            if ($order !== null) {
+                $densities[(int) $productId] = [
                     'density' => (string) $order->density_kg_per_gallon,
                     'order_number' => (string) $order->order_number,
                 ];
-            });
+            }
+        }
 
         return $densities;
     }
