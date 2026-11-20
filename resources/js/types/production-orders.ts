@@ -41,6 +41,7 @@ export type ProductionOrderRawMaterial = {
 
 export type ProductionOrderDetail = {
     id: number;
+    raw_material_id: number;
     step_order?: number | null;
     raw_material?: ProductionOrderRawMaterial | null;
     planned_quantity: FormNumberValue;
@@ -50,6 +51,31 @@ export type ProductionOrderDetail = {
     actual_display_quantity?: FormNumberValue | null;
     unit_cost?: FormNumberValue | null;
     total_cost?: FormNumberValue | null;
+};
+
+/**
+ * Una materia prima que se pasó de lo planeado más allá de la tolerancia (`ProductionOrderConsumptionCheck` en el
+ * servidor): en revisión y completada. Cantidades en la unidad de la materia prima, como texto decimal.
+ */
+export type ProductionOrderOverconsumption = {
+    raw_material_id: number;
+    code: string | null;
+    unit: string | null;
+    planned: string;
+    consumed: string;
+    excess_percentage: string;
+    tolerance_percentage: string;
+    /** false: el exceso viene de ajustes de línea, que ya traen su motivo. */
+    needs_reason: boolean;
+    reason: string | null;
+    /** Solo con «Ver costos» y la orden completada. */
+    extra_cost?: string | null;
+};
+
+export type ProductionOrderConsumptionReason = {
+    raw_material_id: number;
+    code: string | null;
+    reason: string;
 };
 
 export type ProductionOrderProductVariant = {
@@ -154,6 +180,10 @@ export type ProductionOrder = {
     completion_date?: string | null;
     /** Solo con «Ver costos»; null si la orden está cancelada. */
     cost_summary?: ProductionOrderCostSummary | null;
+    /** La tolerancia con que se evaluó el consumo al completar (null en las anteriores). */
+    consumption_tolerance_percentage?: string | null;
+    overconsumption?: ProductionOrderOverconsumption[];
+    consumption_reasons?: ProductionOrderConsumptionReason[];
     qr_landing_url?: string | null;
     qr_image_url?: string | null;
     submitted_at?: string | null;
@@ -215,6 +245,7 @@ export type ProductionOrderShowProps = {
 
 export type ProductionOrderIngredientFormRow = {
     id: number;
+    raw_material_id: number;
     /** Paso de la fórmula: la misma materia prima puede ir en varios pasos (D-FOR2). */
     step_order?: number | null;
     raw_material_name?: string | null;
@@ -261,6 +292,8 @@ export type ProductionOrderFormData = {
     notes: string;
     ingredients: ProductionOrderIngredientFormRow[];
     packaging: ProductionOrderPackagingFormRow[];
+    /** Motivo por id de la materia prima; el servidor dice cuáles se necesitan. */
+    overconsumption_reasons: Record<string, string>;
 };
 
 export type QualitySignerOption = {

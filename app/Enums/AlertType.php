@@ -12,6 +12,7 @@ enum AlertType: string implements HasTone
     case VencimientoProximo = 'vencimiento_proximo';
     case VariacionPrecio = 'variacion_precio';
     case PaintDevelopmentRequest = 'paint_development_request';
+    case Sobreconsumo = 'sobreconsumo';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum AlertType: string implements HasTone
             self::VencimientoProximo => __('Vencimiento próximo'),
             self::VariacionPrecio => __('Variación de precio'),
             self::PaintDevelopmentRequest => __('Solicitud de desarrollo de pintura'),
+            self::Sobreconsumo => __('Sobreconsumo'),
         };
     }
 
@@ -32,7 +34,8 @@ enum AlertType: string implements HasTone
             self::StockBajo,
             self::VencimientoProximo,
             self::VariacionPrecio,
-            self::PaintDevelopmentRequest => Tone::Neutral,
+            self::PaintDevelopmentRequest,
+            self::Sobreconsumo => Tone::Neutral,
         };
     }
 
@@ -49,6 +52,8 @@ enum AlertType: string implements HasTone
             self::VariacionPrecio => Permission::CostsView,
             // El mensaje lleva el cliente de una solicitud que puede no ser propia.
             self::PaintDevelopmentRequest => Permission::PaintDevelopmentRequestsViewAll,
+            // El mensaje lleva el costo del exceso y el margen real de la OP.
+            self::Sobreconsumo => Permission::CostsView,
         };
     }
 }

@@ -120,7 +120,7 @@ conserva (`User::hasActivity()` se reduce a esa consulta).
 
 `formula_details` → `formulas` · `shrink_wrap_type_items` → `shrink_wrap_types` · `shrink_wrap_items` → `shrink_wraps` (los registros no se eliminan; la cascada no llega a actuar) · `qr_documents` → `qr_codes` · `finished_product_batch_stocks` →
 `finished_product_batches` · hijos de una orden (`production_order_details`, `_line_adjustments`, `_packaging_plan`,
-`qr_codes`) → `production_orders` (las órdenes no se eliminan; la cascada no llega a actuar) · `alerts` →
+`_consumption_reasons`, `qr_codes`) → `production_orders` (las órdenes no se eliminan; la cascada no llega a actuar) · `alerts` →
 `raw_materials` / `inventory_batches` · `warehouse_user` → `users` / `warehouses` · tablas de Spatie (roles y permisos).
 
 ### 4.2 Pasan a `RESTRICT`

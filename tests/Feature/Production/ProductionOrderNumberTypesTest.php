@@ -99,6 +99,8 @@ function numberTypesCompleteBody(object $t, array $f, array $override = []): arr
         'density_kg_per_gallon' => '5',
         'quality_responsible_user_id' => $t->admin->id,
         'responsible_name' => 'Operario',
+        // Las cantidades de estas pruebas pasan a propósito de lo planeado: el motivo de sobreconsumo no es lo que miran.
+        'overconsumption_reasons' => [$f['d1']->raw_material_id => 'Prueba de tipos', $f['d2']->raw_material_id => 'Prueba de tipos'],
     ], $override);
 }
 

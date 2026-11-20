@@ -53,6 +53,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string|null $density_kg_per_gallon
  * @property string|null $cif_percentage CIF del producto el día en que se completó
  * @property bool $cif_percentage_estimated
+ * @property string|null $consumption_tolerance_percentage Tolerancia de consumo con que se evaluó al completar
  * @property int $lot_number
  * @property int $created_by
  * @property int|null $submitted_by
@@ -72,6 +73,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read Collection|FinishedInventoryMovement[] $finishedInventoryMovements
  * @property-read Collection|ProductionOrderPackagingPlan[] $packagingPlans
  * @property-read Collection|ProductionOrderLineAdjustment[] $lineAdjustments
+ * @property-read Collection|ProductionOrderConsumptionReason[] $consumptionReasons
  * @property-read Collection|FinishedProductBatch[] $finishedProductBatches
  * @property-read QrCode|null $qrCode
  * @property-read ProductionRemnant|null $remnant
@@ -109,6 +111,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'density_kg_per_gallon',
     'cif_percentage',
     'cif_percentage_estimated',
+    'consumption_tolerance_percentage',
     'created_by',
     'submitted_by',
     'submitted_at',
@@ -178,6 +181,7 @@ class ProductionOrder extends Model
             'density_kg_per_gallon' => 'decimal:4',
             'cif_percentage' => 'decimal:2',
             'cif_percentage_estimated' => 'boolean',
+            'consumption_tolerance_percentage' => 'decimal:2',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];
@@ -277,6 +281,12 @@ class ProductionOrder extends Model
     public function lineAdjustments(): HasMany
     {
         return $this->hasMany(ProductionOrderLineAdjustment::class, 'production_order_id');
+    }
+
+    /** Motivos de las materias primas que se pasaron de lo planeado (uno por materia prima). */
+    public function consumptionReasons(): HasMany
+    {
+        return $this->hasMany(ProductionOrderConsumptionReason::class, 'production_order_id');
     }
 
     public function finishedProductBatches(): HasMany

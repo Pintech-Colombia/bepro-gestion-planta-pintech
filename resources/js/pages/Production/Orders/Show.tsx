@@ -126,6 +126,13 @@ export default function ProductionOrderShow({
             packaging: orderPackagingPlans.map((pack) =>
                 mapPackagingPlanToFormRow(pack),
             ),
+            // Los motivos guardados (si la orden volvió de revisión, se editan); el servidor dice cuáles faltan.
+            overconsumption_reasons: Object.fromEntries(
+                (order.consumption_reasons ?? []).map((reason) => [
+                    String(reason.raw_material_id),
+                    reason.reason,
+                ]),
+            ),
         });
 
     const {
@@ -395,6 +402,8 @@ export default function ProductionOrderShow({
                             solidsReferenceLabel={solidsReferenceLabel}
                             showCosts={can.previewCosts}
                             canPrintLabels={can.printLabels}
+                            overconsumption={order.overconsumption ?? []}
+                            consumptionReasons={order.consumption_reasons ?? []}
                         />
                     </div>
 
@@ -589,6 +598,7 @@ export default function ProductionOrderShow({
 function mapDetailToIngredientFormRow(detail: ProductionOrderDetail) {
     return {
         id: detail.id,
+        raw_material_id: detail.raw_material_id,
         step_order: detail.step_order ?? null,
         raw_material_name: detail.raw_material?.code,
         raw_material_unit: detail.raw_material?.unit_symbol,

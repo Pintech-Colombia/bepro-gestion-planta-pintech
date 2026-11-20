@@ -8,8 +8,12 @@ use App\Enums\AlertSeverity;
 use App\Enums\AlertType;
 use App\Models\Alert;
 use App\Models\InventoryBatch;
+use App\Models\ProductionOrder;
 use App\Models\RawMaterial;
 use App\Models\User;
+use App\Services\Production\ProductionOrderConsumptionCheck;
+use App\Services\Production\ProductionOrderCostSummary;
+use App\Support\NumberFormat;
 use Illuminate\Support\Carbon;
 
 class AlertService
@@ -20,6 +24,8 @@ class AlertService
     public function __construct(
         private readonly DecimalCalculator $calculator,
         private readonly TimezoneService $timezone,
+        private readonly ProductionOrderConsumptionCheck $consumptionCheck,
+        private readonly ProductionOrderCostSummary $costSummary,
     ) {}
 
     public function unresolvedCount(?User $user): int
@@ -31,7 +37,7 @@ class AlertService
     }
 
     /**
-     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int}
+     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int, sobreconsumo: int}
      */
     public function unresolvedBreakdown(?User $user): array
     {
@@ -47,6 +53,7 @@ class AlertService
             'vencimiento_proximo' => (int) ($counts[AlertType::VencimientoProximo->value] ?? 0),
             'variacion_precio' => (int) ($counts[AlertType::VariacionPrecio->value] ?? 0),
             'paint_development_request' => (int) ($counts[AlertType::PaintDevelopmentRequest->value] ?? 0),
+            'sobreconsumo' => (int) ($counts[AlertType::Sobreconsumo->value] ?? 0),
         ];
     }
 
@@ -278,6 +285,71 @@ class AlertService
         );
     }
 
+    /**
+     * Al completar una OP, una sola alerta con todas las materias primas que se pasaron de lo planeado más allá de la
+     * tolerancia, ajustes de línea incluidos (`ProductionOrderConsumptionCheck`). Lleva el costo del exceso y el margen
+     * real por presentación de la OP (`ProductionOrderCostSummary`): el admin decide si revisa la planta, ajusta la
+     * fórmula o sube el margen. Nada se reajusta solo.
+     *
+     * Urgencia alta si alguna pasa el doble de la tolerancia, como la variación de precio.
+     */
+    public function evaluateOverconsumption(ProductionOrder $order): void
+    {
+        $rows = $this->consumptionCheck->forOrder($order);
+
+        if ($rows === []) {
+            return;
+        }
+
+        $tolerance = $rows[0]['tolerance_percentage'];
+        $doubled = $this->calculator->mul($tolerance, '2', 4);
+        $severity = collect($rows)->contains(fn (array $row): bool => $this->calculator->cmp($row['excess_percentage'], $doubled) >= 0)
+            ? AlertSeverity::Alta
+            : AlertSeverity::Media;
+
+        $materials = collect($rows)->map(function (array $row): string {
+            $detail = sprintf(
+                '%s de %s%s',
+                NumberFormat::quantity($row['consumed']),
+                NumberFormat::quantity($row['planned']),
+                $row['unit'] !== null ? " {$row['unit']}" : '',
+            );
+
+            if ($row['extra_cost'] !== null) {
+                $detail .= ', +'.NumberFormat::cost($row['extra_cost']);
+            }
+
+            return sprintf('%s +%s (%s)', $row['code'] ?? "MP #{$row['raw_material_id']}", $this->consumptionCheck->excessLabel($row), $detail);
+        })->implode('; ');
+
+        $message = sprintf('%s · %s: %s.', $order->order_number, $order->productDisplayName(), $materials);
+        $margin = $this->overconsumptionMarginText($order);
+
+        if ($margin !== null) {
+            $message .= ' '.$margin.'.';
+        }
+
+        $alert = Alert::query()
+            ->where('type', AlertType::Sobreconsumo)
+            ->where('production_order_id', $order->id)
+            ->where('is_resolved', false)
+            ->first();
+
+        if ($alert !== null) {
+            $alert->update(['severity' => $severity, 'message' => $message]);
+
+            return;
+        }
+
+        $this->announce(Alert::create([
+            'type' => AlertType::Sobreconsumo,
+            'production_order_id' => $order->id,
+            'severity' => $severity,
+            'message' => $message,
+            'is_resolved' => false,
+        ]));
+    }
+
     public function resolve(Alert $alert, int $userId): void
     {
         if ($alert->is_resolved) {
@@ -297,23 +369,12 @@ class AlertService
         AlertSeverity $severity,
         string $message,
     ): void {
-        $alert = Alert::create([
+        $this->announce(Alert::create([
             'type' => $type,
             'severity' => $severity,
             'message' => $message,
             'is_resolved' => false,
-        ]);
-
-        $payload = [
-            'id' => $alert->id,
-            'message' => $message,
-            'severity' => $severity->value,
-            'type' => $type->value,
-            'type_label' => $type->label(),
-        ];
-
-        $this->createdInRequest[] = $payload;
-        session()->push('new_alerts', $payload);
+        ]));
     }
 
     private function createOrRefresh(
@@ -343,25 +404,59 @@ class AlertService
             return;
         }
 
-        $alert = Alert::create([
+        $this->announce(Alert::create([
             'type' => $type,
             'raw_material_id' => $rawMaterialId,
             'batch_id' => $batchId,
             'severity' => $severity,
             'message' => $message,
             'is_resolved' => false,
-        ]);
+        ]));
+    }
 
+    /** Una alerta nueva sale en el aviso en pantalla de esta petición (`new_alerts`). */
+    private function announce(Alert $alert): void
+    {
         $payload = [
             'id' => $alert->id,
-            'message' => $message,
-            'severity' => $severity->value,
-            'type' => $type->value,
-            'type_label' => $type->label(),
+            'message' => $alert->message,
+            'severity' => $alert->severity->value,
+            'type' => $alert->type->value,
+            'type_label' => $alert->type->label(),
         ];
 
         $this->createdInRequest[] = $payload;
         session()->push('new_alerts', $payload);
+    }
+
+    /**
+     * «Margen real Galón 31% y Cuñete 30% (lista 40%)», con el resumen de costos de la OP contra la lista de hoy. Sin
+     * margen en el producto, lo dice; sin presentaciones con precio, nada.
+     */
+    private function overconsumptionMarginText(ProductionOrder $order): ?string
+    {
+        $comparison = $this->costSummary->forOrder($order)['comparison'] ?? null;
+
+        if ($comparison === null) {
+            return null;
+        }
+
+        if ($comparison['list_margin_percentage'] === null) {
+            return __('Sin margen en la lista');
+        }
+
+        $margins = collect($comparison['presentations'])
+            ->filter(fn (array $presentation): bool => $presentation['real_margin_percentage'] !== null)
+            ->map(fn (array $presentation): string => trim(($presentation['presentation_label'] ?? '').' '.NumberFormat::percent($presentation['real_margin_percentage'])));
+
+        if ($margins->isEmpty()) {
+            return null;
+        }
+
+        return __('Margen real :margins (lista :list)', [
+            'margins' => $margins->join(', ', ' y '),
+            'list' => NumberFormat::percent($comparison['list_margin_percentage']),
+        ]);
     }
 
     private function autoResolveActive(AlertType $type, int $rawMaterialId, ?int $batchId): void

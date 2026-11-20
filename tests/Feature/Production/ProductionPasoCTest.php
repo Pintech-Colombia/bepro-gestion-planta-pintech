@@ -778,6 +778,7 @@ test('it consumes raw material using fifo across multiple batches', function () 
             ['id' => $detail->id, 'actual_quantity' => 150],
         ],
         'packaging' => [],
+        'overconsumption_reasons' => [$detail->raw_material_id => 'Cruza lotes a propósito'],
     ]);
 
     $response->assertRedirect();

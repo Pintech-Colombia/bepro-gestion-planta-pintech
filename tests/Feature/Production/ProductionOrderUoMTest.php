@@ -361,6 +361,7 @@ test('it previews and completes a production order with normalized quantities', 
             ['id' => $detail->id, 'actual_quantity' => 3.0], // 3.0 kg reales gastados
         ],
         'packaging' => [],
+        'overconsumption_reasons' => [$detail->raw_material_id => 'Se gastó más de lo planeado'],
     ]);
 
     $completeResponse->assertRedirect();
@@ -474,6 +475,8 @@ function closingPayload(array $line, string $typed): array
         'remnant_consumption_ids' => [],
         'ingredients' => [['id' => $line['detail']->id, 'actual_quantity' => $typed]],
         'packaging' => [['id' => $line['plan']->id, 'actual_units' => 250]],
+        // Algunas pruebas registran a propósito más de lo planeado: el motivo de sobreconsumo no es lo que miran.
+        'overconsumption_reasons' => [$line['detail']->raw_material_id => 'Prueba de unidades'],
     ];
 }
 

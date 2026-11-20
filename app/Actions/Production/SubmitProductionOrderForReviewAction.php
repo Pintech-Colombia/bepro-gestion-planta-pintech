@@ -8,6 +8,7 @@ use App\Enums\ProductionOrderStatus;
 use App\Models\ProductionOrder;
 use App\Models\User;
 use App\Services\Production\ProductionOrderCompletionLines;
+use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class SubmitProductionOrderForReviewAction
         private readonly ProductionOrderLock $orderLock,
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
+        private readonly ProductionOrderConsumptionCheck $consumptionCheck,
     ) {}
 
     /**
@@ -34,6 +36,9 @@ class SubmitProductionOrderForReviewAction
 
             // Después de la lista: si la orden cambió, eso se avisa antes que un error de cantidad.
             $data['ingredients'] = $this->lineUnits->ingredientsToRecord($lockedOrder, $data['ingredients']);
+
+            // Quien entrega explica lo que se pasó de lo planeado: 422 si falta un motivo.
+            $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], (int) $user->id);
 
             $this->saveOperationalData->execute($lockedOrder, $data);
 
