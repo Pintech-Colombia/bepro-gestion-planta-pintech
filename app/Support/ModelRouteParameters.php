@@ -27,6 +27,7 @@ final class ModelRouteParameters
     public const NAMES = [
         'adjustment',
         'alert',
+        'batch_consumption',
         'client',
         'consumption',
         'document',

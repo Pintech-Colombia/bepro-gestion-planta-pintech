@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AvailableRemnantsService;
 use App\Services\DecimalCalculator;
 use App\Services\Production\ProductionOrderLock;
+use App\Services\Production\ProductLinePlanner;
 use App\Services\Production\RemnantDrawdown;
 use App\Support\NumberFormat;
 use Illuminate\Support\Facades\DB;
@@ -24,21 +25,24 @@ class PlanRemnantConsumptionAction
         private readonly ProductionOrderLock $orderLock,
         private readonly AvailableRemnantsService $availableRemnants,
         private readonly RemnantDrawdown $drawdown,
+        private readonly ProductLinePlanner $planner,
     ) {}
 
     /**
      * Planea el uso de un saldo de PT en una OP abierta: crea la línea sin tocar el saldo, que se descuenta al completar
      * la orden. Los kilos no pueden pasar de lo libre del saldo (lo disponible menos lo ya planeado en órdenes abiertas).
-     * Se guarda un estimado de los galones; los reales y el costo se calculan al completar.
+     * Se guarda un estimado de los galones; los reales y el costo se calculan al completar. El saldo es una fuente de la
+     * línea de su producto en «Productos a usar»: si la orden no la tiene, nace como línea agregada.
      */
     public function execute(
         ProductionRemnant $remnant,
         ProductionOrder $targetOrder,
         string $quantityKg,
         User $user,
-        ?string $notes = null
+        ?string $notes = null,
+        ?int $lineId = null,
     ): RemnantConsumption {
-        return DB::transaction(function () use ($remnant, $targetOrder, $quantityKg, $user, $notes): RemnantConsumption {
+        return DB::transaction(function () use ($remnant, $targetOrder, $quantityKg, $user, $notes, $lineId): RemnantConsumption {
             // Siempre la OP primero y después los saldos (completar bloquea igual, con los saldos por id ascendente), y
             // una sola OP por transacción: así nadie espera en el orden contrario y no hay abrazo mortal.
             $lockedOrder = $this->orderLock->lockFor(
@@ -63,9 +67,12 @@ class PlanRemnantConsumptionAction
                 ]);
             }
 
+            $line = $this->planner->lineFor($lockedOrder, (int) $lockedRemnant->product_id, $lineId, 'remnant_id');
+
             return RemnantConsumption::create([
                 'remnant_id' => $lockedRemnant->id,
                 'target_order_id' => $lockedOrder->id,
+                'production_order_product_line_id' => $line->id,
                 // Los kilos digitados: si al completar agotan el saldo por un resto mínimo, ahí se ajustan.
                 'quantity_kg' => $quantityKg,
                 'quantity_gallons' => $estimate['quantity_gallons'],

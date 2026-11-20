@@ -8,6 +8,7 @@ use App\Models\ProductionOrder;
 use App\Services\DecimalCalculator;
 use App\Services\Inventory\FifoStockAllocatorService;
 use App\Services\Pricing\ProductionCostCalculatorService;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\RemnantDrawdown;
@@ -21,6 +22,7 @@ class PreviewProductionOrderCostsAction
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
+        private readonly BatchSourceDrawdown $batchSources,
     ) {}
 
     /**
@@ -47,6 +49,7 @@ class PreviewProductionOrderCostsAction
      *   raw_materials_cost: string,
      *   line_adjustments_cost: string,
      *   remnants_cost: string,
+     *   products_cost: string,
      *   total_bulk_cost: string,
      *   total_finished_cost: string,
      *   total_equivalent: string,
@@ -59,7 +62,13 @@ class PreviewProductionOrderCostsAction
      */
     public function calculate(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
     {
-        $order->loadMissing(['details', 'packagingPlans.productVariant', 'product', 'remnantConsumptions.remnant']);
+        $order->loadMissing([
+            'details',
+            'packagingPlans.productVariant',
+            'product',
+            'remnantConsumptions.remnant',
+            'batchConsumptions.batch.productionOrder',
+        ]);
 
         $detailsById = $order->details->keyBy('id');
         $ingredientRequirements = [];
@@ -148,6 +157,19 @@ class PreviewProductionOrderCostsAction
             if ($remnantCost !== null) {
                 $totalBulkCost = $this->calculator->add($totalBulkCost, (string) $remnantCost, 4);
                 $remnantsCost = $this->calculator->add($remnantsCost, (string) $remnantCost, 4);
+            }
+        }
+
+        // Los lotes de PT usados, con la misma regla con que se aplicarán al completar: unidades × costo de traslado,
+        // menos lo que vuelve al saldo de origen si ya se registró.
+        $productsCost = '0';
+
+        foreach ($order->batchConsumptions as $source) {
+            $sourceCost = $this->batchSources->lineCost($source);
+
+            if ($sourceCost !== null) {
+                $totalBulkCost = $this->calculator->add($totalBulkCost, $sourceCost, 4);
+                $productsCost = $this->calculator->add($productsCost, $sourceCost, 4);
             }
         }
 
@@ -257,6 +279,7 @@ class PreviewProductionOrderCostsAction
             'raw_materials_cost' => $rawMaterialsCost,
             'line_adjustments_cost' => $lineAdjustmentsCost,
             'remnants_cost' => $remnantsCost,
+            'products_cost' => $productsCost,
             'total_bulk_cost' => $totalBulkCost,
             'total_finished_cost' => $totalFinishedCost,
             'total_equivalent' => $this->completionLines->packagedEquivalent($order, $packaging),

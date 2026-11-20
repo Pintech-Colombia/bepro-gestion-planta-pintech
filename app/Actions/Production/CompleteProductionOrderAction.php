@@ -21,6 +21,7 @@ use App\Services\DecimalCalculator;
 use App\Services\FinishedInventory\FinishedInventoryMovementService;
 use App\Services\Inventory\FifoStockAllocatorService;
 use App\Services\Pricing\ProductionCostCalculatorService;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderLineUnits;
@@ -49,6 +50,7 @@ class CompleteProductionOrderAction
         private readonly RemnantLedger $remnantLedger,
         private readonly ProductionOrderConsumptionCheck $consumptionCheck,
         private readonly ProductionOrderOverconsumptionAlert $overconsumptionAlert,
+        private readonly BatchSourceDrawdown $batchSources,
     ) {}
 
     /**
@@ -71,6 +73,9 @@ class CompleteProductionOrderAction
             // lo que se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
             $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
             $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], $userId);
+
+            // Por cada lote de PT usado: los kilos usados y lo que quedó, pesado. Toda línea de la fórmula con alguna fuente.
+            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? []);
 
             $wasPendingReview = $lockedOrder->status === ProductionOrderStatus::PendingReview;
 
@@ -95,7 +100,7 @@ class CompleteProductionOrderAction
 
             $lockedOrder->update($updateData);
 
-            $lockedOrder->loadMissing(['details.rawMaterial:id,code', 'packagingPlans.productVariant', 'lineAdjustments', 'remnantConsumptions']);
+            $lockedOrder->loadMissing(['details.rawMaterial:id,code', 'packagingPlans.productVariant', 'lineAdjustments', 'remnantConsumptions', 'batchConsumptions']);
             // ensureMatches garantizó una cantidad real por cada línea: se recorren las de la orden, no las enviadas.
             $actualQuantities = collect($data['ingredients'])->mapWithKeys(fn (array $row) => [(int) $row['id'] => (string) $row['actual_quantity']]);
             $totalBulkCost = '0';
@@ -149,9 +154,10 @@ class CompleteProductionOrderAction
                 ), 4);
             }
 
-            $this->applyPlannedRemnants($lockedOrder, $userId);
+            $this->applyProductSources($lockedOrder, $userId, $completionDate);
 
-            foreach ($lockedOrder->remnantConsumptions as $consumption) {
+            // Saldos y lotes de PT usados («Productos a usar»): su costo entra al granel con la MP y los ajustes.
+            foreach ([...$lockedOrder->remnantConsumptions, ...$lockedOrder->batchConsumptions] as $consumption) {
                 if ($consumption->consumed_cost !== null) {
                     $totalBulkCost = $this->calculator->add(
                         $totalBulkCost,
@@ -340,26 +346,75 @@ class CompleteProductionOrderAction
     }
 
     /**
-     * Descuenta de cada saldo las líneas planeadas de la orden, con los galones y el costo reales, y las marca como
-     * aplicadas. Los saldos se bloquean por id ascendente, después de la OP (el mismo orden que al planear): así ninguna
-     * transacción espera en el orden contrario. Si un saldo ya no alcanza, 422 y la transacción no deja nada escrito.
-     * Las líneas ya aplicadas (registradas antes de que los saldos se planearan) solo suman su costo.
+     * Aplica las fuentes de «Productos a usar» sin aplicar: descuenta de cada saldo sus líneas planeadas y saca de cada
+     * lote sus unidades, devolviendo al saldo de la OP de origen lo que quedó en un envase abierto. Bloqueos en orden fijo,
+     * después de la OP: los saldos por id (los planeados y los de origen de los lotes con producto que quedó, juntos) y
+     * después los lotes por id; las filas de stock las bloquea la salida. Así ninguna transacción espera en el orden
+     * contrario (planear un saldo o un lote bloquea la OP y luego la fuente). Si algo ya no alcanza, 422 y la transacción
+     * no deja nada escrito. Las líneas ya aplicadas (registradas antes de que se planearan) solo suman su costo.
      */
-    private function applyPlannedRemnants(ProductionOrder $lockedOrder, int $userId): void
+    private function applyProductSources(ProductionOrder $lockedOrder, int $userId, string $movementDate): void
     {
-        $plannedByRemnant = $lockedOrder->remnantConsumptions
+        $plannedRemnantLines = $lockedOrder->remnantConsumptions
             ->reject(fn ($consumption) => $consumption->isApplied())
-            ->sortBy([['remnant_id', 'asc'], ['id', 'asc']])
-            ->groupBy('remnant_id');
+            ->sortBy([['remnant_id', 'asc'], ['id', 'asc']]);
+        $plannedBatchSources = $lockedOrder->batchConsumptions
+            ->reject(fn ($source) => $source->isApplied())
+            ->sortBy([['finished_product_batch_id', 'asc'], ['id', 'asc']]);
 
-        foreach ($plannedByRemnant as $remnantId => $lines) {
-            $lockedRemnant = ProductionRemnant::query()
+        // Los saldos de las OP que fabricaron los lotes de los que quedó producto: ahí vuelve lo pesado.
+        $originOrderIds = FinishedProductBatch::query()
+            ->whereIn('id', $plannedBatchSources->whereNotNull('leftover_kg')->pluck('finished_product_batch_id')->all())
+            ->pluck('production_order_id')
+            ->unique()
+            ->all();
+        $originRemnantIds = $originOrderIds === []
+            ? []
+            : ProductionRemnant::query()->whereIn('source_order_id', $originOrderIds)->pluck('id')->all();
+
+        $remnantIds = collect($plannedRemnantLines->pluck('remnant_id'))
+            ->merge($originRemnantIds)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->sort()
+            ->values();
+
+        $lockedRemnants = $remnantIds->mapWithKeys(fn (int $remnantId): array => [
+            $remnantId => ProductionRemnant::query()
                 ->with('sourceOrder:id,order_number')
                 ->lockForUpdate()
-                ->findOrFail($remnantId);
+                ->findOrFail($remnantId),
+        ]);
 
-            foreach ($lines as $line) {
-                $this->remnantDrawdown->apply($line, $lockedRemnant, $userId);
+        foreach ($plannedRemnantLines as $line) {
+            $this->remnantDrawdown->apply($line, $lockedRemnants[(int) $line->remnant_id], $userId);
+        }
+
+        $originRemnants = $lockedRemnants->keyBy('source_order_id');
+        $lockedBatches = $plannedBatchSources->pluck('finished_product_batch_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->sort()
+            ->mapWithKeys(fn (int $batchId): array => [
+                $batchId => FinishedProductBatch::query()->lockForUpdate()->findOrFail($batchId),
+            ]);
+
+        foreach ($plannedBatchSources as $source) {
+            $lockedBatch = $lockedBatches[(int) $source->finished_product_batch_id];
+            $originOrderId = (int) $lockedBatch->production_order_id;
+
+            $originRemnant = $this->batchSources->apply(
+                $source,
+                $lockedBatch,
+                $originRemnants->get($originOrderId),
+                $lockedOrder,
+                $userId,
+                $movementDate,
+            );
+
+            // Un saldo que nació aquí recibe lo que quede de otro envase del mismo origen.
+            if ($originRemnant !== null) {
+                $originRemnants->put($originOrderId, $originRemnant);
             }
         }
     }

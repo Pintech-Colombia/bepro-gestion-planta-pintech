@@ -17,6 +17,7 @@ use App\Models\Warehouse;
 use App\Services\DecimalCalculator;
 use App\Services\FormulaService;
 use App\Services\Inventory\FifoStockAllocatorService;
+use App\Services\Production\ProductLinePlanner;
 use App\Services\YearlySequenceNumberGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,7 @@ class CreateProductionOrderAction
         private readonly FormulaService $formulaService,
         private readonly DecimalCalculator $calculator,
         private readonly YearlySequenceNumberGenerator $sequence,
+        private readonly ProductLinePlanner $productLines,
     ) {}
 
     /**
@@ -61,8 +63,9 @@ class CreateProductionOrderAction
             // lo bloquean (acciones de fórmulas), así que la orden ve lo ya guardado y no una versión vieja.
             $formula = $this->stillActiveFormula((int) $data['formula_id'], (int) $data['product_id']);
 
-            // Una fórmula que lleva productos (PT consumible) todavía no se puede producir: la OP aún no sabe tomar saldos ni
-            // lotes de producto como ingrediente (PR E de «Plan — PT consumible», que quita este bloqueo).
+            // Una fórmula que lleva productos (PT consumible) todavía no se puede producir: el servidor ya arma sus líneas y
+            // fuentes (abajo), pero la pantalla de la orden aún no las muestra ni deja registrar su consumo. Este bloqueo
+            // se quita junto con esa pantalla.
             if ($formula->details->contains(fn (FormulaDetail $detail): bool => $detail->isProductLine())) {
                 throw ValidationException::withMessages([
                     'formula_id' => __('Esta fórmula lleva productos como ingrediente: se podrá producir cuando la orden sepa usarlos.'),
@@ -86,7 +89,8 @@ class CreateProductionOrderAction
             $requirementsByMaterialId = [];
             $computedDetails = [];
 
-            foreach ($formula->details as $detail) {
+            // Las líneas de materia prima van a `production_order_details`; las de producto, a «Productos a usar» (abajo).
+            foreach ($formula->details->reject(fn (FormulaDetail $detail): bool => $detail->isProductLine()) as $detail) {
                 $materialId = (int) $detail->raw_material_id;
                 ['planned_quantity' => $detailTotal, 'conversion_factor' => $factor] = $this->formulaService->orderLineRequirement($detail, $quantity);
 
@@ -147,6 +151,10 @@ class CreateProductionOrderAction
                 ProductionOrderPackagingPlan::createForVariant((int) $order->id, (int) $packData['product_variant_id'], $packData['planned_units']);
             }
 
+            // Los productos que la fórmula lleva como ingrediente, con sus kilos y sus fuentes preseleccionadas (saldos y
+            // después lotes de la bodega de la orden). Crear no exige que alcancen: completar sí exige fuentes.
+            $this->productLines->planFromFormula($order, $formula, $userId);
+
             // Al final: lo que impide crear la orden se avisa antes de preguntar si se acepta lo que falta. Crearla no exige
             // stock, porque puede usar saldo y gastar menos que la fórmula: lo que no deja completarla es el consumo real.
             if (! (bool) ($data['confirm_stock_shortage'] ?? false)) {
@@ -188,7 +196,7 @@ class CreateProductionOrderAction
             ->whereKey($formulaId)
             ->where('product_id', $productId)
             ->where('is_active', true)
-            ->with(['details.unitOfMeasure', 'details.rawMaterial.unitOfMeasure'])
+            ->with(['details.unitOfMeasure', 'details.rawMaterial.unitOfMeasure', 'details.product'])
             ->first();
 
         if ($formula === null) {

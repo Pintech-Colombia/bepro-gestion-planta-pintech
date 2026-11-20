@@ -53,7 +53,9 @@ enum FinishedInventoryMovementReason: string implements HasTone
      * Razones que una persona puede elegir al registrar un movimiento a mano. «Producción» no está: solo la crea
      * `CompleteProductionOrderAction` al completar una orden, con su lote y su costo. «Traslado» tampoco: lo registra el
      * servicio de traslado, que crea la salida y la entrada juntas. Una entrada «Producción» a mano inflaba el
-     * inventario con apariencia de producción real (auditoría 3.6, PT-02).
+     * inventario con apariencia de producción real (auditoría 3.6, PT-02). «Transformación» tampoco: es la salida
+     * automática de un lote que una OP usa como ingrediente, al completarla, con su costo trasladado a esa orden. Los
+     * movimientos registrados a mano antes conservan su motivo.
      *
      * El cajón de movimientos de PT las recibe del controlador (`entryReasonOptions` y `exitReasonOptions`), así que el
      * front no tiene copia.
@@ -71,7 +73,6 @@ enum FinishedInventoryMovementReason: string implements HasTone
                 self::Sale,
                 self::Sample,
                 self::Deterioration,
-                self::Transformation,
                 self::Adjustment,
             ],
         };

@@ -31,6 +31,7 @@ class SubmitProductionOrderForReviewRequest extends FormRequest
         return array_merge(
             $this->consumptionRules(),
             $this->seenLinesRules(),
+            $this->batchConsumptionRules(),
             $this->qualityAndResponsibleRules(),
             $this->operationalTimesRules(),
             $this->overconsumptionReasonRules(),

@@ -39,6 +39,9 @@ final class NumberTypeColumns
             'production_remnants.available_quantity_gallons', 'production_remnants.available_quantity_kg',
             'remnant_consumptions.quantity_gallons', 'remnant_consumptions.quantity_kg',
             'production_remnant_movements.quantity_kg', 'production_remnant_movements.balance_after_kg',
+            'production_order_product_lines.planned_kg',
+            'production_order_batch_consumptions.used_kg', 'production_order_batch_consumptions.leftover_kg',
+            'production_order_batch_consumptions.kg_per_unit',
             'raw_materials.minimum_stock',
             'product_variants.presentation_value',
             'shrink_wrap_items.quantity_per_application', 'shrink_wrap_items.quantity',
@@ -54,6 +57,7 @@ final class NumberTypeColumns
             'finished_product_batches.initial_quantity',
             'finished_product_batch_stocks.quantity',
             'finished_inventory_movements.quantity',
+            'production_order_batch_consumptions.units',
         ]);
 
         $add(NumberType::Money, [
@@ -68,6 +72,7 @@ final class NumberTypeColumns
             'product_variants.current_cost', 'product_variants.current_price',
             'production_remnants.cost_per_gallon',
             'remnant_consumptions.consumed_cost',
+            'production_order_batch_consumptions.consumed_cost',
             'shrink_wraps.total_cost', 'shrink_wrap_items.total_cost',
             'quotations.subtotal', 'quotations.iva_amount', 'quotations.total',
             'quotation_items.list_unit_price', 'quotation_items.unit_price', 'quotation_items.subtotal',

@@ -11,6 +11,7 @@ use App\Enums\ProductionOrderStatus;
 use App\Models\FinishedInventoryMovement;
 use App\Models\ProductionCost;
 use App\Models\ProductionOrder;
+use App\Models\ProductionOrderBatchConsumption;
 use App\Models\ProductionOrderPackagingPlan;
 use App\Models\RemnantConsumption;
 use App\Services\DecimalCalculator;
@@ -32,7 +33,7 @@ use App\Services\VariantSalesPriceService;
  * @phpstan-type CostSummary array{
  *   basis: 'estimated'|'actual',
  *   cif_estimated: bool,
- *   bulk: array{total: string, raw_materials: string, line_adjustments: string, remnants_used: string},
+ *   bulk: array{total: string, raw_materials: string, line_adjustments: string, remnants_used: string, products_used: string},
  *   yield_gallons: string,
  *   cost_per_gallon: string|null,
  *   cost_per_gallon_with_cif: string|null,
@@ -123,6 +124,7 @@ class ProductionOrderCostSummary
                 'raw_materials' => $result['raw_materials_cost'],
                 'line_adjustments' => $result['line_adjustments_cost'],
                 'remnants_used' => $result['remnants_cost'],
+                'products_used' => $result['products_cost'],
             ],
             yieldGallons: $result['real_yield'],
             costPerGallon: $result['bulk_cost_per_unit'],
@@ -134,15 +136,15 @@ class ProductionOrderCostSummary
     }
 
     /**
-     * Lo guardado al completar: el granel total es el de `production_costs` (MP + ajustes de línea + saldos usados), y
-     * cada presentación cuesta lo de su entrada de PT. Sin fila de costo (solo se crea con costo positivo), el total es
-     * la suma de las partes, que entonces es cero.
+     * Lo guardado al completar: el granel total es el de `production_costs` (MP + ajustes de línea + saldos y lotes de PT
+     * usados), y cada presentación cuesta lo de su entrada de PT. Sin fila de costo (solo se crea con costo positivo), el
+     * total es la suma de las partes, que entonces es cero.
      *
      * @return CostSummary
      */
     private function completed(ProductionOrder $order): array
     {
-        $order->loadMissing(['product', 'details', 'remnantConsumptions', 'packagingPlans.productVariant', 'finishedInventoryMovements', 'remnant']);
+        $order->loadMissing(['product', 'details', 'remnantConsumptions', 'batchConsumptions', 'packagingPlans.productVariant', 'finishedInventoryMovements', 'remnant']);
 
         $rawMaterials = $this->calculator->sum(
             $order->details->map(fn ($detail): string => (string) ($detail->total_cost ?? '0'))->all(),
@@ -153,13 +155,18 @@ class ProductionOrderCostSummary
                 ->map(fn (RemnantConsumption $line): string => (string) $line->consumed_cost)
                 ->all(),
         );
+        $productsUsed = $this->calculator->sum(
+            $order->batchConsumptions
+                ->filter(fn (ProductionOrderBatchConsumption $source): bool => $source->isApplied() && $source->consumed_cost !== null)
+                ->map(fn (ProductionOrderBatchConsumption $source): string => (string) $source->consumed_cost)
+                ->all(),
+        );
+        $knownParts = $this->calculator->sum([$rawMaterials, $remnantsUsed, $productsUsed], 4);
         $storedTotal = ProductionCost::query()->where('production_order_id', $order->id)->value('cost');
-        $total = $storedTotal !== null
-            ? (string) $storedTotal
-            : $this->calculator->add($rawMaterials, $remnantsUsed, 4);
-        // El costo de los ajustes no se guarda por línea: es lo que el total tiene además de la MP y los saldos. Cada
-        // parte se guardó con 4 decimales y el total es su suma exacta, así que la resta no depende de redondeos.
-        $lineAdjustments = $this->calculator->sub($total, $this->calculator->add($rawMaterials, $remnantsUsed, 4), 4);
+        $total = $storedTotal !== null ? (string) $storedTotal : $knownParts;
+        // El costo de los ajustes no se guarda por línea: es lo que el total tiene además de la MP, los saldos y los lotes.
+        // Cada parte se guardó con 4 decimales y el total es su suma exacta, así que la resta no depende de redondeos.
+        $lineAdjustments = $this->calculator->sub($total, $knownParts, 4);
 
         $yield = (string) ($order->yield_real_quantity ?? $order->actual_quantity ?? '0');
         // La misma cuenta del reparto al completar: sin costo o sin rendimiento no hay costo por galón.
@@ -210,6 +217,7 @@ class ProductionOrderCostSummary
                 'raw_materials' => $rawMaterials,
                 'line_adjustments' => $lineAdjustments,
                 'remnants_used' => $remnantsUsed,
+                'products_used' => $productsUsed,
             ],
             yieldGallons: $yield,
             costPerGallon: $costPerGallon,
@@ -227,7 +235,7 @@ class ProductionOrderCostSummary
      * Lo que comparten los dos: costos con CIF, costo de lo envasado, saldo y comparación con la lista de hoy.
      *
      * @param  'estimated'|'actual'  $basis
-     * @param  array{total: string, raw_materials: string, line_adjustments: string, remnants_used: string}  $bulk
+     * @param  array{total: string, raw_materials: string, line_adjustments: string, remnants_used: string, products_used: string}  $bulk
      * @param  list<array{id: int, units: string, bulk_unit_cost: string, unit_cost: string}>  $packaging
      * @return CostSummary
      */

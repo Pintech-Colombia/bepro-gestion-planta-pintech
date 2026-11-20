@@ -46,6 +46,7 @@ class RemnantConsumptionController extends Controller
         PlanRemnantConsumptionAction $planRemnantConsumption
     ): RedirectResponse {
         $remnant = ProductionRemnant::findOrFail($request->validated('remnant_id'));
+        $lineId = $request->validated('production_order_product_line_id');
 
         try {
             $planRemnantConsumption->execute(
@@ -53,7 +54,8 @@ class RemnantConsumptionController extends Controller
                 targetOrder: $productionOrder,
                 quantityKg: (string) $request->validated('quantity_kg'),
                 user: $request->user(),
-                notes: $request->validated('notes')
+                notes: $request->validated('notes'),
+                lineId: $lineId !== null ? (int) $lineId : null,
             );
         } catch (\DomainException $exception) {
             return $this->staleOrderResponse($exception);
