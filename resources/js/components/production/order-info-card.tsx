@@ -145,6 +145,9 @@ function CostBlock({ summary }: { summary: ProductionOrderCostSummary }) {
             <InfoRow label="Saldos usados" indent>
                 <Money value={summary.bulk.remnants_used} />
             </InfoRow>
+            <InfoRow label="Lotes de PT usados" indent>
+                <Money value={summary.bulk.products_used} />
+            </InfoRow>
             <InfoRow label="Costo por galón (sin CIF)">
                 <Money value={summary.cost_per_gallon} />
             </InfoRow>

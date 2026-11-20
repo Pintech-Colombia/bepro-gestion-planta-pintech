@@ -36,6 +36,7 @@ use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\TimezoneService;
@@ -68,6 +69,7 @@ class ProductionOrderController extends Controller
         private readonly RejectProductionOrderReviewAction $rejectProductionOrderReview,
         private readonly UpdateProductionOrderColorAction $updateProductionOrderColor,
         private readonly TimezoneService $timezoneService,
+        private readonly BatchSourceDrawdown $batchSources,
     ) {}
 
     /**
@@ -461,6 +463,7 @@ class ProductionOrderController extends Controller
                 packaging: $validated['packaging'] ?? [],
                 remnantGallons: $this->completionLines->remnantGallons($validated['remnant_quantity_kg'] ?? null, $density),
                 density: $density,
+                batchUsage: isset($validated['batch_consumptions']) ? $this->batchSources->typedUsage($validated['batch_consumptions']) : null,
             )
         );
     }

@@ -385,7 +385,7 @@ it('a cancelled order has no costs, on screen or in the preview', function () {
 
     $this->postJson(route('production-orders.preview-costs', $this->order), summaryTypedData($this))
         ->assertOk()
-        ->assertExactJson(['ingredients' => [], 'summary' => null]);
+        ->assertExactJson(['ingredients' => [], 'products' => [], 'summary' => null]);
 });
 
 it('without «Ver costos» there is no summary on screen and the preview refuses', function (SystemRole $role) {

@@ -30,11 +30,12 @@ class PreviewProductionOrderCostsAction
      *
      * @param  array<int, array{id:int,actual_quantity:string|int|float}>  $ingredients  lo digitado, en la unidad de la línea
      * @param  array<int, array{id:int,actual_units:float|int|string,new_containers_used?:string|int|float|null,labels_used?:string|int|float|null,label_raw_material_id?:int|null}>  $packaging
+     * @param  array<int, array{leftover_kg: string|null}>|null  $batchUsage  lo que quedó en un envase abierto, por fuente de lote, tal como se escribe
      * @return array<string, mixed> ver calculate()
      */
-    public function execute(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
+    public function execute(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null, ?array $batchUsage = null): array
     {
-        return $this->calculate($order, $this->lineUnits->ingredientsInMaterialUnit($order, $ingredients), $packaging, $remnantGallons);
+        return $this->calculate($order, $this->lineUnits->ingredientsInMaterialUnit($order, $ingredients), $packaging, $remnantGallons, $batchUsage);
     }
 
     /**
@@ -43,8 +44,11 @@ class PreviewProductionOrderCostsAction
      *
      * @param  array<int, array{id:int,actual_quantity:string|int|float}>  $ingredients  en la unidad de la materia prima
      * @param  array<int, array{id:int,actual_units:float|int|string,new_containers_used?:string|int|float|null,labels_used?:string|int|float|null,label_raw_material_id?:int|null}>  $packaging
+     * @param  array<int, array{leftover_kg: string|null}>|null  $batchUsage  id de la fuente de lote => lo que quedó escrito; sin la
+     *                                                                        fuente (o null), lo guardado al enviar a revisión
      * @return array{
      *   ingredients: array<int, array{id:int,unit_cost:string,total_cost:string,actual_quantity:float}>,
+     *   products: list<array{id:int,cost:string|null}>,
      *   packaging: array<int, array{id:int,product_variant_id:int,actual_units:string,bulk_unit_cost:string,cost_price:string,total_cost:string,equivalent:string}>,
      *   raw_materials_cost: string,
      *   line_adjustments_cost: string,
@@ -60,7 +64,7 @@ class PreviewProductionOrderCostsAction
      *   remnant_bulk_cost: string|null
      * }
      */
-    public function calculate(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null): array
+    public function calculate(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons = null, ?array $batchUsage = null): array
     {
         $order->loadMissing([
             'details',
@@ -161,11 +165,14 @@ class PreviewProductionOrderCostsAction
         }
 
         // Los lotes de PT usados, con la misma regla con que se aplicarán al completar: unidades × costo de traslado,
-        // menos lo que vuelve al saldo de origen si ya se registró.
+        // menos lo que vuelve al saldo de origen (lo que se está escribiendo, o lo guardado). Sin estimado (null), la fuente
+        // no suma y la pantalla lo dice en su fila.
         $productsCost = '0';
+        $productRows = [];
 
-        foreach ($order->batchConsumptions as $source) {
-            $sourceCost = $this->batchSources->lineCost($source);
+        foreach ($order->batchConsumptions->sortBy('id') as $source) {
+            $sourceCost = $this->batchSources->lineCost($source, $batchUsage[$source->id] ?? null);
+            $productRows[] = ['id' => (int) $source->id, 'cost' => $sourceCost];
 
             if ($sourceCost !== null) {
                 $totalBulkCost = $this->calculator->add($totalBulkCost, $sourceCost, 4);
@@ -275,6 +282,7 @@ class PreviewProductionOrderCostsAction
 
         return [
             'ingredients' => $ingredientResults,
+            'products' => $productRows,
             'packaging' => $packagingResults,
             'raw_materials_cost' => $rawMaterialsCost,
             'line_adjustments_cost' => $lineAdjustmentsCost,

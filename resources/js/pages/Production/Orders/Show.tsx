@@ -9,10 +9,10 @@ import {
     startProduction as productionOrderStartProduction,
     submitForReview as productionOrderSubmitForReview,
 } from '@/actions/App/Http/Controllers/ProductionOrderController';
-import { ConsumeRemnantsCard } from '@/components/production/consume-remnants-card';
 import { ControlCard } from '@/components/production/control-card';
 import { OrderHeader } from '@/components/production/order-header';
 import { OrderInfoCard } from '@/components/production/order-info-card';
+import { ProductsToUseCard } from '@/components/production/products-to-use-card';
 import { QrCard } from '@/components/production/qr-card';
 import { ResultsCard } from '@/components/production/results-card';
 import {
@@ -28,6 +28,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    mapBatchSourceToUsageRow,
+    useBatchUsageSync,
+} from '@/hooks/use-batch-usage-sync';
 import {
     mapPackagingPlanToFormRow,
     usePackagingSync,
@@ -47,6 +51,7 @@ import {
 } from '@/routes/production-orders';
 import type {
     PreviewCostData,
+    ProductionOrderBatchUsageRow,
     ProductionOrderDetail,
     ProductionOrderFormData,
     ProductionOrderShowProps,
@@ -69,6 +74,17 @@ export default function ProductionOrderShow({
         () => order.line_adjustments ?? [],
         [order.line_adjustments],
     );
+    const batchSources = useMemo(
+        () => order.batch_consumptions ?? [],
+        [order.batch_consumptions],
+    );
+    // Las fuentes de «Productos a usar» con sus kilos y unidades: al cambiar, la vista previa se vuelve a pedir.
+    const sourcesKey = [
+        ...(order.remnant_consumptions ?? []).map(
+            (source) => `saldo-${source.id}:${source.quantity_kg}`,
+        ),
+        ...batchSources.map((source) => `lote-${source.id}:${source.units}`),
+    ].join(',');
 
     const isCompleted = order.status === 'completed';
     const isCancelled = order.status === 'cancelled';
@@ -133,6 +149,10 @@ export default function ProductionOrderShow({
                     reason.reason,
                 ]),
             ),
+            // Por lote de PT usado: lo que la planta registró al enviar a revisión (quien aprueba lo ve y lo corrige).
+            batch_consumptions: batchSources.map((source) =>
+                mapBatchSourceToUsageRow(source),
+            ),
         });
 
     const {
@@ -159,6 +179,23 @@ export default function ProductionOrderShow({
         setData,
     });
 
+    useBatchUsageSync({
+        sources: batchSources,
+        currentRows: data.batch_consumptions,
+        setData,
+    });
+
+    const updateBatchUsage = (
+        index: number,
+        patch: Partial<Omit<ProductionOrderBatchUsageRow, 'id'>>,
+    ) =>
+        setData(
+            'batch_consumptions',
+            data.batch_consumptions.map((row, rowIndex) =>
+                rowIndex === index ? { ...row, ...patch } : row,
+            ),
+        );
+
     const { previewCosts, previewLoading, previewStale } =
         useProductionCostPreview({
             orderId: order.id,
@@ -167,6 +204,8 @@ export default function ProductionOrderShow({
             lineAdjustments,
             remnantQuantityKg: data.remnant_quantity_kg,
             density: data.density_kg_per_gallon,
+            batchUsage: data.batch_consumptions,
+            sourcesKey,
             isCompleted,
             // Cancelada: sin costos (lo digitado ya no los cambia).
             enabled: can.previewCosts && !isCancelled,
@@ -216,6 +255,20 @@ export default function ProductionOrderShow({
         isCompleted || isCancelled
             ? (order.cost_summary ?? null)
             : (previewCosts?.summary ?? order.cost_summary ?? null);
+
+    // El costo de cada lote con lo que quedó tal como se escribe; completada o cancelada, el de la página.
+    const previewProductCosts = useMemo(
+        () =>
+            isCompleted || isCancelled || !previewCosts
+                ? null
+                : new Map(
+                      (previewCosts.products ?? []).map((product) => [
+                          product.id,
+                          product.cost,
+                      ]),
+                  ),
+        [isCompleted, isCancelled, previewCosts],
+    );
 
     const packagingCosts = useMemo(
         () =>
@@ -298,6 +351,15 @@ export default function ProductionOrderShow({
             remnant_consumption_ids: (order.remnant_consumptions ?? []).map(
                 (consumption) => consumption.id,
             ),
+            // Lo que quedó solo viaja con «sí»; con «no», nada (el servidor lo toma como que no quedó producto).
+            batch_consumptions: formData.batch_consumptions.map((row) => ({
+                id: row.id,
+                used_kg: toDecimalPayload(row.used_kg),
+                has_leftover: row.has_leftover,
+                leftover_kg: row.has_leftover
+                    ? toDecimalPayload(row.leftover_kg)
+                    : null,
+            })),
         }));
         post(action.url, {
             preserveScroll: true,
@@ -417,16 +479,20 @@ export default function ProductionOrderShow({
                             />
                         )}
 
-                        <ConsumeRemnantsCard
-                            orderId={order.id}
+                        <ProductsToUseCard
                             order={order}
                             showCosts={can.previewCosts}
                             canPlan={can.planRemnant}
-                            // Al completar: un saldo planeado que ya no alcanza. La llave no es un campo del formulario.
-                            completionError={
-                                (errors as Record<string, string | undefined>)
-                                    .remnant_consumption_ids
+                            // Los kilos usados y lo que quedó se escriben al entregar la orden (enviar o completar).
+                            canRecordUsage={!isFormReadOnly && showSubmit}
+                            usageRows={data.batch_consumptions}
+                            onUsageChange={updateBatchUsage}
+                            // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya no
+                            // alcanza. Varias llaves no son campos del formulario.
+                            errors={
+                                errors as Record<string, string | undefined>
                             }
+                            previewProductCosts={previewProductCosts}
                         />
 
                         <ControlCard

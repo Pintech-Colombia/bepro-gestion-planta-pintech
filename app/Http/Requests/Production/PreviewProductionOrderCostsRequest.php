@@ -7,6 +7,7 @@ namespace App\Http\Requests\Production;
 use App\Enums\NumberType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class PreviewProductionOrderCostsRequest extends FormRequest
 {
@@ -33,6 +34,18 @@ class PreviewProductionOrderCostsRequest extends FormRequest
                 'remnant_quantity_kg' => ['bail', 'nullable', ...NumberType::Quantity->rules(), 'min:0'],
                 // Opcional aquí: sin él, la vista previa calcula sin sobrante y no da error.
                 'density_kg_per_gallon' => ['bail', 'nullable', ...NumberType::Density->rules(), 'min:0.0001'],
+                // Lo que quedó en cada envase abierto, tal como se escribe: el costo de la pantalla es el de completar. Sin la
+                // lista, lo guardado. Que no pase de una unidad lo revisa completar; aquí solo la forma.
+                'batch_consumptions' => ['sometimes', 'array'],
+                'batch_consumptions.*.id' => [
+                    'bail',
+                    'required',
+                    'integer',
+                    'distinct',
+                    Rule::exists('production_order_batch_consumptions', 'id')->where('production_order_id', $this->resolveProductionOrderId() ?? 0),
+                ],
+                'batch_consumptions.*.has_leftover' => ['sometimes', 'boolean'],
+                'batch_consumptions.*.leftover_kg' => ['bail', 'nullable', ...NumberType::Quantity->rules(), 'min:0'],
             ]
         );
     }

@@ -34,6 +34,8 @@ type RemnantItem = {
     available_quantity_kg: number;
     /** Kilos planeados en órdenes abiertas que todavía no se descontaron; null si no hay. */
     committed_quantity_kg: number | null;
+    /** Kilos que volvieron de cuñetes abiertos en otras OP, solo si por ellos hay más de lo que dejó su OP; null si no. */
+    opened_units_kg: string | null;
     /** Las órdenes abiertas con kilos planeados del saldo, para los diálogos de baja y corrección. */
     planned_orders: RemnantPlannedOrder[];
     density_kg_per_gallon: number;
@@ -172,10 +174,23 @@ export default function RemnantsIndex({
             key: 'available_kg',
             header: 'Disponible (kg)',
             cell: (remnant) => (
-                <FormattedNumber
-                    value={remnant.available_quantity_kg}
-                    kind="quantity"
-                />
+                <>
+                    <FormattedNumber
+                        value={remnant.available_quantity_kg}
+                        kind="quantity"
+                    />
+                    {/* Más de lo que dejó su OP: no es un error, son cuñetes abiertos que volvieron. */}
+                    {remnant.opened_units_kg !== null && (
+                        <span className="block text-xs font-normal text-muted-foreground">
+                            Incluye{' '}
+                            <FormattedNumber
+                                value={remnant.opened_units_kg}
+                                kind="quantity"
+                            />{' '}
+                            kg de cuñetes abiertos
+                        </span>
+                    )}
+                </>
             ),
             mobile: 'primary',
             align: 'right',

@@ -5,6 +5,7 @@ import { parseDecimal, toDecimalPayload } from '@/lib/numeric-input';
 import type {
     FormNumberValue,
     PreviewCostData,
+    ProductionOrderBatchUsageRow,
     ProductionOrderIngredientFormRow,
     ProductionOrderLineAdjustment,
     ProductionOrderPackagingFormRow,
@@ -20,6 +21,13 @@ type UseProductionCostPreviewProps = {
     lineAdjustments: ProductionOrderLineAdjustment[];
     remnantQuantityKg: FormNumberValue;
     density: FormNumberValue;
+    /** Lo que quedó en cada envase abierto, tal como se escribe: el costo de la pantalla es el de completar. */
+    batchUsage: ProductionOrderBatchUsageRow[];
+    /**
+     * Las fuentes de «Productos a usar» (saldos y lotes, con sus kilos y unidades). No viajan (el servidor las lee de la
+     * OP), pero al agregar, quitar o cambiar una piden otra vista previa.
+     */
+    sourcesKey: string;
     isCompleted: boolean;
     enabled?: boolean;
 };
@@ -35,10 +43,18 @@ type PreviewCostPayload = {
     }>;
     remnant_quantity_kg: string;
     density_kg_per_gallon: string | null;
+    batch_consumptions: Array<{
+        id: number;
+        has_leftover: boolean;
+        leftover_kg: string | null;
+    }>;
 };
 
-/** Los ajustes de línea no viajan (el servidor los lee de la OP), pero al cambiar piden otra vista previa. */
-type LineAdjustmentsKey = Array<{ id: number; quantity: number }>;
+/** Los ajustes de línea y las fuentes no viajan (el servidor los lee de la OP), pero al cambiar piden otra vista previa. */
+type PreviewContext = {
+    lineAdjustments: Array<{ id: number; quantity: number }>;
+    sources: string;
+};
 
 export function useProductionCostPreview({
     orderId,
@@ -47,12 +63,14 @@ export function useProductionCostPreview({
     lineAdjustments,
     remnantQuantityKg,
     density,
+    batchUsage,
+    sourcesKey,
     isCompleted,
     enabled = true,
 }: UseProductionCostPreviewProps) {
     const request: ServerPreviewRequest<
         PreviewCostPayload,
-        LineAdjustmentsKey
+        PreviewContext
     > | null =
         isCompleted || !enabled
             ? null
@@ -91,17 +109,31 @@ export function useProductionCostPreview({
                           (parseDecimal(density) ?? 0) > 0
                               ? toDecimalPayload(density) || null
                               : null,
+                      // Lo que quedó solo cuenta con «sí» y un peso mayor a 0; a medio escribir, como si no quedara nada
+                      // (completar sí lo exige).
+                      batch_consumptions: batchUsage.map((row) => ({
+                          id: row.id,
+                          has_leftover: row.has_leftover,
+                          leftover_kg:
+                              row.has_leftover &&
+                              (parseDecimal(row.leftover_kg) ?? 0) > 0
+                                  ? toDecimalPayload(row.leftover_kg)
+                                  : null,
+                      })),
                   },
-                  context: lineAdjustments.map((adjustment) => ({
-                      id: adjustment.id,
-                      quantity: Number(adjustment.quantity) || 0,
-                  })),
+                  context: {
+                      lineAdjustments: lineAdjustments.map((adjustment) => ({
+                          id: adjustment.id,
+                          quantity: Number(adjustment.quantity) || 0,
+                      })),
+                      sources: sourcesKey,
+                  },
               };
 
     const { result, loading, stale } = useServerPreview<
         PreviewCostData,
         PreviewCostPayload,
-        LineAdjustmentsKey
+        PreviewContext
     >(request, PREVIEW_DELAY_MS);
 
     return {

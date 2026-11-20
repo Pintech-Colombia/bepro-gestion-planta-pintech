@@ -490,10 +490,11 @@ it('returns curated fields in available remnants json', function () {
     expect($remnant)->toHaveKey('id')
         ->toHaveKey('source_order_number')
         ->toHaveKey('available_quantity_kg')
+        // El buscador de cada línea de «Productos a usar» solo ofrece saldos de su producto.
+        ->toHaveKey('product_id')
         ->not->toHaveKey('available_quantity_gallons')
         ->not->toHaveKey('density_kg_per_gallon')
         ->not->toHaveKey('cost_per_gallon')
-        ->not->toHaveKey('product_id')
         ->not->toHaveKey('notes');
 });
 

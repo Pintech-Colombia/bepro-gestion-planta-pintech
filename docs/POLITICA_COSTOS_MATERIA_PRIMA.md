@@ -94,7 +94,8 @@ OP completada. Si no se puede calcular (sin forma de costeo, sin peso o sin cost
 lleva conserva su costo (`recalculateForProductOrLog`) y la ficha de la fórmula muestra el motivo. Se recalcula **en
 cadena y en segundo plano** (`RecalculateProductDependentCosts`): MP → blanco → RAL 7016 → …; al cambiar el costo del
 producto fuente, sus presentaciones, su CIF, su peso de referencia o su último lote. Los ciclos se rechazan al guardar
-o activar la fórmula (`FormulaProductGraph`). Una fórmula con productos todavía no se produce (la OP llega en el PR E).
+o activar la fórmula (`FormulaProductGraph`). Ese costo teórico es el de la lista de precios: en una OP, el producto
+cuesta lo de sus fuentes reales (ver «Producto terminado usado en otra OP»).
 
 Costo teórico de una presentación: `(granel × presentación + envase + etiqueta) × (1 + CIF)` (`VariantPricingService`).
 El precio solo cambia si el costo varía más que el umbral del producto.

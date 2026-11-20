@@ -57,6 +57,7 @@ function numericRequestFields(): array
             'packaging.*.labels_used' => 'production_order_packaging_plan.labels_used',
             'remnant_quantity_kg' => 'production_orders.remnant_quantity_kg',
             'density_kg_per_gallon' => 'production_orders.density_kg_per_gallon',
+            'batch_consumptions.*.leftover_kg' => 'production_order_batch_consumptions.leftover_kg',
         ],
         'CompleteProductionOrderRequest|SubmitProductionOrderForReviewRequest' => [
             'viscosity_ku' => 'production_orders.viscosity_ku',
@@ -64,7 +65,6 @@ function numericRequestFields(): array
             'quality_solids' => 'production_orders.quality_solids',
             'spillage_quantity' => 'production_orders.spillage_quantity',
             'batch_consumptions.*.used_kg' => 'production_order_batch_consumptions.used_kg',
-            'batch_consumptions.*.leftover_kg' => 'production_order_batch_consumptions.leftover_kg',
         ],
         'PlanBatchConsumptionRequest|UpdateBatchConsumptionRequest' => [
             'units' => 'production_order_batch_consumptions.units',

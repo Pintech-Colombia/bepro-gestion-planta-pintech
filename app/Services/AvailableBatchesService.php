@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Enums\ProductionOrderStatus;
 use App\Models\FinishedProductBatch;
 use App\Models\FinishedProductBatchStock;
+use App\Models\ProductionOrder;
 use App\Models\ProductionOrderBatchConsumption;
 use App\Support\NumberFormat;
 use Illuminate\Database\Eloquent\Builder;
@@ -127,10 +128,55 @@ class AvailableBatchesService
             return collect();
         }
 
+        return $this->freeBatches($productIds, $warehouseId, $lock);
+    }
+
+    /**
+     * Los lotes que se pueden agregar a la orden: los de su bodega con unidades libres, de cualquier producto (la línea
+     * filtra el suyo; «Agregar producto» elige otro), del más antiguo al más nuevo. Cada uno con el producto y el color de
+     * la OP que lo fabricó, el lote, la presentación y los kilos por unidad. El costo de traslado, solo con «Ver costos».
+     *
+     * @return list<array{id: int, product_id: int, product_name: string, lot_number: int|null, source_order_number: string|null, presentation_label: string|null, free_units: string, kg_per_unit: string|null, entry_date: string|null, transfer_unit_cost?: string|null}>
+     */
+    public function forOrder(ProductionOrder $order, bool $includeCosts): array
+    {
+        return $this->freeBatches(null, (int) $order->warehouse_id, lock: false)
+            ->map(function (array $row) use ($includeCosts): array {
+                /** @var FinishedProductBatch $batch */
+                $batch = $row['batch'];
+                $sourceOrder = $batch->productionOrder;
+
+                return [
+                    'id' => $batch->id,
+                    'product_id' => (int) $batch->product_id,
+                    'product_name' => ProductionOrder::nameWithColor((string) $batch->product?->name, $sourceOrder?->color),
+                    'lot_number' => $sourceOrder?->lot_number,
+                    'source_order_number' => $sourceOrder?->order_number,
+                    'presentation_label' => $batch->productVariant?->presentation_label,
+                    'free_units' => $row['free_units'],
+                    'kg_per_unit' => $batch->kgPerUnit(),
+                    'entry_date' => $batch->entry_date?->toDateString(),
+                    ...($includeCosts ? [
+                        'transfer_unit_cost' => $batch->transfer_unit_cost !== null ? (string) $batch->transfer_unit_cost : null,
+                    ] : []),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * Los lotes con unidades libres en la bodega (de los productos dados, o de todos con null), del más antiguo al más
+     * nuevo, con lo que necesitan los kilos por unidad.
+     *
+     * @param  list<int>|null  $productIds
+     * @return Collection<int, array{batch: FinishedProductBatch, free_units: string}>
+     */
+    private function freeBatches(?array $productIds, int $warehouseId, bool $lock): Collection
+    {
         $query = FinishedProductBatch::query()
-            ->whereIn('product_id', $productIds)
+            ->when($productIds !== null, fn (Builder $batches) => $batches->whereIn('product_id', $productIds))
             ->whereHas('stocks', fn (Builder $stocks) => $stocks->forWarehouse($warehouseId)->available())
-            ->with(['productVariant', 'productionOrder', 'stocks' => fn ($stocks) => $stocks->forWarehouse($warehouseId)]);
+            ->with(['product:id,name', 'productVariant', 'productionOrder', 'stocks' => fn ($stocks) => $stocks->forWarehouse($warehouseId)]);
 
         // Con bloqueo, por id: el mismo orden en que se bloquean al completar.
         $batches = $lock

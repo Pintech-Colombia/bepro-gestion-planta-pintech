@@ -63,15 +63,6 @@ class CreateProductionOrderAction
             // lo bloquean (acciones de fórmulas), así que la orden ve lo ya guardado y no una versión vieja.
             $formula = $this->stillActiveFormula((int) $data['formula_id'], (int) $data['product_id']);
 
-            // Una fórmula que lleva productos (PT consumible) todavía no se puede producir: el servidor ya arma sus líneas y
-            // fuentes (abajo), pero la pantalla de la orden aún no las muestra ni deja registrar su consumo. Este bloqueo
-            // se quita junto con esa pantalla.
-            if ($formula->details->contains(fn (FormulaDetail $detail): bool => $detail->isProductLine())) {
-                throw ValidationException::withMessages([
-                    'formula_id' => __('Esta fórmula lleva productos como ingrediente: se podrá producir cuando la orden sepa usarlos.'),
-                ]);
-            }
-
             $order = ProductionOrder::create([
                 'product_id' => $data['product_id'],
                 'formula_id' => $data['formula_id'],
