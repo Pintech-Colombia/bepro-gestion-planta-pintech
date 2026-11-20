@@ -78,6 +78,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read QrCode|null $qrCode
  * @property-read ProductionRemnant|null $remnant
  * @property-read Collection|RemnantConsumption[] $remnantConsumptions
+ * @property-read Collection|ProductionOrderProductLine[] $productLines
+ * @property-read Collection|ProductionOrderBatchConsumption[] $batchConsumptions
  */
 #[Fillable([
     'order_number',
@@ -313,6 +315,25 @@ class ProductionOrder extends Model
     public function remnantConsumptions(): HasMany
     {
         return $this->hasMany(RemnantConsumption::class, 'target_order_id');
+    }
+
+    /**
+     * «Productos a usar»: el producto terminado que la orden lleva como ingrediente, de la fórmula o agregado.
+     */
+    public function productLines(): HasMany
+    {
+        return $this->hasMany(ProductionOrderProductLine::class, 'production_order_id')
+            ->orderByRaw('step_order IS NULL')
+            ->orderBy('step_order')
+            ->orderBy('id');
+    }
+
+    /**
+     * Lotes de PT que usa esta orden (fuentes de sus líneas de producto).
+     */
+    public function batchConsumptions(): HasMany
+    {
+        return $this->hasMany(ProductionOrderBatchConsumption::class, 'production_order_id');
     }
 
     public function getManufacturingDate(): ?CarbonInterface

@@ -779,7 +779,7 @@ it('preview costs include the estimated cost of planned remnants', function () {
     ])->assertOk()->json();
 
     // 150 de ingredientes + 22 del saldo planeado.
-    expect($data['summary']['bulk'])->toBe(['total' => '172.0000', 'raw_materials' => '150.0000', 'line_adjustments' => '0.0000', 'remnants_used' => '22.0000'])
+    expect($data['summary']['bulk'])->toBe(['total' => '172.0000', 'raw_materials' => '150.0000', 'line_adjustments' => '0.0000', 'remnants_used' => '22.0000', 'products_used' => '0.0000'])
         ->and($this->remnant->fresh()->available_quantity_kg)->toBe('50.0000');
 });
 

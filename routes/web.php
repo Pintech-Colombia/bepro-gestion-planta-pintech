@@ -19,6 +19,7 @@ use App\Http\Controllers\Pricing\CostController;
 use App\Http\Controllers\Pricing\PriceListController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductDocumentController;
+use App\Http\Controllers\Production\BatchConsumptionController;
 use App\Http\Controllers\Production\LineAdjustmentController;
 use App\Http\Controllers\Production\PackagingPlanController;
 use App\Http\Controllers\Production\ProductionLabelController;
@@ -372,6 +373,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('production-orders/{production_order}/consume-remnant', [RemnantConsumptionController::class, 'store'])->name('production-orders.consume-remnant');
         Route::delete('production-orders/{production_order}/remnant-consumptions/{consumption}', [RemnantConsumptionController::class, 'destroy'])->name('production-orders.remnant-consumptions.destroy');
         Route::get('production-orders/{production_order}/available-remnants', [RemnantConsumptionController::class, 'availableRemnants'])->name('production-orders.available-remnants');
+        Route::post('production-orders/{production_order}/batch-consumptions', [BatchConsumptionController::class, 'store'])->name('production-orders.batch-consumptions.store');
+        Route::patch('production-orders/{production_order}/batch-consumptions/{batch_consumption}', [BatchConsumptionController::class, 'update'])->name('production-orders.batch-consumptions.update');
+        Route::delete('production-orders/{production_order}/batch-consumptions/{batch_consumption}', [BatchConsumptionController::class, 'destroy'])->name('production-orders.batch-consumptions.destroy');
     });
 
     // Inventario de producto terminado

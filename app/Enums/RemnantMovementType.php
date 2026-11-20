@@ -23,6 +23,9 @@ enum RemnantMovementType: string implements HasTone
     /** Se corrigieron sus kilos a lo que se pesó: el único tipo con signo. */
     case Correction = 'correction';
 
+    /** Recibió lo que quedó, pesado, en un envase abierto de un lote de su OP que otra OP usó. */
+    case OpenedUnit = 'opened_unit';
+
     public function label(): string
     {
         return match ($this) {
@@ -30,13 +33,15 @@ enum RemnantMovementType: string implements HasTone
             self::Consumption => __('Consumo en OP'),
             self::WriteOff => __('Baja'),
             self::Correction => __('Corrección'),
+            self::OpenedUnit => __('Cuñete abierto'),
         };
     }
 
     public function tone(): Tone
     {
         return match ($this) {
-            self::Birth => Tone::Success,
+            self::Birth,
+            self::OpenedUnit => Tone::Success,
             self::Consumption,
             self::WriteOff => Tone::Warning,
             self::Correction => Tone::Neutral,
@@ -50,7 +55,8 @@ enum RemnantMovementType: string implements HasTone
             self::Consumption,
             self::WriteOff => true,
             self::Birth,
-            self::Correction => false,
+            self::Correction,
+            self::OpenedUnit => false,
         };
     }
 }

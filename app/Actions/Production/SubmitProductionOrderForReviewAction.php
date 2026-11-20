@@ -7,6 +7,7 @@ namespace App\Actions\Production;
 use App\Enums\ProductionOrderStatus;
 use App\Models\ProductionOrder;
 use App\Models\User;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderLineUnits;
@@ -21,6 +22,7 @@ class SubmitProductionOrderForReviewAction
         private readonly ProductionOrderCompletionLines $completionLines,
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly ProductionOrderConsumptionCheck $consumptionCheck,
+        private readonly BatchSourceDrawdown $batchSources,
     ) {}
 
     /**
@@ -39,6 +41,9 @@ class SubmitProductionOrderForReviewAction
 
             // Quien entrega explica lo que se pasó de lo planeado: 422 si falta un motivo.
             $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], (int) $user->id);
+
+            // Por cada lote de PT usado: los kilos usados y lo que quedó, pesado. Toda línea de la fórmula con alguna fuente.
+            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? []);
 
             $this->saveOperationalData->execute($lockedOrder, $data);
 

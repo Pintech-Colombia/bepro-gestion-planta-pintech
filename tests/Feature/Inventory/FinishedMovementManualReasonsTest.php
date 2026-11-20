@@ -33,7 +33,6 @@ it('keeps accepting the reasons the form offers', function (string $type, string
     ['exit', 'sale'],
     ['exit', 'sample'],
     ['exit', 'deterioration'],
-    ['exit', 'transformation'],
     ['exit', 'adjustment'],
 ]);
 
@@ -47,6 +46,8 @@ it('does not accept the reasons of the other direction', function (string $type,
     ['entry', 'deterioration'],
     ['exit', 'return'],
     ['exit', 'production'],
+    // Es la salida automática del lote que una OP usa como ingrediente, al completarla.
+    ['exit', 'transformation'],
 ]);
 
 it('accepts a transfer sent as an exit, which is how the form sends it', function (): void {

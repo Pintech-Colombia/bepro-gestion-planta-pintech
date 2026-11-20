@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\Production;
 
 use App\Enums\NumberType;
-use App\Enums\RemnantStatus;
 use App\Models\ProductionRemnant;
 use App\Models\ProductionRemnantMovement;
 use App\Models\User;
@@ -86,21 +85,10 @@ class CorrectRemnantAction
                 $lockedRemnant,
                 $quantityKg,
                 $quantityGallons,
-                $this->statusFor($lockedRemnant),
+                $this->ledger->restockedStatus($lockedRemnant),
                 $notes,
                 (int) $user->id,
             );
         }, attempts: 3);
-    }
-
-    /**
-     * Pesar de nuevo no es consumir: disponible si ninguna orden lo usó, parcialmente consumido si alguna sí. Uno agotado
-     * que se corrige vuelve a tener kilos, así que nunca queda consumido.
-     */
-    private function statusFor(ProductionRemnant $lockedRemnant): RemnantStatus
-    {
-        return $lockedRemnant->consumptions()->applied()->exists()
-            ? RemnantStatus::PartiallyConsumed
-            : RemnantStatus::Available;
     }
 }

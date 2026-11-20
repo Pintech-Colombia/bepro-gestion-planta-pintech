@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Production;
 
 use App\Enums\NumberType;
+use App\Models\ProductionOrder;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class PlanRemnantConsumptionRequest extends FormRequest
 {
@@ -25,10 +27,20 @@ class PlanRemnantConsumptionRequest extends FormRequest
      */
     public function rules(): array
     {
+        $order = $this->route('production_order');
+
         return [
             'remnant_id' => ['required', 'integer', 'exists:production_remnants,id'],
             'quantity_kg' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0.0001'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            // Opcional: la línea de «Productos a usar» a la que va. Sin ella, la del producto del saldo.
+            'production_order_product_line_id' => [
+                'bail',
+                'nullable',
+                'integer',
+                Rule::exists('production_order_product_lines', 'id')
+                    ->where('production_order_id', $order instanceof ProductionOrder ? $order->id : 0),
+            ],
         ];
     }
 
@@ -39,6 +51,7 @@ class PlanRemnantConsumptionRequest extends FormRequest
     {
         return [
             'quantity_kg' => 'kilos a usar',
+            'production_order_product_line_id' => 'línea de producto',
         ];
     }
 }

@@ -121,7 +121,7 @@ How it works:
 | `QuotationStatus` | draft neutral · sent info · accepted success · rejected danger |
 | `ProductionOrderStatus` | pending warning · in_progress info · pending_review warning · completed success · cancelled danger |
 | `RemnantStatus` | available success · partially_consumed warning · consumed neutral |
-| `RemnantMovementType` | birth success · consumption warning · write_off warning · correction neutral (its kilos carry their own sign) |
+| `RemnantMovementType` | birth success · opened_unit success · consumption warning · write_off warning · correction neutral (its kilos carry their own sign) |
 | `PaintDevelopmentRequestStatus` | draft neutral · submitted info · in_review warning · approved success · rejected danger |
 | `AlertSeverity` | baja neutral · media warning · alta danger |
 | `AlertType`, `WarehouseType` | all neutral (told apart by icon or label) |

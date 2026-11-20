@@ -47,33 +47,86 @@ class EstimatedTransferCostBackfill
                     ->pluck('cif_percentage', 'id');
 
                 foreach ($batches as $batch) {
-                    $entryCost = $entryCosts->get((int) $batch->id);
-
-                    if ($entryCost === null) {
-                        continue;
-                    }
-
                     $cif = $cifByProduct->get((int) $batch->product_id);
-                    $transferCost = $this->calculator->round(
-                        $this->productionCostCalculator->transferCost((string) $entryCost, $cif !== null ? (string) $cif : null),
-                        NumberType::Money->scale(),
-                    );
+                    $transferCost = $this->estimatedCost($entryCosts->get((int) $batch->id), $cif !== null ? (string) $cif : null);
 
-                    // Un costo que no cabe en la columna haría fallar la migración en PostgreSQL: se deja nulo, como el
-                    // lote sin entrada.
-                    if ($this->calculator->cmp($this->calculator->abs($transferCost), NumberType::Money->max()) > 0) {
+                    if ($transferCost === null) {
                         continue;
                     }
 
-                    DB::table('finished_product_batches')->where('id', $batch->id)->update([
-                        'transfer_unit_cost' => $transferCost,
-                        'transfer_cost_estimated' => true,
-                    ]);
+                    $this->store((int) $batch->id, $transferCost);
                     $filled++;
                 }
             });
 
         return $filled;
+    }
+
+    /**
+     * El costo de traslado estimado de un lote que no lo tiene, con la misma regla del relleno, sin guardarlo: la vista
+     * previa de costos de una OP que lo usa. Nulo si el lote ya tiene costo de traslado o no se puede estimar.
+     */
+    public function estimateFor(int $batchId): ?string
+    {
+        $batch = DB::table('finished_product_batches')
+            ->where('id', $batchId)
+            ->whereNull('transfer_unit_cost')
+            ->first(['id', 'product_id']);
+
+        if ($batch === null) {
+            return null;
+        }
+
+        $cif = DB::table('products')->where('id', $batch->product_id)->value('cif_percentage');
+
+        return $this->estimatedCost(
+            $this->productionEntryCosts([(int) $batch->id])->get((int) $batch->id),
+            $cif !== null ? (string) $cif : null,
+        );
+    }
+
+    /**
+     * Estima y guarda, marcado como estimado, el costo de traslado de un lote que no lo tiene (uno creado por una imagen
+     * anterior a la columna, durante una vuelta atrás de un despliegue). Lo llama completar una OP que lo consume, con el
+     * lote ya bloqueado. Nulo si no se puede estimar.
+     */
+    public function fill(int $batchId): ?string
+    {
+        $transferCost = $this->estimateFor($batchId);
+
+        if ($transferCost !== null) {
+            $this->store($batchId, $transferCost);
+        }
+
+        return $transferCost;
+    }
+
+    /**
+     * La regla: el costo de la entrada «Producción» con el CIF de hoy del producto. Nulo sin entrada, o si el costo no
+     * cabe en la columna (haría fallar la migración en PostgreSQL: se deja nulo, como el lote sin entrada).
+     */
+    private function estimatedCost(?string $entryCost, ?string $cif): ?string
+    {
+        if ($entryCost === null) {
+            return null;
+        }
+
+        $transferCost = $this->calculator->round(
+            $this->productionCostCalculator->transferCost($entryCost, $cif),
+            NumberType::Money->scale(),
+        );
+
+        return $this->calculator->cmp($this->calculator->abs($transferCost), NumberType::Money->max()) > 0
+            ? null
+            : $transferCost;
+    }
+
+    private function store(int $batchId, string $transferCost): void
+    {
+        DB::table('finished_product_batches')->where('id', $batchId)->update([
+            'transfer_unit_cost' => $transferCost,
+            'transfer_cost_estimated' => true,
+        ]);
     }
 
     /**

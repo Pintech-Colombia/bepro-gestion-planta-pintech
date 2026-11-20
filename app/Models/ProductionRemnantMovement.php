@@ -23,6 +23,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string $balance_after_kg
  * @property int|null $production_order_id
  * @property int|null $remnant_consumption_id
+ * @property int|null $production_order_batch_consumption_id el lote abierto cuyo resto volvió al saldo
  * @property string|null $notes
  * @property int|null $user_id
  * @property Carbon|null $created_at
@@ -30,6 +31,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read ProductionRemnant $remnant
  * @property-read ProductionOrder|null $productionOrder
  * @property-read RemnantConsumption|null $consumption
+ * @property-read ProductionOrderBatchConsumption|null $batchConsumption
  * @property-read User|null $user
  */
 #[Fillable([
@@ -39,6 +41,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'balance_after_kg',
     'production_order_id',
     'remnant_consumption_id',
+    'production_order_batch_consumption_id',
     'notes',
     'user_id',
 ])]
@@ -100,6 +103,11 @@ class ProductionRemnantMovement extends Model
     public function consumption(): BelongsTo
     {
         return $this->belongsTo(RemnantConsumption::class, 'remnant_consumption_id');
+    }
+
+    public function batchConsumption(): BelongsTo
+    {
+        return $this->belongsTo(ProductionOrderBatchConsumption::class, 'production_order_batch_consumption_id');
     }
 
     public function user(): BelongsTo

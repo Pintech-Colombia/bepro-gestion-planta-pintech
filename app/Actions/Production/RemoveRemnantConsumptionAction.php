@@ -8,17 +8,20 @@ use App\Models\ProductionOrder;
 use App\Models\RemnantConsumption;
 use App\Models\User;
 use App\Services\Production\ProductionOrderLock;
+use App\Services\Production\ProductLinePlanner;
 use Illuminate\Validation\ValidationException;
 
 class RemoveRemnantConsumptionAction
 {
     public function __construct(
         private readonly ProductionOrderLock $orderLock,
+        private readonly ProductLinePlanner $planner,
     ) {}
 
     /**
      * Quita una línea planeada de saldo de una OP abierta. El saldo no se toca: la línea solo reservaba sus kilos. Una
-     * línea ya aplicada (descontada del saldo) no se quita. Corregir la cantidad es quitar y volver a agregar.
+     * línea ya aplicada (descontada del saldo) no se quita. Corregir la cantidad es quitar y volver a agregar. Si era la
+     * última fuente de una línea agregada de «Productos a usar», la línea también se va.
      */
     public function execute(ProductionOrder $order, RemnantConsumption $consumption, User $user): void
     {
@@ -43,7 +46,10 @@ class RemoveRemnantConsumptionAction
                     ]);
                 }
 
+                $productLineId = $lockedLine->production_order_product_line_id;
                 $lockedLine->delete();
+
+                $this->planner->pruneIfEmpty($productLineId);
             },
         );
     }

@@ -111,6 +111,38 @@ trait ProductionConsumptionRules
     }
 
     /**
+     * Los lotes de PT que la orden usa en «Productos a usar», con lo que se registra al entregar: los kilos usados de cada
+     * lote y, si quedó producto en un envase abierto, cuánto pesó (por defecto no quedó). Las unidades que salen son las
+     * de la fuente, no se piden aquí. Que lo que quedó no pase de una unidad lo revisa la acción, con el lote.
+     *
+     * @return array<string, mixed>
+     */
+    protected function batchConsumptionRules(): array
+    {
+        $scopedOrderId = $this->resolveProductionOrderId() ?? 0;
+
+        return [
+            'batch_consumptions' => ['sometimes', 'array'],
+            'batch_consumptions.*.id' => [
+                'bail',
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('production_order_batch_consumptions', 'id')->where('production_order_id', $scopedOrderId),
+            ],
+            'batch_consumptions.*.used_kg' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0.0001'],
+            'batch_consumptions.*.has_leftover' => ['sometimes', 'boolean'],
+            'batch_consumptions.*.leftover_kg' => [
+                'bail',
+                'nullable',
+                'required_if_accepted:batch_consumptions.*.has_leftover',
+                ...NumberType::Quantity->rules(),
+                'min:0.0001',
+            ],
+        ];
+    }
+
+    /**
      * El motivo de cada materia prima que se pasó de lo planeado más allá de la tolerancia, por id de la materia prima.
      * Cuáles lo necesitan lo decide `ProductionOrderConsumptionCheck` en la acción, con lo real ya convertido: aquí solo
      * la forma. Los de una materia prima que no lo necesita se ignoran.
@@ -302,6 +334,9 @@ trait ProductionConsumptionRules
             'packaging.*.id.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'line_adjustment_ids.*.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'remnant_consumption_ids.*.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
+            'batch_consumptions.*.id.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
+            'batch_consumptions.*.id.distinct' => 'No puedes repetir el mismo lote en la lista.',
+            'batch_consumptions.*.leftover_kg.required_if_accepted' => 'Pesa lo que quedó en el envase abierto y escribe los kilos.',
         ];
     }
 
@@ -324,6 +359,11 @@ trait ProductionConsumptionRules
             'line_adjustment_ids.*' => 'ajuste de línea',
             'remnant_consumption_ids' => 'saldos consumidos',
             'remnant_consumption_ids.*' => 'saldo consumido',
+            'batch_consumptions' => 'lotes usados',
+            'batch_consumptions.*.id' => 'lote usado',
+            'batch_consumptions.*.used_kg' => 'kilos usados del lote',
+            'batch_consumptions.*.has_leftover' => 'quedó producto en un envase abierto',
+            'batch_consumptions.*.leftover_kg' => 'kilos que quedaron',
             'overconsumption_reasons' => 'motivos del sobreconsumo',
             'overconsumption_reasons.*' => 'motivo del sobreconsumo',
         ];

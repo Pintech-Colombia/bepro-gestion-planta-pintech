@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Casts\WholeUnits;
 use App\Models\Concerns\HasAuditDescription;
 use App\Models\Concerns\ValidatesProductVariant;
+use App\Services\DecimalCalculator;
 use Database\Factories\FinishedProductBatchFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +36,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read ProductionOrder $productionOrder
  * @property-read Collection|FinishedProductBatchStock[] $stocks
  * @property-read Collection|FinishedInventoryMovement[] $movements
+ * @property-read Collection|ProductionOrderBatchConsumption[] $orderConsumptions
  */
 #[Fillable([
     'product_id',
@@ -99,6 +101,34 @@ class FinishedProductBatch extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(FinishedInventoryMovement::class, 'finished_product_batch_id');
+    }
+
+    /** Las OP que usan (o usaron) este lote como ingrediente. */
+    public function orderConsumptions(): HasMany
+    {
+        return $this->hasMany(ProductionOrderBatchConsumption::class, 'finished_product_batch_id');
+    }
+
+    /**
+     * Los kilos de una unidad del lote: galones de su presentación × peso por galón real de la OP que lo fabricó. La
+     * única cuenta de kilos por unidad de un lote: la usan la preselección de fuentes, la pantalla y el consumo al
+     * completar (que la fija en la fuente). Sin valor de presentación cuenta 1 galón (la regla de
+     * `VariantPricingService`). Nulo si la OP no tiene peso por galón.
+     */
+    public function kgPerUnit(): ?string
+    {
+        $this->loadMissing(['productVariant', 'productionOrder']);
+
+        $density = $this->productionOrder?->density_kg_per_gallon;
+        $calculator = app(DecimalCalculator::class);
+
+        if ($density === null || ! $calculator->isPositive((string) $density)) {
+            return null;
+        }
+
+        $gallons = (string) ($this->productVariant?->presentation_value ?? '1');
+
+        return $calculator->round($calculator->mul($gallons, (string) $density, 8), 4);
     }
 
     /**

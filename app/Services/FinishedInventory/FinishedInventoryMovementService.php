@@ -11,6 +11,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Models\FinishedInventory;
 use App\Models\FinishedInventoryMovement;
 use App\Models\FinishedProductBatch;
+use App\Services\AvailableBatchesService;
 use App\Services\DecimalCalculator;
 use App\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,7 @@ class FinishedInventoryMovementService
         // Sin fecha, los movimientos llevan la de hoy en la planta: `movement_date` es una fecha y en UTC uno de las
         // 8 p. m. en Bogotá quedaría en el día siguiente (B54).
         private readonly TimezoneService $timezone,
+        private readonly AvailableBatchesService $availableBatches,
     ) {}
 
     /**
@@ -94,7 +96,12 @@ class FinishedInventoryMovementService
     }
 
     /**
-     * Register a stock exit (sale, sample, deterioration, adjustment, transfer-out).
+     * Register a stock exit (sale, sample, deterioration, adjustment, transfer-out, or the consumption of the batch in a
+     * production order).
+     *
+     * Ninguna salida toma unidades comprometidas en órdenes abiertas (fuentes de lote sin aplicar): 422 que dice qué
+     * órdenes las tienen. `$productionOrderId` es la orden que consume el lote al completarse («Transformación»): toma
+     * sus propias unidades comprometidas, nunca las de otra.
      *
      * @throws InsufficientStockException when stock is insufficient
      */
@@ -106,9 +113,19 @@ class FinishedInventoryMovementService
         int $userId,
         ?string $notes = null,
         ?string $movementDate = null,
+        ?int $productionOrderId = null,
     ): FinishedInventoryMovement {
-        return DB::transaction(function () use ($batchId, $warehouseId, $quantity, $reason, $userId, $notes, $movementDate) {
+        return DB::transaction(function () use ($batchId, $warehouseId, $quantity, $reason, $userId, $notes, $movementDate, $productionOrderId) {
             $batch = $this->lockBatch($batchId);
+
+            // Con el lote bloqueado: quien compromete unidades (agregar un lote a una orden) también lo bloquea.
+            $this->availableBatches->ensureFree(
+                $batchId,
+                $warehouseId,
+                $quantity,
+                exceptOrderId: $productionOrderId,
+                errorKey: $productionOrderId === null ? 'quantity' : 'batch_consumptions',
+            );
 
             $this->stockService->decrementStock($batchId, $warehouseId, $quantity);
 
@@ -116,6 +133,7 @@ class FinishedInventoryMovementService
                 'product_id' => $batch->product_id,
                 'product_variant_id' => $batch->product_variant_id,
                 'warehouse_id' => $warehouseId,
+                'production_order_id' => $productionOrderId,
                 'finished_product_batch_id' => $batchId,
                 'type' => InventoryMovementType::Exit,
                 'reason' => $reason,
@@ -227,6 +245,12 @@ class FinishedInventoryMovementService
         return FinishedProductBatch::query()->lockForUpdate()->findOrFail($batchId);
     }
 
+    /**
+     * Lo que se puede devolver de un lote en una bodega: las salidas devolvibles menos las devoluciones. Una
+     * «Transformación» con orden (el lote se consumió en una OP al completarla) no se devuelve: su costo quedó en esa
+     * orden, y devolverla a mano dejaría el producto en bodega y también en la OP. Una sin orden (registrada a mano antes
+     * de que existiera el consumo en la OP) sigue siendo devolvible.
+     */
     private function calculateReturnableForBatchWarehouse(int $batchId, int $warehouseId): string
     {
         $exitReasons = [
@@ -241,6 +265,9 @@ class FinishedInventoryMovementService
             ->where('warehouse_id', $warehouseId)
             ->where('type', InventoryMovementType::Exit)
             ->whereIn('reason', $exitReasons)
+            ->where(fn ($query) => $query
+                ->where('reason', '!=', FinishedInventoryMovementReason::Transformation->value)
+                ->orWhereNull('production_order_id'))
             ->sum('quantity');
 
         $totalReturns = (string) FinishedInventoryMovement::query()

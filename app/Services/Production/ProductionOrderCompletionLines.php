@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
  */
 class ProductionOrderCompletionLines
 {
-    public const ORDER_CHANGED_MESSAGE = 'La orden cambió mientras la tenías abierta: se agregó o quitó una presentación, un ajuste de línea o un saldo. La pantalla ya muestra la lista actual: revisa los datos y vuelve a confirmar.';
+    public const ORDER_CHANGED_MESSAGE = 'La orden cambió mientras la tenías abierta: se agregó o quitó una presentación, un ajuste de línea, un saldo o un lote. La pantalla ya muestra la lista actual: revisa los datos y vuelve a confirmar.';
 
     public const MISSING_INGREDIENTS_MESSAGE = 'Registra el consumo real de todos los ingredientes de la orden (0 si alguno no se usó).';
 
@@ -28,8 +28,9 @@ class ProductionOrderCompletionLines
 
     /**
      * Con la OP ya bloqueada (nadie puede agregar ni quitar líneas mientras tanto), 422 si lo enviado no es exactamente
-     * lo de la orden: ingredientes y presentaciones con sus datos reales, y los IDs de los ajustes y los saldos
-     * consumidos que mostraba la pantalla (quien aprueba firma el costo que vio).
+     * lo de la orden: ingredientes, presentaciones y lotes de PT usados con sus datos reales, y los IDs de los ajustes y
+     * los saldos consumidos que mostraba la pantalla (quien aprueba firma el costo que vio). Los lotes pueden no venir
+     * (una pantalla que todavía no los muestra): entonces la orden no puede tener ninguno.
      *
      * @param  array<string, mixed>  $data  datos validados
      */
@@ -40,6 +41,7 @@ class ProductionOrderCompletionLines
             'packaging' => [$lockedOrder->packagingPlans()->pluck('id'), collect($data['packaging'] ?? [])->pluck('id'), self::ORDER_CHANGED_MESSAGE],
             'line_adjustment_ids' => [$lockedOrder->lineAdjustments()->pluck('id'), collect($data['line_adjustment_ids']), self::ORDER_CHANGED_MESSAGE],
             'remnant_consumption_ids' => [$lockedOrder->remnantConsumptions()->pluck('id'), collect($data['remnant_consumption_ids']), self::ORDER_CHANGED_MESSAGE],
+            'batch_consumptions' => [$lockedOrder->batchConsumptions()->pluck('id'), collect($data['batch_consumptions'] ?? [])->pluck('id'), self::ORDER_CHANGED_MESSAGE],
         ];
 
         $errors = [];

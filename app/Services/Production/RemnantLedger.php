@@ -6,6 +6,7 @@ namespace App\Services\Production;
 
 use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
+use App\Models\ProductionOrderBatchConsumption;
 use App\Models\ProductionRemnant;
 use App\Models\ProductionRemnantMovement;
 use App\Models\RemnantConsumption;
@@ -13,7 +14,8 @@ use App\Services\DecimalCalculator;
 
 /**
  * La única pieza que cambia los kilos de un saldo de PT, y cada cambio deja su movimiento en el historial
- * (`production_remnant_movements`): nacer al completar su OP, consumirse al completar otra, darse de baja y corregirse.
+ * (`production_remnant_movements`): nacer al completar su OP, consumirse al completar otra, darse de baja, corregirse y
+ * recibir lo que quedó en un envase abierto de un lote de su OP.
  * Así ningún camino mueve kilos sin rastro. Las reglas (cuánto se descuenta, qué se permite) viven en quien llama
  * (`RemnantDrawdown`, las acciones de baja y corrección); aquí solo se escribe, dentro de la transacción y con el saldo
  * ya bloqueado por quien llama.
@@ -39,6 +41,61 @@ class RemnantLedger
         ]);
 
         return $remnant;
+    }
+
+    /**
+     * Lo que quedó, pesado, en un envase abierto de un lote vuelve al saldo de la OP que fabricó ese lote. Con el saldo
+     * ya bloqueado por quien llama, se suman los kilos, los galones quedan en `$availableGallonsAfter` (los de los kilos
+     * que quedan, calculados por quien llama con la regla del saldo) y el estado se recalcula: uno consumido o dado de
+     * baja vuelve a tener kilos. Si la OP de origen no tiene saldo, nace aquí con esos kilos (`$newRemnant`, las columnas
+     * del saldo nuevo). El movimiento es «Cuñete abierto», con la OP que abrió el envase y la fuente de lote.
+     *
+     * @param  array<string, mixed>  $newRemnant  las columnas del saldo si hay que crearlo
+     */
+    public function returnFromOpenedUnit(
+        ?ProductionRemnant $lockedRemnant,
+        array $newRemnant,
+        string $quantityKg,
+        string $availableGallonsAfter,
+        ProductionOrderBatchConsumption $source,
+        int $userId,
+    ): ProductionRemnant {
+        if ($lockedRemnant === null) {
+            $remnant = ProductionRemnant::create([
+                ...$newRemnant,
+                'original_quantity_kg' => $quantityKg,
+                'original_quantity_gallons' => $availableGallonsAfter,
+                'available_quantity_kg' => $quantityKg,
+                'available_quantity_gallons' => $availableGallonsAfter,
+                'status' => RemnantStatus::Available,
+            ]);
+        } else {
+            $remnant = $lockedRemnant;
+            $remnant->update([
+                'available_quantity_kg' => $this->calculator->add((string) $remnant->available_quantity_kg, $quantityKg, 4),
+                'available_quantity_gallons' => $availableGallonsAfter,
+                'status' => $this->restockedStatus($remnant),
+            ]);
+        }
+
+        $this->record($remnant, RemnantMovementType::OpenedUnit, $quantityKg, [
+            'production_order_id' => $source->production_order_id,
+            'production_order_batch_consumption_id' => $source->id,
+            'user_id' => $userId,
+        ]);
+
+        return $remnant;
+    }
+
+    /**
+     * El estado de un saldo que vuelve a tener kilos sin que nadie lo haya consumido ahora (corregir, recibir un envase
+     * abierto): disponible si ninguna orden lo usó, parcialmente consumido si alguna sí. Nunca queda consumido.
+     */
+    public function restockedStatus(ProductionRemnant $lockedRemnant): RemnantStatus
+    {
+        return $lockedRemnant->consumptions()->applied()->exists()
+            ? RemnantStatus::PartiallyConsumed
+            : RemnantStatus::Available;
     }
 
     /**

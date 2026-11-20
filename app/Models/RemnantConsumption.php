@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $remnant_id
  * @property int|null $target_order_id
+ * @property int|null $production_order_product_line_id nulo solo en consumos de una imagen anterior a las líneas
  * @property string|null $consumed_cost
  * @property string $quantity_gallons
  * @property string $quantity_kg
@@ -29,11 +30,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read ProductionRemnant $remnant
  * @property-read ProductionOrder|null $targetOrder
+ * @property-read ProductionOrderProductLine|null $productLine
  * @property-read User $consumedBy
  */
 #[Fillable([
     'remnant_id',
     'target_order_id',
+    'production_order_product_line_id',
     'consumed_cost',
     'quantity_gallons',
     'quantity_kg',
@@ -84,6 +87,12 @@ class RemnantConsumption extends Model
     public function targetOrder(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class, 'target_order_id');
+    }
+
+    /** La línea de «Productos a usar» de la orden de la que este saldo es fuente. */
+    public function productLine(): BelongsTo
+    {
+        return $this->belongsTo(ProductionOrderProductLine::class, 'production_order_product_line_id');
     }
 
     public function consumedBy(): BelongsTo

@@ -500,6 +500,7 @@ cancelada conserva sus líneas como historial, sin reservar nada.
 | `id` | BIGINT |  | PK |
 | `remnant_id` | BIGINT |  | FK → `production_remnants` (RESTRICT) |
 | `target_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT) |
+| `production_order_product_line_id` | BIGINT | sí | FK → `production_order_product_lines` (RESTRICT), con índice. La línea de «Productos a usar» de la que el saldo es fuente (la del producto del saldo; si la orden no la tiene, nace como agregada). Los consumos anteriores a las líneas recibieron una línea agregada de su producto en su OP (`RemnantConsumptionLineBackfill`). Nula solo si lo escribe una imagen anterior |
 | `consumed_cost` | DECIMAL(16,4) | sí | Nulo hasta aplicarse (y si el saldo no tiene costo) |
 | `quantity_gallons` | DECIMAL(12,4) |  | Estimado mientras está planeada; real al aplicarse |
 | `quantity_kg` | DECIMAL(12,4) |  | Los kilos planeados; al aplicarse, los descontados (un resto de menos de 0,0001 gal agota el saldo) |
@@ -514,21 +515,69 @@ cancelada conserva sus líneas como historial, sin reservar nada.
 
 Historial de cada saldo de PT: un libro que no se edita ni se borra (un error se corrige con otro movimiento y una
 nota). Lo escribe solo `RemnantLedger`: el nacimiento al completar la OP de origen, un consumo por cada línea aplicada al
-completar otra OP, la baja y la corrección (`production_remnants.adjust`). Los saldos anteriores a la tabla se
-rellenaron con su nacimiento y sus consumos aplicados (`RemnantMovementBackfill`).
+completar otra OP, la baja, la corrección (`production_remnants.adjust`) y el «cuñete abierto»: lo que quedó, pesado, en
+un envase abierto de un lote de su OP que otra OP usó (si la OP no tenía saldo, nace con ese movimiento). Los saldos
+anteriores a la tabla se rellenaron con su nacimiento y sus consumos aplicados (`RemnantMovementBackfill`).
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `production_remnant_id` | BIGINT |  | FK → `production_remnants` (RESTRICT). Índice (`production_remnant_id`, `created_at`) |
-| `type` | VARCHAR(20) |  | `RemnantMovementType`: birth, consumption, write_off, correction. Texto, sin CHECK: un tipo nuevo no rehace la restricción |
+| `type` | VARCHAR(20) |  | `RemnantMovementType`: birth, consumption, write_off, correction, opened_unit. Texto, sin CHECK: un tipo nuevo no rehace la restricción |
 | `quantity_kg` | DECIMAL(12,4) |  | Sin signo (el tipo dice si entran o salen), salvo en la corrección: la diferencia con signo entre los kilos pesados y los que tenía |
 | `balance_after_kg` | DECIMAL(12,4) |  | Los kilos disponibles del saldo después del movimiento |
-| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT). La OP donde nació o donde se usó; nula en la baja y la corrección |
+| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT). La OP donde nació o donde se usó (en el cuñete abierto, la que abrió el envase); nula en la baja y la corrección |
 | `remnant_consumption_id` | BIGINT | sí | FK → `remnant_consumptions` (RESTRICT). La línea aplicada, en un consumo |
+| `production_order_batch_consumption_id` | BIGINT | sí | FK → `production_order_batch_consumptions` (RESTRICT). El lote abierto, en el cuñete abierto |
 | `notes` | TEXT | sí | Obligatoria en la baja y la corrección (10 a 1.000 caracteres) |
 | `user_id` | BIGINT | sí | FK → `users` (RESTRICT). Quién completó la OP, dio de baja o corrigió. Nulo solo en el ajuste que dejó el relleno si los kilos viejos no cuadraban |
 | `created_at` | TIMESTAMP | sí | La fecha del movimiento |
+| `updated_at` | TIMESTAMP | sí |  |
+
+### 2.5.7b `production_order_product_lines`
+
+«Productos a usar» de una OP: el producto terminado que lleva como ingrediente. Las de la fórmula se copian al crear la
+OP con sus kilos planeados (cantidad por galón × equivalencia a kilos de su unidad × galones de la OP); las agregadas
+nacen al usar en la OP un saldo o un lote de un producto que la fórmula no lleva, sin plan, y se van con su última
+fuente. Sus fuentes son saldos (`remnant_consumptions`) y lotes (`production_order_batch_consumptions`), siempre del
+mismo producto. Una línea de la fórmula sin ninguna fuente no deja enviar a revisión ni completar.
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | BIGINT |  | PK |
+| `production_order_id` | BIGINT |  | FK → `production_orders` (RESTRICT). Índice (`production_order_id`, `product_id`) |
+| `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
+| `step_order` | INT | sí | El paso de la fórmula; nulo en una agregada |
+| `planned_kg` | DECIMAL(12,4) | sí | Kilos planeados; nulo en una agregada |
+| `origin` | VARCHAR(20) |  | `ProductionOrderProductLineOrigin`: formula, added |
+| `created_at` | TIMESTAMP | sí |  |
+| `updated_at` | TIMESTAMP | sí |  |
+
+### 2.5.7c `production_order_batch_consumptions`
+
+Lotes de PT que usa una OP como fuente de una línea de producto, en unidades enteras (las que se sacan de bodega,
+propuestas por la preselección y editables hasta completar). Sin aplicar, sus unidades quedan **comprometidas** en la
+bodega: lo libre de un lote es su stock menos las fuentes sin aplicar de órdenes abiertas (`AvailableBatchesService`), y
+ninguna salida de PT (venta, muestra, deterioro, ajuste, traslado) toma lo comprometido. Al enviar a revisión o completar
+se guardan los kilos usados y lo que quedó, pesado, en el envase abierto. Al completar salen las unidades
+(«Transformación», con la OP que consume), lo que quedó vuelve al saldo de la OP que fabricó el lote y se fijan los kilos
+por unidad y el costo (`BatchSourceDrawdown`).
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | BIGINT |  | PK |
+| `production_order_id` | BIGINT |  | FK → `production_orders` (RESTRICT), con índice |
+| `production_order_product_line_id` | BIGINT |  | FK → `production_order_product_lines` (RESTRICT) |
+| `finished_product_batch_id` | BIGINT |  | FK → `finished_product_batches` (RESTRICT). Índice (`finished_product_batch_id`, `warehouse_id`) |
+| `warehouse_id` | BIGINT |  | FK → `warehouses` (RESTRICT). La bodega de la OP |
+| `units` | INT |  | Unidades enteras que salen al completar |
+| `used_kg` | DECIMAL(12,4) | sí | Kilos usados del lote, registrados al entregar |
+| `leftover_kg` | DECIMAL(12,4) | sí | Lo que quedó en el envase abierto, pesado (no pasa de una unidad). Nulo: no quedó nada |
+| `kg_per_unit` | DECIMAL(12,4) | sí | Galones de la presentación × peso por galón de la OP del lote, fijado al completar |
+| `consumed_cost` | DECIMAL(16,4) | sí | Al completar: unidades × costo de traslado − valor de lo que volvió al saldo |
+| `applied_at` | TIMESTAMP | sí | Cuándo salieron del inventario. Nulo = comprometidas |
+| `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
+| `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
 
 ### 2.5.8 `production_costs`
@@ -653,9 +702,9 @@ Movimientos de producto terminado (libro contable: inmutable).
 | `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
 | `product_variant_id` | BIGINT | sí | FK → `product_variants` (RESTRICT) |
 | `warehouse_id` | BIGINT |  | FK → `warehouses` (RESTRICT) |
-| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT) |
+| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT). En una entrada «Producción», la OP que fabricó el lote; en una salida «Transformación», la OP que lo consumió como ingrediente (esa no se puede devolver a mano) |
 | `type` | VARCHAR(255) |  |  |
-| `reason` | VARCHAR(50) |  |  |
+| `reason` | VARCHAR(50) |  | `FinishedInventoryMovementReason`. «Producción» y «Transformación» las escribe solo completar una OP; las «Transformación» manuales anteriores conservan su motivo |
 | `quantity` | INTEGER |  |  |
 | `movement_date` | DATE |  | fecha de planta del movimiento; no futura (`PlantDate`) |
 | `notes` | TEXT | sí |  |
@@ -1057,7 +1106,8 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 | `FinishedInventoryMovementReason` | `finished_inventory_movements.reason` | production, return, adjustment, sale, sample, transfer, transformation, deterioration |
 | `ProductionOrderStatus` | `production_orders.status` | pending, in_progress, pending_review, completed, cancelled |
 | `RemnantStatus` | `production_remnants.status` | available, partially_consumed, consumed |
-| `RemnantMovementType` | `production_remnant_movements.type` (texto, sin CHECK) | birth, consumption, write_off, correction |
+| `RemnantMovementType` | `production_remnant_movements.type` (texto, sin CHECK) | birth, consumption, write_off, correction, opened_unit |
+| `ProductionOrderProductLineOrigin` | `production_order_product_lines.origin` (texto, sin CHECK) | formula, added |
 | `QrDocumentType` | `qr_documents.document_type`, `product_documents.document_type` | technical_data_sheet, safety_data_sheet, quality_certificate |
 | `QuotationStatus` | `quotations.status` | draft, sent, accepted, rejected |
 | `QuotationValidity` | `quotations.validity_days` | 30, 45, 60 |
