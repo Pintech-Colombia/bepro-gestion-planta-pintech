@@ -30,6 +30,7 @@ class AlertController extends Controller
             ->with([
                 'rawMaterial:id,code',
                 'batch:id,lot_number,expiry_date',
+                'productionOrder:id,order_number',
                 'resolvedBy:id,name',
             ])
             ->latest('id')
@@ -56,6 +57,10 @@ class AlertController extends Controller
                         'lot_number' => $alert->batch->lot_number,
                         'expiry_date' => $alert->batch->expiry_date?->format('Y-m-d'),
                     ] : null,
+                    'production_order' => $alert->productionOrder ? [
+                        'id' => $alert->productionOrder->id,
+                        'order_number' => $alert->productionOrder->order_number,
+                    ] : null,
                     'resolved_by' => $alert->resolvedBy ? [
                         'id' => $alert->resolvedBy->id,
                         'name' => $alert->resolvedBy->name,
@@ -79,10 +84,11 @@ class AlertController extends Controller
             'stats' => [
                 'unresolved_count' => $this->alertService->unresolvedCount($request->user()),
             ],
-            // El mensaje enlaza a la materia prima, que pide otro permiso (las alertas de precio se ven con
-            // `costs.view`): sin él, queda como texto.
+            // El mensaje enlaza a la materia prima o a la OP, que piden otro permiso (las alertas de precio y de
+            // sobreconsumo se ven con `costs.view`): sin él, queda como texto.
             'can' => [
                 'viewRawMaterials' => $request->user()->can(Permission::RawMaterialsView->value),
+                'viewProductionOrders' => $request->user()->can(Permission::ProductionOrdersView->value),
             ],
         ]);
     }

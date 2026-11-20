@@ -3,6 +3,7 @@ import { Beaker } from 'lucide-react';
 import { DecimalInput } from '@/components/decimal-input';
 import { IngredientsTable } from '@/components/production/ingredients-table';
 import { LineAdjustmentsPanel } from '@/components/production/line-adjustments-panel';
+import { OverconsumptionReasons } from '@/components/production/overconsumption-reasons';
 import { PackagingSection } from '@/components/production/packaging-section';
 import {
     Card,
@@ -17,10 +18,12 @@ import type { PreviewStaleReason } from '@/hooks/use-server-preview';
 import { HEGMAN_LIMITS, NUMBER_TYPES } from '@/lib/number-types';
 import type {
     LabelMaterialOption,
+    ProductionOrderConsumptionReason,
     ProductionOrderErrors,
     ProductionOrderFormData,
     ProductionOrderIngredientFormRow,
     ProductionOrderLineAdjustment,
+    ProductionOrderOverconsumption,
     ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
     ProductionOrderSetData,
@@ -49,6 +52,9 @@ type ResultsCardProps = {
     solidsReferenceLabel: string | null;
     showCosts?: boolean;
     canPrintLabels?: boolean;
+    /** Lo que el servidor marca como pasado de lo planeado, y los motivos guardados. */
+    overconsumption?: ProductionOrderOverconsumption[];
+    consumptionReasons?: ProductionOrderConsumptionReason[];
 };
 
 export function ResultsCard({
@@ -70,7 +76,20 @@ export function ResultsCard({
     solidsReferenceLabel,
     showCosts = true,
     canPrintLabels = false,
+    overconsumption = [],
+    consumptionReasons = [],
 }: ResultsCardProps) {
+    const materialCodes = new Map<number, string>();
+
+    for (const row of ingredientRows) {
+        if (!materialCodes.has(row.raw_material_id)) {
+            materialCodes.set(
+                row.raw_material_id,
+                row.raw_material_name ?? `MP #${row.raw_material_id}`,
+            );
+        }
+    }
+
     return (
         <Card className={isCompleted ? 'opacity-90 shadow-none' : ''}>
             <CardHeader>
@@ -190,6 +209,17 @@ export function ResultsCard({
                         rows={ingredientRows}
                         data={data}
                         setData={setData}
+                        isReadOnly={isReadOnly}
+                        showCosts={showCosts}
+                        overconsumption={overconsumption}
+                    />
+                    <OverconsumptionReasons
+                        overconsumption={overconsumption}
+                        storedReasons={consumptionReasons}
+                        codes={materialCodes}
+                        data={data}
+                        setData={setData}
+                        errors={errors as Record<string, string | undefined>}
                         isReadOnly={isReadOnly}
                         showCosts={showCosts}
                     />

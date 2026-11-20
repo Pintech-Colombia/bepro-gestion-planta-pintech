@@ -5,6 +5,7 @@ import {
     CheckCircle2,
     Clock,
     FlaskConical,
+    Gauge,
     PackageX,
     TrendingUp,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { useFilters } from '@/hooks/use-filters';
 import { pillClasses, toneClasses } from '@/lib/tones';
 import { index as alertsIndex, resolve as alertResolve } from '@/routes/alerts';
+import { show as productionOrderShow } from '@/routes/production-orders';
 import { show as rawMaterialShow } from '@/routes/raw-materials';
 import type { Paginated } from '@/types/ui';
 
@@ -38,6 +40,7 @@ type AlertRow = {
         lot_number: string | null;
         expiry_date: string | null;
     } | null;
+    production_order: { id: number; order_number: string } | null;
     resolved_by: { id: number; name: string } | null;
     can: {
         resolve: boolean;
@@ -64,6 +67,7 @@ type Props = {
     };
     can: {
         viewRawMaterials: boolean;
+        viewProductionOrders: boolean;
     };
 };
 
@@ -75,6 +79,8 @@ function renderTypeIcon(type: string) {
             return <Clock className="size-3.5" aria-hidden="true" />;
         case 'variacion_precio':
             return <TrendingUp className="size-3.5" aria-hidden="true" />;
+        case 'sobreconsumo':
+            return <Gauge className="size-3.5" aria-hidden="true" />;
         default:
             return <FlaskConical className="size-3.5" aria-hidden="true" />;
     }
@@ -198,7 +204,7 @@ export default function AlertsIndex({
             <div className="space-y-6 p-6">
                 <PageHeader
                     title="Alertas"
-                    description="Stock bajo, vencimientos y variaciones de precio en materias primas."
+                    description="Stock bajo, vencimientos y variaciones de precio en materias primas, y sobreconsumo en órdenes de producción."
                     actions={
                         <div className="rounded-md border border-border bg-card px-4 py-2 text-sm">
                             <span className="text-muted-foreground">
@@ -223,13 +229,21 @@ export default function AlertsIndex({
                 <DataListing
                     rows={alerts.data}
                     rowKey={(alert) => alert.id}
-                    // El mensaje abre la materia prima de la alerta (las alertas no tienen detalle propio), si se
-                    // tiene permiso de verla: las alertas de precio se ven con el de costos.
-                    rowHref={(alert) =>
-                        alert.raw_material && can.viewRawMaterials
+                    // El mensaje abre la OP o la materia prima de la alerta (las alertas no tienen detalle propio), si
+                    // se tiene permiso de verla: las de precio y sobreconsumo se ven con el de costos.
+                    rowHref={(alert) => {
+                        if (alert.production_order) {
+                            return can.viewProductionOrders
+                                ? productionOrderShow.url(
+                                      alert.production_order.id,
+                                  )
+                                : undefined;
+                        }
+
+                        return alert.raw_material && can.viewRawMaterials
                             ? rawMaterialShow.url(alert.raw_material.id)
-                            : undefined
-                    }
+                            : undefined;
+                    }}
                     rowLabel={(alert) => alert.message}
                     columns={columns}
                     actions={(alert) => [

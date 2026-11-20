@@ -31,7 +31,7 @@ class AlertService
     }
 
     /**
-     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int}
+     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int, sobreconsumo: int}
      */
     public function unresolvedBreakdown(?User $user): array
     {
@@ -47,6 +47,7 @@ class AlertService
             'vencimiento_proximo' => (int) ($counts[AlertType::VencimientoProximo->value] ?? 0),
             'variacion_precio' => (int) ($counts[AlertType::VariacionPrecio->value] ?? 0),
             'paint_development_request' => (int) ($counts[AlertType::PaintDevelopmentRequest->value] ?? 0),
+            'sobreconsumo' => (int) ($counts[AlertType::Sobreconsumo->value] ?? 0),
         ];
     }
 
@@ -278,6 +279,33 @@ class AlertService
         );
     }
 
+    /**
+     * La alerta de una OP (hoy, el sobreconsumo): una sola sin resolver por OP y tipo. Si ya hay una, se actualiza; si no,
+     * se crea y sale en el aviso en pantalla. El mensaje lo arma el módulo de la OP: este servicio no depende de costos.
+     */
+    public function raiseForProductionOrder(AlertType $type, int $productionOrderId, AlertSeverity $severity, string $message): void
+    {
+        $alert = Alert::query()
+            ->where('type', $type)
+            ->where('production_order_id', $productionOrderId)
+            ->where('is_resolved', false)
+            ->first();
+
+        if ($alert !== null) {
+            $alert->update(['severity' => $severity, 'message' => $message]);
+
+            return;
+        }
+
+        $this->announce(Alert::create([
+            'type' => $type,
+            'production_order_id' => $productionOrderId,
+            'severity' => $severity,
+            'message' => $message,
+            'is_resolved' => false,
+        ]));
+    }
+
     public function resolve(Alert $alert, int $userId): void
     {
         if ($alert->is_resolved) {
@@ -297,23 +325,12 @@ class AlertService
         AlertSeverity $severity,
         string $message,
     ): void {
-        $alert = Alert::create([
+        $this->announce(Alert::create([
             'type' => $type,
             'severity' => $severity,
             'message' => $message,
             'is_resolved' => false,
-        ]);
-
-        $payload = [
-            'id' => $alert->id,
-            'message' => $message,
-            'severity' => $severity->value,
-            'type' => $type->value,
-            'type_label' => $type->label(),
-        ];
-
-        $this->createdInRequest[] = $payload;
-        session()->push('new_alerts', $payload);
+        ]));
     }
 
     private function createOrRefresh(
@@ -343,21 +360,25 @@ class AlertService
             return;
         }
 
-        $alert = Alert::create([
+        $this->announce(Alert::create([
             'type' => $type,
             'raw_material_id' => $rawMaterialId,
             'batch_id' => $batchId,
             'severity' => $severity,
             'message' => $message,
             'is_resolved' => false,
-        ]);
+        ]));
+    }
 
+    /** Una alerta nueva sale en el aviso en pantalla de esta petición (`new_alerts`). */
+    private function announce(Alert $alert): void
+    {
         $payload = [
             'id' => $alert->id,
-            'message' => $message,
-            'severity' => $severity->value,
-            'type' => $type->value,
-            'type_label' => $type->label(),
+            'message' => $alert->message,
+            'severity' => $alert->severity->value,
+            'type' => $alert->type->value,
+            'type_label' => $alert->type->label(),
         ];
 
         $this->createdInRequest[] = $payload;

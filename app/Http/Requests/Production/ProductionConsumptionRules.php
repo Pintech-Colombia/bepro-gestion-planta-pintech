@@ -13,6 +13,7 @@ use App\Models\RawMaterial;
 use App\Rules\RawMaterialOfType;
 use App\Services\DecimalCalculator;
 use App\Services\Production\ProductionOrderCompletionLines;
+use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Support\OperationalTimes;
 use Closure;
 use Illuminate\Validation\Rule;
@@ -106,6 +107,21 @@ trait ProductionConsumptionRules
                 'distinct',
                 Rule::exists('remnant_consumptions', 'id')->where('target_order_id', $scopedOrderId),
             ],
+        ];
+    }
+
+    /**
+     * El motivo de cada materia prima que se pasó de lo planeado más allá de la tolerancia, por id de la materia prima.
+     * Cuáles lo necesitan lo decide `ProductionOrderConsumptionCheck` en la acción, con lo real ya convertido: aquí solo
+     * la forma. Los de una materia prima que no lo necesita se ignoran.
+     *
+     * @return array<string, list<string>>
+     */
+    protected function overconsumptionReasonRules(): array
+    {
+        return [
+            'overconsumption_reasons' => ['nullable', 'array'],
+            'overconsumption_reasons.*' => ['nullable', 'string', 'max:'.ProductionOrderConsumptionCheck::REASON_MAX_LENGTH],
         ];
     }
 
@@ -308,6 +324,8 @@ trait ProductionConsumptionRules
             'line_adjustment_ids.*' => 'ajuste de línea',
             'remnant_consumption_ids' => 'saldos consumidos',
             'remnant_consumption_ids.*' => 'saldo consumido',
+            'overconsumption_reasons' => 'motivos del sobreconsumo',
+            'overconsumption_reasons.*' => 'motivo del sobreconsumo',
         ];
     }
 }

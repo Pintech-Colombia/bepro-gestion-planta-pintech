@@ -38,6 +38,7 @@ class CompleteProductionOrderRequest extends FormRequest
             $this->seenLinesRules(),
             $this->qualityAndResponsibleRules(),
             $this->operationalTimesRules(),
+            $this->overconsumptionReasonRules(),
             [
                 // Cada cantidad con el tipo de su columna (Cantidad 12,4 y Densidad 10,4): sin tope, 1e65 o 1e20 pasan
                 // `numeric` y fallan en la calculadora o al guardar en PostgreSQL. El rendimiento real no se pide: lo

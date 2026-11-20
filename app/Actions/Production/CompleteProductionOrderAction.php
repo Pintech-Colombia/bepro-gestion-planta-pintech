@@ -22,8 +22,10 @@ use App\Services\FinishedInventory\FinishedInventoryMovementService;
 use App\Services\Inventory\FifoStockAllocatorService;
 use App\Services\Pricing\ProductionCostCalculatorService;
 use App\Services\Production\ProductionOrderCompletionLines;
+use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
+use App\Services\Production\ProductionOrderOverconsumptionAlert;
 use App\Services\Production\RemnantDrawdown;
 use App\Services\Production\RemnantLedger;
 use App\Services\ProductionCostRecalculationService;
@@ -45,6 +47,8 @@ class CompleteProductionOrderAction
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
         private readonly RemnantLedger $remnantLedger,
+        private readonly ProductionOrderConsumptionCheck $consumptionCheck,
+        private readonly ProductionOrderOverconsumptionAlert $overconsumptionAlert,
     ) {}
 
     /**
@@ -62,6 +66,11 @@ class CompleteProductionOrderAction
 
             // Después de la lista: si la orden cambió, eso se avisa antes que un error de cantidad.
             $data['ingredients'] = $this->lineUnits->ingredientsToRecord($lockedOrder, $data['ingredients']);
+
+            // El % con que se evalúa el consumo queda en la orden: si cambia después, la completada sigue mostrando
+            // lo que se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
+            $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
+            $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], $userId);
 
             $wasPendingReview = $lockedOrder->status === ProductionOrderStatus::PendingReview;
 
@@ -279,6 +288,7 @@ class CompleteProductionOrderAction
                 // El CIF con que se fijaron los lotes y el saldo: la OP completada lo muestra aunque el producto cambie.
                 'cif_percentage' => $productCifPercentage,
                 'cif_percentage_estimated' => false,
+                'consumption_tolerance_percentage' => $consumptionTolerance,
             ]);
 
             // TODO: Revisar si estas comparaciones con scale 4 deberían usar
@@ -309,6 +319,9 @@ class CompleteProductionOrderAction
                 cifPercentage: $productCifPercentage,
                 userId: $userId
             );
+
+            // Con todo guardado (costos, lotes y saldo): la alerta toma el costo y el margen reales del resumen de la OP.
+            $this->overconsumptionAlert->evaluate($lockedOrder->fresh());
 
             $uniqueConsumedRawMaterialIds = collect($consumedRawMaterialIds)->unique()->values();
 

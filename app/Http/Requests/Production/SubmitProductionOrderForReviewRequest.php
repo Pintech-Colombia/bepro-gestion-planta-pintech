@@ -33,6 +33,7 @@ class SubmitProductionOrderForReviewRequest extends FormRequest
             $this->seenLinesRules(),
             $this->qualityAndResponsibleRules(),
             $this->operationalTimesRules(),
+            $this->overconsumptionReasonRules(),
             [
                 // Los mismos tipos que al completar (CompleteProductionOrderRequest).
                 'spillage_quantity' => ['bail', 'nullable', ...NumberType::Quantity->rules(), 'min:0'],

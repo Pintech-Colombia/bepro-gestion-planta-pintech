@@ -1,8 +1,11 @@
 import { DecimalInput } from '@/components/decimal-input';
 import { FormattedNumber } from '@/components/formatted-number';
+import { excessLabel } from '@/components/production/overconsumption-reasons';
+import { pillClasses, toneClasses } from '@/lib/tones';
 import type {
     ProductionOrderFormData,
     ProductionOrderIngredientFormRow,
+    ProductionOrderOverconsumption,
     ProductionOrderSetData,
 } from '@/types/production-orders';
 
@@ -12,6 +15,8 @@ type IngredientsTableProps = {
     setData: ProductionOrderSetData;
     isReadOnly: boolean;
     showCosts?: boolean;
+    /** Las materias primas que se pasan (lo dice el servidor), por id: se marcan en cada una de sus líneas. */
+    overconsumption?: ProductionOrderOverconsumption[];
 };
 
 export function IngredientsTable({
@@ -20,7 +25,12 @@ export function IngredientsTable({
     setData,
     isReadOnly,
     showCosts = true,
+    overconsumption = [],
 }: IngredientsTableProps) {
+    const exceeding = new Map(
+        overconsumption.map((row) => [row.raw_material_id, row]),
+    );
+
     return (
         <div className="overflow-hidden rounded-md border">
             <div className="relative overflow-x-auto">
@@ -55,7 +65,23 @@ export function IngredientsTable({
                                     {ingredient.step_order ?? '—'}
                                 </td>
                                 <td className="p-3 font-medium">
-                                    {ingredient.raw_material_name}
+                                    <span className="flex flex-wrap items-center gap-1.5">
+                                        {ingredient.raw_material_name}
+                                        {exceeding.has(
+                                            ingredient.raw_material_id,
+                                        ) && (
+                                            <span
+                                                className={`${pillClasses} ${toneClasses.warning}`}
+                                                title="Se pasó de lo planeado (todos sus pasos y ajustes)"
+                                            >
+                                                {excessLabel(
+                                                    exceeding.get(
+                                                        ingredient.raw_material_id,
+                                                    )!,
+                                                )}
+                                            </span>
+                                        )}
+                                    </span>
                                 </td>
                                 <td className="p-3 text-right whitespace-nowrap text-muted-foreground">
                                     <FormattedNumber

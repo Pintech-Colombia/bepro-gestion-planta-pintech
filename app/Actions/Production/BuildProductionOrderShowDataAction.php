@@ -12,6 +12,7 @@ use App\Models\ProductionOrderPackagingPlan;
 use App\Models\RemnantConsumption;
 use App\Services\AvailableRemnantsService;
 use App\Services\DecimalCalculator;
+use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\RemnantDrawdown;
@@ -24,6 +25,7 @@ class BuildProductionOrderShowDataAction
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
         private readonly ProductionOrderCostSummary $costSummary,
+        private readonly ProductionOrderConsumptionCheck $consumptionCheck,
     ) {}
 
     /**
@@ -52,6 +54,7 @@ class BuildProductionOrderShowDataAction
             'finishedInventoryMovements',
             'warehouse',
             'lineAdjustments.rawMaterial',
+            'consumptionReasons.rawMaterial:id,code',
             'submittedBy:id,name',
             'reviewedBy:id,name',
             'qualityResponsibleUser:id,name,job_title',
@@ -162,6 +165,30 @@ class BuildProductionOrderShowDataAction
             ...($includeCosts ? [
                 'cost_summary' => $costSummary,
             ] : []),
+            // Las materias primas que se pasaron de lo planeado (en revisión y completada), con su motivo. La cuenta es
+            // del servidor; el costo del exceso, solo con «Ver costos».
+            'consumption_tolerance_percentage' => $productionOrder->consumption_tolerance_percentage,
+            'overconsumption' => array_map(fn (array $row): array => [
+                'raw_material_id' => $row['raw_material_id'],
+                'code' => $row['code'],
+                'unit' => $row['unit'],
+                'planned' => $row['planned'],
+                'consumed' => $row['consumed'],
+                'excess_percentage' => $row['excess_percentage'],
+                'tolerance_percentage' => $row['tolerance_percentage'],
+                'needs_reason' => $row['needs_reason'],
+                'reason' => $row['reason'],
+                ...($includeCosts ? ['extra_cost' => $row['extra_cost']] : []),
+            ], $this->consumptionCheck->forOrder($productionOrder)),
+            // Los motivos guardados, para volver a editarlos si la orden vuelve de revisión.
+            'consumption_reasons' => $productionOrder->consumptionReasons
+                ->sortBy('raw_material_id')
+                ->map(fn ($reason): array => [
+                    'raw_material_id' => (int) $reason->raw_material_id,
+                    'code' => $reason->rawMaterial?->code,
+                    'reason' => $reason->reason,
+                ])
+                ->values(),
             'details' => $productionOrder->details->map(function (ProductionOrderDetail $detail) use ($formulaDetailsByKey, $lineFactors, $productionOrder, $includeCosts) {
                 $formulaDetail = $formulaDetailsByKey->get($detail->step_order.'-'.$detail->raw_material_id);
 

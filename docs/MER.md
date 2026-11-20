@@ -380,6 +380,7 @@ Ingredientes de cada fórmula: una materia prima **o** un producto (PT consumibl
 | `density_kg_per_gallon` | DECIMAL(10,4) | sí |  |
 | `cif_percentage` | DECIMAL(5,2) | sí | CIF del producto el día en que se completó: el de sus lotes y su saldo. Nulo mientras está abierta (usa el del producto) |
 | `cif_percentage_estimated` | BOOLEAN |  | Default false. true = completada antes de la columna, sin lote ni saldo que fijara el CIF: se tomó el del producto al migrar |
+| `consumption_tolerance_percentage` | DECIMAL(5,2) | sí | Tolerancia de consumo con que se evaluó al completar (`config/production.php`). Nula mientras está abierta y en las completadas antes de la columna (no se marcan) |
 | `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
 | `submitted_by` | BIGINT | sí | FK → `users` (RESTRICT) |
 | `submitted_at` | TIMESTAMP | sí |  |
@@ -424,6 +425,24 @@ Ajustes de línea registrados durante la orden.
 | `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
+
+### 2.5.3b `production_order_consumption_reasons`
+
+Motivo de cada materia prima que se pasó de lo planeado en la OP más allá de la tolerancia de consumo (sumando sus
+líneas y sus ajustes de línea; el exceso que viene solo de ajustes no lo pide). Lo escribe quien envía a revisión o
+completa; si la materia prima deja de pasarse, se borra al guardar. Auditado (log `ordenes_produccion`).
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | BIGINT |  | PK |
+| `production_order_id` | BIGINT |  | FK → `production_orders` (CASCADE) |
+| `raw_material_id` | BIGINT |  | FK → `raw_materials` (RESTRICT) |
+| `reason` | VARCHAR(500) |  |  |
+| `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
+| `created_at` | TIMESTAMP | sí |  |
+| `updated_at` | TIMESTAMP | sí |  |
+
+Única: (`production_order_id`, `raw_material_id`).
 
 ### 2.5.4 `production_order_packaging_plan`
 
@@ -846,6 +865,7 @@ Alertas (visibles según el permiso de su tipo).
 | `type` | VARCHAR(50) |  |  |
 | `raw_material_id` | BIGINT | sí | FK → `raw_materials` (CASCADE) |
 | `batch_id` | BIGINT | sí | FK → `inventory_batches` (CASCADE) |
+| `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT), con índice. La alerta de sobreconsumo (una por OP) |
 | `severity` | VARCHAR(255) |  | default `media` |
 | `message` | TEXT |  |  |
 | `is_resolved` | BOOLEAN |  | default `false` |
@@ -1029,7 +1049,7 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 
 | Enum | Columna(s) | Valores |
 | --- | --- | --- |
-| `AlertType` | `alerts.type` | stock_bajo, vencimiento_proximo, variacion_precio, paint_development_request |
+| `AlertType` | `alerts.type` | stock_bajo, vencimiento_proximo, variacion_precio, paint_development_request, sobreconsumo |
 | `AlertSeverity` | `alerts.severity` | baja, media, alta |
 | `WarehouseType` | `warehouses.type` | factory, storage |
 | `RawMaterialType` | `raw_material_categories.type` | chemical, container, label, secondary_packaging |

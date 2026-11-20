@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property AlertType $type
  * @property int|null $raw_material_id
  * @property int|null $batch_id
+ * @property int|null $production_order_id
  * @property AlertSeverity $severity
  * @property string $message
  * @property bool $is_resolved
@@ -30,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read RawMaterial|null $rawMaterial
  * @property-read InventoryBatch|null $batch
+ * @property-read ProductionOrder|null $productionOrder
  * @property-read User|null $resolvedBy
  * @property-read User|null $updatedBy
  */
@@ -37,6 +39,7 @@ use Illuminate\Support\Carbon;
     'type',
     'raw_material_id',
     'batch_id',
+    'production_order_id',
     'severity',
     'message',
     'is_resolved',
@@ -110,6 +113,11 @@ class Alert extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(InventoryBatch::class, 'batch_id');
+    }
+
+    public function productionOrder(): BelongsTo
+    {
+        return $this->belongsTo(ProductionOrder::class, 'production_order_id');
     }
 
     public function resolvedBy(): BelongsTo
