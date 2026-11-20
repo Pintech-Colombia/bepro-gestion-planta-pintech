@@ -162,8 +162,9 @@ class BatchSourceDrawdown
         $originOrder = $batch->productionOrder;
         $density = $originOrder?->density_kg_per_gallon;
 
+        // Sin peso por galón no se sabe cuánto vale lo que quedó, y completar lo rechaza: tampoco se estima.
         if ($originOrder === null || $density === null || ! $this->calculator->isPositive((string) $density)) {
-            return $total;
+            return null;
         }
 
         $originRemnant = ProductionRemnant::query()->where('source_order_id', $originOrder->id)->first();

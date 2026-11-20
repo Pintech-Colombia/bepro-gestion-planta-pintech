@@ -47,8 +47,10 @@ class RemnantLedger
      * Lo que quedó, pesado, en un envase abierto de un lote vuelve al saldo de la OP que fabricó ese lote. Con el saldo
      * ya bloqueado por quien llama, se suman los kilos, los galones quedan en `$availableGallonsAfter` (los de los kilos
      * que quedan, calculados por quien llama con la regla del saldo) y el estado se recalcula: uno consumido o dado de
-     * baja vuelve a tener kilos. Si la OP de origen no tiene saldo, nace aquí con esos kilos (`$newRemnant`, las columnas
-     * del saldo nuevo). El movimiento es «Cuñete abierto», con la OP que abrió el envase y la fuente de lote.
+     * baja vuelve a tener kilos. Si la OP de origen no tiene saldo, nace aquí con esos kilos disponibles y lo **original en
+     * 0** (`$newRemnant`, las columnas del saldo nuevo): lo original es lo que su OP dejó de saldo al completarse, y el
+     * resumen de costos de esa OP, ya cerrada, lo lee así; esos kilos los explica el movimiento. El movimiento es «Cuñete
+     * abierto», con la OP que abrió el envase y la fuente de lote.
      *
      * @param  array<string, mixed>  $newRemnant  las columnas del saldo si hay que crearlo
      */
@@ -63,8 +65,8 @@ class RemnantLedger
         if ($lockedRemnant === null) {
             $remnant = ProductionRemnant::create([
                 ...$newRemnant,
-                'original_quantity_kg' => $quantityKg,
-                'original_quantity_gallons' => $availableGallonsAfter,
+                'original_quantity_kg' => '0',
+                'original_quantity_gallons' => '0',
                 'available_quantity_kg' => $quantityKg,
                 'available_quantity_gallons' => $availableGallonsAfter,
                 'status' => RemnantStatus::Available,

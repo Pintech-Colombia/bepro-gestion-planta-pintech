@@ -33,6 +33,7 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\FinishedInventory\FinishedInventoryMovementService;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\Production\ProductLinePlanner;
@@ -594,14 +595,20 @@ it('returns what was left in the opened bucket to the origin remnant at bulk pri
 
 it('creates the origin remnant when its order has none, in the warehouse of the consuming order', function () {
     $order = opsRalOrder($this);
+    $originSummaryBefore = app(ProductionOrderCostSummary::class)->forOrder($this->origin->fresh());
 
     opsComplete($this, $order, opsRows($order, '462.3', '5.7'))->assertSessionHasNoErrors();
 
     $remnant = ProductionRemnant::query()->where('source_order_id', $this->origin->id)->sole();
     $movement = $remnant->movements()->sole();
+    $originSummaryAfter = app(ProductionOrderCostSummary::class)->forOrder($this->origin->fresh());
 
+    // Lo original es lo que la OP de origen dejó de saldo al completarse (nada): su costo, ya cerrado, no cambia.
     expect($remnant->available_quantity_kg)->toBe('5.7000')
-        ->and($remnant->original_quantity_kg)->toBe('5.7000')
+        ->and($remnant->original_quantity_kg)->toBe('0.0000')
+        ->and($remnant->original_quantity_gallons)->toBe('0.0000')
+        ->and($originSummaryAfter['remnant'])->toBeNull()
+        ->and($originSummaryAfter)->toBe($originSummaryBefore)
         ->and($remnant->status)->toBe(RemnantStatus::Available)
         ->and((int) $remnant->warehouse_id)->toBe($this->warehouse->id)
         ->and($remnant->density_kg_per_gallon)->toBe('5.8500')
@@ -721,6 +728,20 @@ it('estimates and stores the transfer cost of a lot that has none when consuming
     expect($this->lot->fresh()->transfer_unit_cost)->toBe('226908.2885')
         ->and($this->lot->fresh()->transfer_cost_estimated)->toBeTrue()
         ->and(ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->value('consumed_cost'))->toBe('4538165.7700');
+});
+
+it('does not estimate a lot with a leftover when its origin order has no weight per gallon', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->orderBy('id')->firstOrFail();
+
+    // Sin lo que quedó: unidades × costo de traslado.
+    expect(app(BatchSourceDrawdown::class)->lineCost($source->fresh()))->not->toBeNull();
+
+    // Completar rechaza lo que quedó sin peso por galón: la vista previa tampoco lo estima.
+    $source->update(['used_kg' => '462.3', 'leftover_kg' => '5.7']);
+    $this->origin->update(['density_kg_per_gallon' => null]);
+
+    expect(app(BatchSourceDrawdown::class)->lineCost($source->fresh()))->toBeNull();
 });
 
 // --- Costo ---

@@ -516,7 +516,8 @@ cancelada conserva sus líneas como historial, sin reservar nada.
 Historial de cada saldo de PT: un libro que no se edita ni se borra (un error se corrige con otro movimiento y una
 nota). Lo escribe solo `RemnantLedger`: el nacimiento al completar la OP de origen, un consumo por cada línea aplicada al
 completar otra OP, la baja, la corrección (`production_remnants.adjust`) y el «cuñete abierto»: lo que quedó, pesado, en
-un envase abierto de un lote de su OP que otra OP usó (si la OP no tenía saldo, nace con ese movimiento). Los saldos
+un envase abierto de un lote de su OP que otra OP usó (si la OP no tenía saldo, nace con ese movimiento y lo original en 0: lo original es lo que su OP dejó de saldo al
+completarse). Los saldos
 anteriores a la tabla se rellenaron con su nacimiento y sus consumos aplicados (`RemnantMovementBackfill`).
 
 | Columna | Tipo | Nulo | Notas |
