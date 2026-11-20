@@ -1,11 +1,9 @@
 import { Beaker } from 'lucide-react';
 
 import { DecimalInput } from '@/components/decimal-input';
-import {
-    IngredientsTable,
-    OverconsumptionReasons,
-} from '@/components/production/ingredients-table';
+import { IngredientsTable } from '@/components/production/ingredients-table';
 import { LineAdjustmentsPanel } from '@/components/production/line-adjustments-panel';
+import { OverconsumptionReasons } from '@/components/production/overconsumption-reasons';
 import { PackagingSection } from '@/components/production/packaging-section';
 import {
     Card,

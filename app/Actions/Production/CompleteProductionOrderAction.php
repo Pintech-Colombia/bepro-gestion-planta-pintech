@@ -25,6 +25,7 @@ use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderLineUnits;
 use App\Services\Production\ProductionOrderLock;
+use App\Services\Production\ProductionOrderOverconsumptionAlert;
 use App\Services\Production\RemnantDrawdown;
 use App\Services\Production\RemnantLedger;
 use App\Services\ProductionCostRecalculationService;
@@ -47,6 +48,7 @@ class CompleteProductionOrderAction
         private readonly RemnantDrawdown $remnantDrawdown,
         private readonly RemnantLedger $remnantLedger,
         private readonly ProductionOrderConsumptionCheck $consumptionCheck,
+        private readonly ProductionOrderOverconsumptionAlert $overconsumptionAlert,
     ) {}
 
     /**
@@ -319,7 +321,7 @@ class CompleteProductionOrderAction
             );
 
             // Con todo guardado (costos, lotes y saldo): la alerta toma el costo y el margen reales del resumen de la OP.
-            $this->alertService->evaluateOverconsumption($lockedOrder->fresh());
+            $this->overconsumptionAlert->evaluate($lockedOrder->fresh());
 
             $uniqueConsumedRawMaterialIds = collect($consumedRawMaterialIds)->unique()->values();
 
