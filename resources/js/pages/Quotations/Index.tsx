@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import { withReturnTo } from '@/lib/navigation';
+import { hasActiveFilters } from '@/lib/table-filters';
 import {
     create as quotationsCreate,
     edit as quotationsEdit,
@@ -197,6 +198,8 @@ export default function QuotationsIndex({
                         },
                     ]}
                     empty="No hay cotizaciones registradas."
+                    hasFilters={hasActiveFilters(filters)}
+                    onClearFilters={clearFilters}
                 />
 
                 <Pagination paginator={quotations} />

@@ -314,6 +314,12 @@ Same in all three:
   pages, «12 registros» / «1 registro» on a single page or out-of-range page, nothing when empty, with an optional
   `noun={{ one, other }}` when the paginator counts something other than rows — and Inertia `<Link>` buttons; on the
   phone only previous, «Página X de Y» and next).
+- **Collapsible filters on the phone:** below `md`, `<DataTableFilters>` (`components/data-table-filters.tsx`) keeps
+  the text search visible and moves secondary filters (`select`, `date-range`) behind a «Filtros» button that shows the
+  number of active secondary filters («Filtros (2)»). Tapping it opens a bottom `Sheet` (`max-h-[85dvh]` with internal
+  scrolling in `SheetBody`) containing those fields and «Quitar filtros». Listings with only text search omit the
+  «Filtros» button; listings without text search show only the «Filtros» button. From `md` up, all filters stay inline.
+  The clear action always reads «Quitar filtros» at every size.
 - Page frame: a listing uses the full width of the content area with `space-y-6 p-6` as its wrapper; no `max-w-*`,
   no `mx-auto`, no own background. Settings screens (catalogs) already sit inside the card of the Settings layout,
   which sets the padding: their wrapper is `space-y-6` with no padding.
@@ -371,7 +377,10 @@ Same in all three:
   (and no column when no row has one).
 - A blocked action shows its reason under the label (`disabledReason`; a tooltip does not work on the phone). It is
   not Radix `disabled`: it keeps focus, is announced with `aria-disabled` and does nothing.
-- Empty listing: the `empty` message in a dashed box, centered (`<EmptyState>`, `components/empty-state.tsx`).
+- Empty listing: the `empty` message in a dashed box, centered (`<EmptyState>`, `components/empty-state.tsx`). When the
+  listing is filtered, pass `hasFilters={hasActiveFilters(filters)}` (from `lib/table-filters.ts`, the same helper
+  `<DataTableFilters>` uses) and `onClearFilters={clearFilters}` to `<DataListing>`: an empty result with active filters
+  shows «No hay resultados con estos filtros.» and a «Quitar filtros» button, reserving `empty` for «no records yet».
 - Detail tables (the lines of **one** record: the products of an order or a quotation, the ingredients of a formula)
   are not listings: see «Detail tables» below.
 
@@ -496,6 +505,22 @@ they open nothing.
 - The sidebar toggle uses the panel icon (`PanelLeftClose`/`PanelLeftOpen`), never arrows; on the phone, `Menu` (☰).
 - Navigation links use Wayfinder (`@/routes`, `@/actions`), never hardcoded URLs.
 
+### Phone action bar
+
+- `<MobileActionBar>` (`components/mobile-action-bar.tsx`): a fixed bottom bar shown only below `md`
+  (`fixed inset-x-0 bottom-0 z-40 md:hidden`), with the sticky-header surface (`bg-background/95 border-t border-border/80`).
+  It holds the primary action in `children` (right-aligned, or full width when it is the only child and there is no
+  `summary`) and an optional `summary` on the left (e.g. a quotation total). On desktop (`>= md`) it is not shown:
+  actions remain in `<PageHeader>` and `<FormActions>`.
+- Screens that render `<MobileActionBar>` reserve bottom space below `md` (`pb-24 md:pb-6` on the page wrapper) so the
+  bar never covers the last block of content.
+- **Soft keyboard:** the bar hides while focus is inside a control that opens the virtual keyboard (`opensKeyboard` in
+  `lib/mobile-keyboard.ts`: text-like `<input>`, `<textarea>` or `[contenteditable]`, never `readOnly`/`disabled`,
+  buttons, checkboxes, radios or Radix `Select` triggers). On `focusout` it waits one animation frame before reading
+  `document.activeElement`, so moving from one field to the next never flickers.
+- **Stacking and safe area:** `z-40` keeps the bar below `Dialog`, `Sheet`, `Popover` and notifications (`z-50`). Never
+  add `viewport-fit=cover` to the viewport `<meta>` tag in `resources/views/app.blade.php`.
+
 ## 11. Libraries
 
 - Components: shadcn/ui on Radix, added with the shadcn CLI into `components/ui/`. When you touch a component that
@@ -518,4 +543,5 @@ PR checklist:
 - [ ] Numbers formatted (§7); icons from `lucide-react` with `sr-only` when alone.
 - [ ] Text readable in both themes; visible focus ring.
 - [ ] Works at 390 px without horizontal page scroll.
+- [ ] Tested in iOS Safari and Android Chrome for commercial screens.
 - [ ] `composer ci:check` green (includes `design-contract.test.ts`).
