@@ -160,8 +160,8 @@ export type ProductionOrderAvailableRemnant = {
 export type ProductionOrderSourceState = 'applied' | 'planned' | 'unused';
 
 /**
- * Un lote de PT que usa la orden, en unidades enteras. Al enviar a revisión o completar se escriben los kilos usados y lo
- * que quedó, pesado, en un envase abierto. Kilos como texto decimal.
+ * Un lote de PT que usa la orden, en unidades enteras. Al enviar a revisión o completar se escribe lo que quedó, pesado,
+ * en un envase abierto (lo gastado va por línea). Kilos como texto decimal.
  */
 export type ProductionOrderBatchConsumption = {
     id: number;
@@ -177,7 +177,6 @@ export type ProductionOrderBatchConsumption = {
     kg_per_unit: string | null;
     /** Unidades × kilos por unidad. */
     kg: string | null;
-    used_kg: string | null;
     leftover_kg: string | null;
     /** Solo con costs.view. */
     transfer_unit_cost?: string | null;
@@ -195,12 +194,17 @@ export type ProductionOrderProductLine = {
     step_order: number | null;
     origin: 'formula' | 'added';
     planned_kg: string | null;
+    /** Lo real gastado, escrito al enviar a revisión o completar. */
+    actual_kg: string | null;
     /** Los kilos de sus saldos y de sus lotes. */
     covered_kg: string;
     /** Lo planeado menos lo cubierto, sin bajar de 0; null en una línea agregada. */
     missing_kg: string | null;
     /** Algún lote sin peso por galón: sus kilos no suman en lo cubierto. */
     has_unknown_kg: boolean;
+    /** Solo con costs.view: lo que cuestan sus fuentes (null si alguna no se puede estimar) y ese costo por kilo. */
+    cost?: string | null;
+    unit_cost?: string | null;
 };
 
 /** Un lote con unidades libres en la bodega de la orden, para el buscador de fuentes. */
@@ -223,11 +227,16 @@ export type ProductionOrderAvailableBatch = {
 /** Lo que se escribe de un lote al enviar a revisión o completar. */
 export type ProductionOrderBatchUsageRow = {
     id: number;
-    used_kg: FormNumberValue;
     /** «¿Quedó producto en un cuñete abierto?»: por defecto no. */
     has_leftover: boolean;
     /** Lo que quedó, pesado; solo con «sí». */
     leftover_kg: FormNumberValue;
+};
+
+/** Lo que se escribe de un producto al enviar a revisión o completar: lo real gastado, en kilos (como una MP). */
+export type ProductionOrderProductLineUsageRow = {
+    id: number;
+    actual_kg: FormNumberValue;
 };
 
 export type ProductionOrder = {
@@ -276,6 +285,10 @@ export type ProductionOrder = {
     } | null;
     product?: {
         name?: string | null;
+        quality_viscosity_lower?: FormNumberValue | null;
+        quality_viscosity_upper?: FormNumberValue | null;
+        quality_fineness_lower?: FormNumberValue | null;
+        quality_fineness_upper?: FormNumberValue | null;
         quality_solids_lower?: FormNumberValue | null;
         quality_solids_upper?: FormNumberValue | null;
     } | null;
@@ -377,8 +390,10 @@ export type ProductionOrderFormData = {
     packaging: ProductionOrderPackagingFormRow[];
     /** Motivo por id de la materia prima; el servidor dice cuáles se necesitan. */
     overconsumption_reasons: Record<string, string>;
-    /** Por lote de PT usado: kilos usados y lo que quedó en un envase abierto. */
+    /** Por lote de PT usado: lo que quedó en un envase abierto. */
     batch_consumptions: ProductionOrderBatchUsageRow[];
+    /** Por producto usado: lo real gastado, en kilos. */
+    product_lines: ProductionOrderProductLineUsageRow[];
 };
 
 export type QualitySignerOption = {
@@ -462,5 +477,11 @@ export type PreviewCostData = {
     }>;
     /** El costo de cada lote usado con lo que quedó tal como se escribe (null: no se puede estimar). */
     products: Array<{ id: number; cost: string | null }>;
+    /** El renglón de cada producto en la tabla de consumo: lo que cuestan sus fuentes y ese costo por kilo. */
+    product_lines: Array<{
+        id: number;
+        cost: string | null;
+        unit_cost: string | null;
+    }>;
     summary: ProductionOrderCostSummary | null;
 };

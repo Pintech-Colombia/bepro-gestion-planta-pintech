@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { X } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -37,9 +37,9 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-    batchOverfillWarning,
     batchUnitsSuggestion,
     batchUsageSummary,
+    lineOverfillWarning,
 } from '@/lib/batch-usage';
 import { formatKind } from '@/lib/formatters';
 import { parseDecimal } from '@/lib/numeric-input';
@@ -48,6 +48,7 @@ import type {
     ProductionOrderBatchConsumption,
     ProductionOrderBatchUsageRow,
     ProductionOrderProductLine,
+    ProductionOrderProductLineUsageRow,
     ProductionOrderRemnantConsumption,
     ProductionOrderSourceState,
 } from '@/types/production-orders';
@@ -66,9 +67,11 @@ type ProductsToUseCardProps = {
     canPlan: boolean;
     /** Los costos, solo con costs.view. */
     showCosts: boolean;
-    /** Se escriben los kilos usados y lo que quedó: la orden se está entregando (enviar a revisión o completar). */
+    /** Se escribe lo que quedó: la orden se está entregando (enviar a revisión o completar). */
     canRecordUsage: boolean;
     usageRows: ProductionOrderBatchUsageRow[];
+    /** Lo real gastado de cada producto, tal como se escribe en la tabla de consumo: para la cuenta en unidades y el aviso. */
+    lineUsageRows: ProductionOrderProductLineUsageRow[];
     onUsageChange: (
         index: number,
         patch: Partial<Omit<ProductionOrderBatchUsageRow, 'id'>>,
@@ -92,11 +95,10 @@ function firstErrorWithPrefix(
 }
 
 /**
- * «Productos a usar»: el producto terminado que la orden lleva como ingrediente y de dónde sale cada kilo. Cada línea (de
- * la fórmula, con sus kilos planeados, o agregada en la orden) tiene sus fuentes: saldos en kilos y lotes en unidades
- * enteras, de la bodega de la orden. Se agregan, cambian y quitan mientras la orden está abierta; al enviar a revisión o
- * completar se escriben, por lote, los kilos usados y lo que quedó pesado en un envase abierto. Todo se descuenta al
- * completar.
+ * «Productos a usar»: de dónde sale el producto terminado que la orden lleva como ingrediente. Lo gastado de cada producto
+ * se escribe en la tabla de consumo, como una materia prima; aquí van sus fuentes (saldos en kilos y lotes en unidades
+ * enteras, de la bodega de la orden), que alguien elige mientras la orden está abierta, y, al enviar a revisión o
+ * completar, si quedó producto pesado en un envase abierto. Todo se descuenta al completar.
  */
 export function ProductsToUseCard({
     order,
@@ -104,10 +106,12 @@ export function ProductsToUseCard({
     showCosts,
     canRecordUsage,
     usageRows,
+    lineUsageRows,
     onUsageChange,
     errors,
     previewProductCosts,
 }: ProductsToUseCardProps) {
+    const [showAddProduct, setShowAddProduct] = useState(false);
     const lines = order.product_lines ?? [];
     const remnantSources = order.remnant_consumptions ?? [];
     const batchSources = order.batch_consumptions ?? [];
@@ -135,9 +139,8 @@ export function ProductsToUseCard({
             <CardHeader>
                 <CardTitle>Productos a usar</CardTitle>
                 <CardDescription>
-                    Producto terminado que lleva la orden: saldos en kilos o
-                    lotes en unidades enteras de esta bodega. Se descuentan al
-                    completar la orden.
+                    De dónde sale el producto terminado que lleva la orden. Lo
+                    gastado se escribe en la tabla de consumo.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -182,6 +185,10 @@ export function ProductsToUseCard({
                         showCosts={showCosts}
                         canRecordUsage={canRecordUsage}
                         usageRows={usageRows}
+                        lineActualKg={
+                            lineUsageRows.find((row) => row.id === line.id)
+                                ?.actual_kg ?? line.actual_kg
+                        }
                         onUsageChange={onUsageChange}
                         errors={errors}
                         previewProductCosts={previewProductCosts}
@@ -190,24 +197,38 @@ export function ProductsToUseCard({
 
                 {canPlan && (
                     <section className="space-y-3 border-t border-border pt-4">
-                        <div>
-                            <h3 className="text-base font-semibold">
-                                Agregar producto
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                Un saldo o un lote de un producto que la fórmula
-                                no lleva.
-                            </p>
-                        </div>
-                        <ProductSourcePicker
-                            orderId={order.id}
-                            lineId={null}
-                            idPrefix="added-product"
-                            remnants={otherRemnants}
-                            batches={otherBatches}
-                            label="Saldo o lote"
-                            emptyText="No hay saldos ni lotes de otros productos en esta bodega."
-                        />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="-ml-2"
+                            aria-expanded={showAddProduct}
+                            onClick={() => setShowAddProduct((open) => !open)}
+                        >
+                            {showAddProduct ? (
+                                <Minus className="size-4" />
+                            ) : (
+                                <Plus className="size-4" />
+                            )}
+                            Producto adicional
+                        </Button>
+                        {showAddProduct && (
+                            <>
+                                <p className="text-xs text-muted-foreground">
+                                    Un saldo o un lote de un producto que la
+                                    fórmula no lleva.
+                                </p>
+                                <ProductSourcePicker
+                                    orderId={order.id}
+                                    lineId={null}
+                                    idPrefix="added-product"
+                                    remnants={otherRemnants}
+                                    batches={otherBatches}
+                                    otherProducts
+                                    label="De dónde sale"
+                                />
+                            </>
+                        )}
                     </section>
                 )}
 
@@ -245,8 +266,10 @@ export function ProductsToUseCard({
 
 type ProductLineBlockProps = Omit<
     ProductsToUseCardProps,
-    'order' | 'canPlan'
+    'order' | 'canPlan' | 'lineUsageRows'
 > & {
+    /** Lo gastado de la línea, tal como se escribe en la tabla (o lo guardado). */
+    lineActualKg: ProductionOrderProductLineUsageRow['actual_kg'] | null;
     orderId: number;
     line: ProductionOrderProductLine;
     remnantSources: ProductionOrderRemnantConsumption[];
@@ -268,11 +291,24 @@ function ProductLineBlock({
     showCosts,
     canRecordUsage,
     usageRows,
+    lineActualKg,
     onUsageChange,
     errors,
     previewProductCosts,
 }: ProductLineBlockProps) {
     const hasSources = remnantSources.length + batchSources.length > 0;
+    // La cuenta en unidades y la sugerencia de bajarlas solo tienen sentido si la línea sale de un solo lote.
+    const singleLot =
+        remnantSources.length === 0 && batchSources.length === 1
+            ? batchSources[0]
+            : null;
+    const leftoverTotal = batchSources
+        .map((source) => usageRows.find((row) => row.id === source.id))
+        .filter((row) => row?.has_leftover)
+        .reduce((sum, row) => sum + (parseDecimal(row?.leftover_kg) ?? 0), 0);
+    const overfill = canRecordUsage
+        ? lineOverfillWarning(lineActualKg, leftoverTotal, line.covered_kg)
+        : null;
     const takenBatchIds = new Set(
         batchSources.map((source) => source.finished_product_batch_id),
     );
@@ -293,18 +329,18 @@ function ProductLineBlock({
             </div>
 
             <p className="text-sm">
+                <FormattedNumber value={line.covered_kg} kind="quantity" />
                 {line.planned_kg !== null && (
                     <>
+                        {' de '}
                         <FormattedNumber
                             value={line.planned_kg}
                             kind="quantity"
-                        />{' '}
-                        kg planeados ·{' '}
+                        />
                     </>
-                )}
-                <FormattedNumber value={line.covered_kg} kind="quantity" /> kg
-                cubiertos
-                {line.missing_kg !== null && (
+                )}{' '}
+                kg
+                {line.missing_kg !== null && hasSources && (
                     <>
                         {' · '}
                         {isMissing ? (
@@ -330,9 +366,8 @@ function ProductLineBlock({
             )}
 
             {!hasSources && line.origin === 'formula' && (
-                <p className="text-sm text-warning-text">
-                    Sin fuentes: agrega un saldo o un lote antes de entregar la
-                    orden.
+                <p className="text-sm font-medium text-warning-text">
+                    Elige de dónde sale: un saldo o un lote.
                 </p>
             )}
 
@@ -367,10 +402,18 @@ function ProductLineBlock({
                                 previewCost={previewProductCosts?.get(
                                     source.id,
                                 )}
+                                lineActualKg={
+                                    singleLot?.id === source.id
+                                        ? lineActualKg
+                                        : null
+                                }
                             />
                         );
                     })}
                 </ul>
+            )}
+            {overfill && (
+                <p className="text-xs text-warning-text">{overfill}</p>
             )}
 
             {canPlan && (
@@ -382,10 +425,8 @@ function ProductLineBlock({
                     batches={availableBatches.filter(
                         (batch) => !takenBatchIds.has(batch.id),
                     )}
-                    label={
-                        hasSources ? 'Agregar otra fuente' : 'Agregar fuente'
-                    }
-                    emptyText="No hay más saldos ni lotes libres de este producto en la bodega."
+                    missingKg={line.missing_kg}
+                    label={hasSources ? 'Agregar otra fuente' : 'De dónde sale'}
                 />
             )}
         </section>
@@ -490,14 +531,9 @@ function RemnantSourceItem({
 
     return (
         <SourceFrame
-            title={`Saldo · ${source.source_product_name}`}
+            title={`Saldo · Lote ${source.source_lot_number}`}
             subtitle={
-                <>
-                    Lote {source.source_lot_number} ·{' '}
-                    <span className="font-mono">
-                        {source.source_order_number}
-                    </span>
-                </>
+                <span className="font-mono">{source.source_order_number}</span>
             }
             action={
                 source.can.remove && (
@@ -562,6 +598,8 @@ type BatchSourceItemProps = {
     errors: Record<string, string | undefined>;
     /** undefined: la vista previa no lo trae; null: no se puede estimar. */
     previewCost: string | null | undefined;
+    /** Lo gastado de la línea si sale solo de este lote: para la cuenta en unidades; null si no. */
+    lineActualKg: ProductionOrderProductLineUsageRow['actual_kg'] | null;
 };
 
 function BatchSourceItem({
@@ -574,6 +612,7 @@ function BatchSourceItem({
     onUsageChange,
     errors,
     previewCost,
+    lineActualKg,
 }: BatchSourceItemProps) {
     const { remove, removing, error } = useRemove(
         removeBatchConsumption({
@@ -597,12 +636,7 @@ function BatchSourceItem({
                 </>
             }
             subtitle={
-                <>
-                    {source.source_product_name} ·{' '}
-                    <span className="font-mono">
-                        {source.source_order_number}
-                    </span>
-                </>
+                <span className="font-mono">{source.source_order_number}</span>
             }
             action={
                 source.can.remove && (
@@ -662,6 +696,7 @@ function BatchSourceItem({
                 <BatchUsageFields
                     source={source}
                     usage={usage}
+                    lineActualKg={lineActualKg}
                     onChange={(patch) => onUsageChange(usageIndex, patch)}
                     fieldId={errorKey}
                     errors={errors}
@@ -780,16 +815,21 @@ function BatchUnitsEditor({
     );
 }
 
-/** Al enviar o completar: los kilos usados del lote, la cuenta en unidades y lo que quedó, pesado. */
+/**
+ * Al enviar o completar: si quedó producto en un envase abierto y cuánto pesó. Si la línea sale solo de este lote, la
+ * cuenta de lo gastado en unidades y la sugerencia de bajarlas.
+ */
 function BatchUsageFields({
     source,
     usage,
+    lineActualKg,
     onChange,
     fieldId,
     errors,
 }: {
     source: ProductionOrderBatchConsumption;
     usage: ProductionOrderBatchUsageRow;
+    lineActualKg: ProductionOrderProductLineUsageRow['actual_kg'] | null;
     onChange: (
         patch: Partial<Omit<ProductionOrderBatchUsageRow, 'id'>>,
     ) => void;
@@ -797,38 +837,28 @@ function BatchUsageFields({
     errors: Record<string, string | undefined>;
 }) {
     const leftover = usage.has_leftover ? usage.leftover_kg : '';
-    const summary = batchUsageSummary(usage.used_kg, source.kg_per_unit);
-    const suggestion = batchUnitsSuggestion(
-        usage.used_kg,
-        leftover,
-        source.kg_per_unit,
-        source.units,
-    );
-    const overfill = batchOverfillWarning(
-        usage.used_kg,
-        leftover,
-        source.kg_per_unit,
-        source.units,
-    );
+    const summary =
+        lineActualKg !== null
+            ? batchUsageSummary(lineActualKg, source.kg_per_unit)
+            : null;
+    const suggestion =
+        lineActualKg !== null
+            ? batchUnitsSuggestion(
+                  lineActualKg,
+                  leftover,
+                  source.kg_per_unit,
+                  source.units,
+              )
+            : null;
 
     return (
         <div className="space-y-3">
+            {summary && (
+                <p className="text-xs text-muted-foreground">
+                    Gastado: {summary}
+                </p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                    id={fieldId('used_kg')}
-                    label="Kilos usados"
-                    required
-                    help={
-                        summary ?? 'Lo que se agregó de este lote a la mezcla.'
-                    }
-                    error={errors[fieldId('used_kg')]}
-                >
-                    <DecimalInput
-                        placeholder="0,00"
-                        value={usage.used_kg}
-                        onValueChange={(value) => onChange({ used_kg: value })}
-                    />
-                </FormField>
                 <FormField
                     id={fieldId('has_leftover')}
                     label="¿Quedó producto en un cuñete abierto?"
@@ -862,7 +892,6 @@ function BatchUsageFields({
                                 : `Pésalo en la báscula: vuelve al saldo de ${source.source_order_number ?? 'su OP'}.`
                         }
                         error={errors[fieldId('leftover_kg')]}
-                        className="sm:col-span-2"
                     >
                         <DecimalInput
                             placeholder="0,00"
@@ -877,35 +906,25 @@ function BatchUsageFields({
             {suggestion && (
                 <p className="text-xs text-muted-foreground">{suggestion}</p>
             )}
-            {overfill && (
-                <p className="text-xs text-warning-text">{overfill}</p>
-            )}
         </div>
     );
 }
 
 /** Lo que se registró al enviar a revisión o al completar, sin campos. */
 function SavedUsage({ source }: { source: ProductionOrderBatchConsumption }) {
-    if (source.used_kg === null) {
-        return null;
+    if (source.leftover_kg !== null) {
+        return (
+            <p className="text-xs text-muted-foreground">
+                Quedaron{' '}
+                <FormattedNumber value={source.leftover_kg} kind="quantity" />{' '}
+                kg pesados en un cuñete abierto
+            </p>
+        );
     }
 
-    return (
+    return source.state === 'applied' ? (
         <p className="text-xs text-muted-foreground">
-            Usados: <FormattedNumber value={source.used_kg} kind="quantity" />{' '}
-            kg
-            {source.leftover_kg !== null ? (
-                <>
-                    {' · quedaron '}
-                    <FormattedNumber
-                        value={source.leftover_kg}
-                        kind="quantity"
-                    />{' '}
-                    kg pesados en un cuñete abierto
-                </>
-            ) : (
-                ' · no quedó producto en un cuñete abierto'
-            )}
+            No quedó producto en un cuñete abierto
         </p>
-    );
+    ) : null;
 }

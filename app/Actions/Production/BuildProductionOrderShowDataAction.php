@@ -19,6 +19,7 @@ use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderConsumptionCheck;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\Production\ProductionOrderLineUnits;
+use App\Services\Production\ProductLineCosts;
 use App\Services\Production\RemnantDrawdown;
 
 class BuildProductionOrderShowDataAction
@@ -32,6 +33,7 @@ class BuildProductionOrderShowDataAction
         private readonly ProductionOrderConsumptionCheck $consumptionCheck,
         private readonly AvailableBatchesService $availableBatches,
         private readonly BatchSourceDrawdown $batchSources,
+        private readonly ProductLineCosts $productLineCosts,
     ) {}
 
     /**
@@ -92,6 +94,8 @@ class BuildProductionOrderShowDataAction
         $batchSources = $productionOrder->batchConsumptions
             ->map(fn (ProductionOrderBatchConsumption $source): array => $this->batchSourceRow($source, $sourceState($source->isApplied()), $includeCosts, $canPlanRemnant))
             ->values();
+        // Lo que cubre y cuesta cada producto: sin costo en una orden cancelada (sus fuentes no se usaron).
+        $lineCosts = $this->productLineCosts->forOrder($productionOrder, $includeCosts && $productionOrder->status !== ProductionOrderStatus::Cancelled);
 
         // La página pública vive en el dominio del QR: va absoluta. La imagen sale del ERP, con la sesión de quien ve la OP.
         $qrCode = $productionOrder->qrCode;
@@ -270,8 +274,6 @@ class BuildProductionOrderShowDataAction
                     'label_raw_material_id' => $plan->label_raw_material_id,
                     'label_code' => $plan->labelRawMaterial?->code,
                     'labels_used' => $plan->labels_used,
-                    // Para el PDF y el Excel: «GALON-MET · ETQ-GALON», o null si no lleva ninguno.
-                    'packaging_materials' => collect([$packageCode, $plan->labelRawMaterial?->code])->filter()->implode(' · ') ?: null,
                     'product_variant' => $plan->productVariant ? [
                         'id' => $plan->productVariant->id,
                         'presentation_label' => $plan->productVariant->presentation_label,
@@ -346,12 +348,12 @@ class BuildProductionOrderShowDataAction
                     ],
                 ];
             })->values(),
-            // Los lotes de PT que usa la orden, en unidades enteras; al enviar o completar se escriben sus kilos usados y lo
-            // que quedó, pesado, en un envase abierto.
+            // Los lotes de PT que usa la orden, en unidades enteras; al enviar o completar se escribe lo que quedó, pesado,
+            // en un envase abierto.
             'batch_consumptions' => $batchSources,
             // Las líneas de «Productos a usar»: cuánto planea la fórmula y cuánto cubren sus fuentes.
             'product_lines' => $productionOrder->productLines
-                ->map(fn (ProductionOrderProductLine $line): array => $this->productLineRow($line, $productionOrder, $batchSources->all()))
+                ->map(fn (ProductionOrderProductLine $line): array => $this->productLineRow($line, $lineCosts[(int) $line->id], $includeCosts))
                 ->values(),
             'available_remnants' => $canPlanRemnant
                 ? $this->availableRemnants->forOrder($productionOrder)
@@ -388,7 +390,6 @@ class BuildProductionOrderShowDataAction
             'kg_per_unit' => $kgPerUnit,
             'kg' => $kgPerUnit !== null ? $this->calculator->mul((string) $source->units, $kgPerUnit, 4) : null,
             // Lo registrado al enviar a revisión (o al completar): quien aprueba lo ve y lo corrige.
-            'used_kg' => $source->used_kg !== null ? (string) $source->used_kg : null,
             'leftover_kg' => $source->leftover_kg !== null ? (string) $source->leftover_kg : null,
             ...($includeCosts ? [
                 'transfer_unit_cost' => $batch->transfer_unit_cost !== null ? (string) $batch->transfer_unit_cost : null,
@@ -403,22 +404,16 @@ class BuildProductionOrderShowDataAction
     }
 
     /**
-     * Una línea de «Productos a usar»: lo planeado (null en una agregada), lo que cubren sus fuentes (los kilos de sus
-     * saldos y de sus lotes) y lo que falta. Un lote sin peso por galón no suma: `has_unknown_kg` lo avisa.
+     * Una línea de producto: el renglón del producto en la tabla de consumo. Lo planeado (null en una agregada), lo real
+     * gastado (lo escrito al enviar a revisión o completar), lo que cubren sus fuentes y lo que falta, y su costo
+     * (`ProductLineCosts`, solo con «Ver costos»).
      *
-     * @param  list<array<string, mixed>>  $batchSources
+     * @param  array{covered_kg: string, has_unknown_kg: bool, cost: string|null, unit_cost: string|null}  $costs
      * @return array<string, mixed>
      */
-    private function productLineRow(ProductionOrderProductLine $line, ProductionOrder $order, array $batchSources): array
+    private function productLineRow(ProductionOrderProductLine $line, array $costs, bool $includeCosts): array
     {
-        $remnantKg = $order->remnantConsumptions
-            ->filter(fn (RemnantConsumption $consumption): bool => (int) $consumption->production_order_product_line_id === $line->id)
-            ->map(fn (RemnantConsumption $consumption): string => (string) $consumption->quantity_kg)
-            ->all();
-        $lots = array_values(array_filter($batchSources, fn (array $row): bool => (int) $row['production_order_product_line_id'] === $line->id));
-        $lotKg = array_values(array_filter(array_column($lots, 'kg'), fn (?string $kg): bool => $kg !== null));
-
-        $covered = $this->calculator->sum([...$remnantKg, ...$lotKg], 4);
+        $covered = $costs['covered_kg'];
         $planned = $line->planned_kg !== null ? (string) $line->planned_kg : null;
         $missing = $planned !== null ? $this->calculator->sub($planned, $covered, 4) : null;
 
@@ -429,9 +424,14 @@ class BuildProductionOrderShowDataAction
             'step_order' => $line->step_order,
             'origin' => $line->origin->value,
             'planned_kg' => $planned,
+            'actual_kg' => $line->actual_kg !== null ? (string) $line->actual_kg : null,
             'covered_kg' => $covered,
             'missing_kg' => $missing !== null && $this->calculator->isPositive($missing) ? $missing : ($missing !== null ? '0.0000' : null),
-            'has_unknown_kg' => count($lotKg) < count($lots),
+            'has_unknown_kg' => $costs['has_unknown_kg'],
+            ...($includeCosts ? [
+                'cost' => $costs['cost'],
+                'unit_cost' => $costs['unit_cost'],
+            ] : []),
         ];
     }
 }

@@ -42,8 +42,8 @@ class SubmitProductionOrderForReviewAction
             // Quien entrega explica lo que se pasó de lo planeado: 422 si falta un motivo.
             $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], (int) $user->id);
 
-            // Por cada lote de PT usado: los kilos usados y lo que quedó, pesado. Toda línea de la fórmula con alguna fuente.
-            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? []);
+            // Lo real gastado de cada producto y, por lote, lo que quedó pesado. Toda línea de la fórmula con alguna fuente.
+            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? [], $data['product_lines'] ?? []);
 
             $this->saveOperationalData->execute($lockedOrder, $data);
 

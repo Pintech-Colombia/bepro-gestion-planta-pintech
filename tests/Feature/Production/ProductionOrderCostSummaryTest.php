@@ -399,7 +399,7 @@ it('without «Ver costos» there is no summary on screen and the preview refuses
 
     $this->postJson(route('production-orders.preview-costs', $this->order), summaryTypedData($this))->assertForbidden();
 
-    expect(app(BuildProductionOrderExportDataAction::class)->execute($this->order, includeCosts: false))
+    expect(app(BuildProductionOrderExportDataAction::class)->execute($this->order))
         ->not->toHaveKey('cost_summary');
 })->with([SystemRole::Production, SystemRole::Operator]);
 
@@ -444,7 +444,8 @@ it('compares each presentation with the price list of today and its real margin'
         ->and(collect($withoutMargin['presentations'])->pluck('real_margin_percentage')->filter()->all())->toBe([]);
 });
 
-it('the pdf and the excel show the same bulk total as the card', function () {
+// El PDF y el Excel son la hoja de planta: el resumen se ve en el detalle de la OP, nunca impreso (2026-11-23).
+it('the pdf and the excel never print the cost summary, even for whoever can see it', function () {
     summaryOrderWithAdjustmentAndRemnant($this);
     completeSummaryOrder($this)->assertSessionHasNoErrors();
 
@@ -452,10 +453,10 @@ it('the pdf and the excel show the same bulk total as the card', function () {
     $pdfHtml = view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render();
     $excelHtml = view('excel.production-order', ['order' => $payload])->render();
 
-    expect($payload['cost_summary'])->toEqual(shownCostSummary($this))
-        ->and($pdfHtml)->toContain('COSTO TOTAL GRANEL')->toContain('$192')
-        ->and($pdfHtml)->toContain('COSTO CON CIF (ENVASADO)')->toContain('$224')
-        ->and($excelHtml)->toContain('192.00');
+    expect(shownCostSummary($this)['bulk']['total'])->not->toBeNull()
+        ->and($payload)->not->toHaveKey('cost_summary')
+        ->and($pdfHtml)->not->toContain('COSTO TOTAL GRANEL')->not->toContain('$192')
+        ->and($excelHtml)->not->toContain('COSTO')->not->toContain('192.00');
 });
 
 it('the completed entry is the unit cost of each presentation, with and without CIF', function () {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    batchOverfillWarning,
     batchUnitsSuggestion,
     batchUsageSummary,
+    lineOverfillWarning,
+    proposedBatchUnits,
+    proposedRemnantKg,
 } from '@/lib/batch-usage';
 
 describe('batchUsageSummary', () => {
@@ -59,20 +61,47 @@ describe('batchUnitsSuggestion', () => {
     });
 });
 
-describe('batchOverfillWarning', () => {
-    it('avisa cuando los kilos usados más lo que quedó pasan de las unidades', () => {
-        expect(batchOverfillWarning('465', '5,7', '23.4', 20)).toBe(
-            'Los kilos usados más lo que quedó (470,7 kg) pasan de lo que traen 20 unidades (468 kg). Revisa los kilos o las unidades; si están bien, puedes seguir.',
+describe('lineOverfillWarning', () => {
+    it('avisa cuando lo gastado más lo que quedó pasa de lo que traen las fuentes', () => {
+        expect(lineOverfillWarning('465', '5,7', '468')).toBe(
+            'Lo gastado más lo que quedó (470,7 kg) pasa de lo que traen sus fuentes (468 kg). Revisa los kilos o las fuentes; si están bien, puedes seguir.',
         );
-        expect(batchOverfillWarning('210', '', '20.5', 10)).toBe(
-            'Los kilos usados (210 kg) pasan de lo que traen 10 unidades (205 kg). Revisa los kilos o las unidades; si están bien, puedes seguir.',
+        expect(lineOverfillWarning('210', '', '205')).toBe(
+            'Lo gastado (210 kg) pasa de lo que traen sus fuentes (205 kg). Revisa los kilos o las fuentes; si están bien, puedes seguir.',
         );
     });
 
     it('no avisa si cabe justo o faltan datos', () => {
-        expect(batchOverfillWarning('462,3', '5,7', '23.4', 20)).toBeNull();
-        expect(batchOverfillWarning('205', '', '20.5', 10)).toBeNull();
-        expect(batchOverfillWarning('', '5', '23.4', 20)).toBeNull();
-        expect(batchOverfillWarning('300', '', null, 10)).toBeNull();
+        expect(lineOverfillWarning('462,3', '5,7', '468')).toBeNull();
+        expect(lineOverfillWarning('205', '', '205.0000')).toBeNull();
+        expect(lineOverfillWarning('', '5', '468')).toBeNull();
+        expect(lineOverfillWarning('300', '', '0')).toBeNull();
+    });
+});
+
+describe('proposedRemnantKg', () => {
+    it('propone lo que falta, o todo el saldo si tiene menos', () => {
+        expect(proposedRemnantKg('462.3', '500')).toBe('462.3');
+        expect(proposedRemnantKg('462.3', '10')).toBe('10');
+    });
+
+    it('sin faltante o en una línea agregada no propone nada', () => {
+        expect(proposedRemnantKg('0.0000', '10')).toBe('');
+        expect(proposedRemnantKg(null, '10')).toBe('');
+    });
+});
+
+describe('proposedBatchUnits', () => {
+    it('propone las unidades que cubren lo que falta, sin pasar de las libres', () => {
+        // 462,3 ÷ 23,4 = 19,76 → 20 cuñetes.
+        expect(proposedBatchUnits('462.3', '23.4', '25')).toBe('20');
+        expect(proposedBatchUnits('205', '20.5', '34')).toBe('10');
+        expect(proposedBatchUnits('462.3', '23.4', '5')).toBe('5');
+    });
+
+    it('sin faltante, sin peso por galón o en una línea agregada no propone nada', () => {
+        expect(proposedBatchUnits('0', '23.4', '25')).toBe('');
+        expect(proposedBatchUnits('462.3', null, '25')).toBe('');
+        expect(proposedBatchUnits(null, '23.4', '25')).toBe('');
     });
 });

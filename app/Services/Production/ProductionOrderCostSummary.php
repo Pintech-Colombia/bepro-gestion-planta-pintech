@@ -86,12 +86,12 @@ class ProductionOrderCostSummary
      * @param  array<int, array{id:int,actual_quantity:string|int|float}>  $ingredients
      * @param  array<int, array<string, mixed>>  $packaging
      * @param  array<int, array{leftover_kg: string|null}>|null  $batchUsage  lo que quedó en cada envase abierto, tal como se escribe
-     * @return array{ingredients: list<array<string, mixed>>, products: list<array{id:int,cost:string|null}>, summary: CostSummary|null}
+     * @return array{ingredients: list<array<string, mixed>>, products: list<array{id:int,cost:string|null}>, product_lines: list<array{id:int,cost:string|null,unit_cost:string|null}>, summary: CostSummary|null}
      */
     public function preview(ProductionOrder $order, array $ingredients, array $packaging, ?string $remnantGallons, ?string $density, ?array $batchUsage = null): array
     {
         if (! in_array($order->status, ProductionOrderStatus::open(), true)) {
-            return ['ingredients' => [], 'products' => [], 'summary' => $this->forOrder($order)];
+            return ['ingredients' => [], 'products' => [], 'product_lines' => [], 'summary' => $this->forOrder($order)];
         }
 
         $result = $this->preview->execute($order, $ingredients, $packaging, $remnantGallons, $batchUsage);
@@ -99,6 +99,7 @@ class ProductionOrderCostSummary
         return [
             'ingredients' => $result['ingredients'],
             'products' => $result['products'],
+            'product_lines' => $result['product_lines'],
             'summary' => $this->estimated($order, $result, $density ?? ($order->density_kg_per_gallon !== null ? (string) $order->density_kg_per_gallon : null)),
         ];
     }

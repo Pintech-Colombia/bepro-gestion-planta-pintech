@@ -18,8 +18,7 @@
         </tr>
         <tr>
             <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #f0f0f0;"> FECHA</th>
-            <th colspan="2" style="font-size: 10px; border: 1px solid #000000; background-color: #ffffff;">DIC 2020
-            </th>
+            <th colspan="2" style="font-size: 10px; border: 1px solid #000000; background-color: #ffffff;">02/12/2020</th>
         </tr>
         <tr>
             <td colspan="15" style="height: 10px;"></td>
@@ -48,7 +47,7 @@
                 NOMBRE DEL PRODUCTO</th>
             <td colspan="8" style="border: 1px solid #000000;">{{ $order['product_display_name'] ?? 'N/A' }}</td>
             <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff;">FECHA</th>
-            <td colspan="2" style="border: 1px solid #000000; text-align: center;">{{ !empty($order['planned_date']) ? \Carbon\Carbon::parse($order['planned_date'])->format('d/m/Y') : '—' }}</td>
+            <td colspan="2" style="border: 1px solid #000000; text-align: center;">{{ filled($order['manufactured_on'] ?? null) ? \Carbon\Carbon::parse($order['manufactured_on'])->format('d/m/Y') : '—' }}</td>
         </tr>
         <tr>
             <th colspan="3"
@@ -62,7 +61,7 @@
             <td colspan="6" style="border: 1px solid #000000;">
                 @foreach($order['packaging_plans'] as $plan)
                     {{ $plan['planned_units'] }} x
-                    {{ $plan['product_variant']['presentation_label'] ?? 'N/A' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
+                    {{ $plan['product_variant']['presentation_label'] ?? 'N/A' }}@if(!$loop->last), @endif
                 @endforeach
             </td>
         </tr>
@@ -268,17 +267,6 @@
             <td colspan="4" style="border: 1px solid #000000; text-align: center;">{{ $order['grinding_hg'] ?? '---' }}
             </td>
         </tr>
-        {{-- El mismo resumen de la tarjeta del detalle (ProductionOrderCostSummary): solo con «Ver costos», nunca cancelada. --}}
-        @if(! empty($order['cost_summary']))
-            <tr>
-                <th colspan="4"
-                    style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">COSTO
-                    TOTAL GRANEL{{ $order['cost_summary']['basis'] === 'estimated' ? ' (ESTIMADO)' : '' }}</th>
-                <td colspan="11" style="border: 1px solid #000000; font-weight: bold;">$
-                    {{ number_format($order['cost_summary']['bulk']['total'], 2) }}
-                </td>
-            </tr>
-        @endif
 
         <tr>
             <td colspan="15" style="height: 10px;"></td>

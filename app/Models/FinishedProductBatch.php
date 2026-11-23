@@ -111,7 +111,7 @@ class FinishedProductBatch extends Model
 
     /**
      * Los kilos de una unidad del lote: galones de su presentación × peso por galón real de la OP que lo fabricó. La
-     * única cuenta de kilos por unidad de un lote: la usan la preselección de fuentes, la pantalla y el consumo al
+     * única cuenta de kilos por unidad de un lote: la usan la pantalla, la cantidad que propone el buscador y el consumo al
      * completar (que la fija en la fuente). Sin valor de presentación cuenta 1 galón (la regla de
      * `VariantPricingService`). Nulo si la OP no tiene peso por galón.
      */

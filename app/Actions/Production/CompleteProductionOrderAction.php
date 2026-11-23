@@ -74,8 +74,8 @@ class CompleteProductionOrderAction
             $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
             $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], $userId);
 
-            // Por cada lote de PT usado: los kilos usados y lo que quedó, pesado. Toda línea de la fórmula con alguna fuente.
-            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? []);
+            // Lo real gastado de cada producto y, por lote, lo que quedó pesado. Toda línea de la fórmula con alguna fuente.
+            $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? [], $data['product_lines'] ?? []);
 
             $wasPendingReview = $lockedOrder->status === ProductionOrderStatus::PendingReview;
 

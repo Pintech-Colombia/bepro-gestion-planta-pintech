@@ -11,6 +11,7 @@ use App\Services\Pricing\ProductionCostCalculatorService;
 use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderLineUnits;
+use App\Services\Production\ProductLineCosts;
 use App\Services\Production\RemnantDrawdown;
 
 class PreviewProductionOrderCostsAction
@@ -23,6 +24,7 @@ class PreviewProductionOrderCostsAction
         private readonly ProductionOrderLineUnits $lineUnits,
         private readonly RemnantDrawdown $remnantDrawdown,
         private readonly BatchSourceDrawdown $batchSources,
+        private readonly ProductLineCosts $productLineCosts,
     ) {}
 
     /**
@@ -49,6 +51,7 @@ class PreviewProductionOrderCostsAction
      * @return array{
      *   ingredients: array<int, array{id:int,unit_cost:string,total_cost:string,actual_quantity:float}>,
      *   products: list<array{id:int,cost:string|null}>,
+     *   product_lines: list<array{id:int,cost:string|null,unit_cost:string|null}>,
      *   packaging: array<int, array{id:int,product_variant_id:int,actual_units:string,bulk_unit_cost:string,cost_price:string,total_cost:string,equivalent:string}>,
      *   raw_materials_cost: string,
      *   line_adjustments_cost: string,
@@ -283,6 +286,11 @@ class PreviewProductionOrderCostsAction
         return [
             'ingredients' => $ingredientResults,
             'products' => $productRows,
+            // El renglón de cada producto en la tabla de consumo, con lo que quedó escrito: la misma cuenta del detalle.
+            'product_lines' => collect($this->productLineCosts->forOrder($order, true, $batchUsage))
+                ->map(fn (array $row, int $lineId): array => ['id' => $lineId, 'cost' => $row['cost'], 'unit_cost' => $row['unit_cost']])
+                ->values()
+                ->all(),
             'packaging' => $packagingResults,
             'raw_materials_cost' => $rawMaterialsCost,
             'line_adjustments_cost' => $lineAdjustmentsCost,

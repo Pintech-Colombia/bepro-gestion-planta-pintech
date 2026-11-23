@@ -16,6 +16,7 @@ use App\Models\ProductionCost;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderPackagingPlan;
+use App\Models\ProductionOrderProductLine;
 use App\Models\ProductionRemnant;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
@@ -253,6 +254,15 @@ function completeTargetOrder(object $test): TestResponse
         'line_adjustment_ids' => [],
         // Los saldos que muestra la pantalla.
         'remnant_consumption_ids' => RemnantConsumption::query()->where('target_order_id', $test->targetOrder->id)->pluck('id')->all(),
+        // Cada saldo cuelga de una línea de producto: lo gastado de cada una, lo que traen sus saldos.
+        'product_lines' => ProductionOrderProductLine::query()
+            ->where('production_order_id', $test->targetOrder->id)
+            ->get()
+            ->map(fn (ProductionOrderProductLine $line): array => [
+                'id' => $line->id,
+                'actual_kg' => (string) $line->remnantConsumptions()->sum('quantity_kg'),
+            ])
+            ->all(),
         'ingredients' => [['id' => $detail->id, 'actual_quantity' => 30]],
         'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
     ]);

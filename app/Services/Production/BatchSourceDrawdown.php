@@ -49,14 +49,24 @@ class BatchSourceDrawdown
     ) {}
 
     /**
-     * Al enviar a revisión o completar, con la OP bloqueada y la lista ya comparada (`ensureMatches`): guarda en cada
-     * fuente de lote los kilos usados y lo que quedó, pesado (nulo si no quedó nada). Lo que quedó no pasa de una unidad.
-     * 422 si una línea de la fórmula no tiene ninguna fuente: lo normal es un olvido y la orden quedaría sin ese costo.
+     * Al enviar a revisión o completar, con la OP bloqueada y las listas ya comparadas (`ensureMatches`): guarda lo real
+     * gastado de cada línea de producto y, en cada fuente de lote, lo que quedó, pesado (nulo si no quedó nada). Lo que
+     * quedó no pasa de una unidad. 422 si una línea de la fórmula no tiene ninguna fuente: lo normal es un olvido y la
+     * orden quedaría sin ese costo.
      *
-     * @param  list<array<string, mixed>>  $rows  `batch_consumptions` validado: id, used_kg, has_leftover, leftover_kg
+     * @param  list<array<string, mixed>>  $rows  `batch_consumptions` validado: id, has_leftover, leftover_kg
+     * @param  list<array<string, mixed>>  $lineRows  `product_lines` validado: id, actual_kg
      */
-    public function recordUsage(ProductionOrder $lockedOrder, array $rows): void
+    public function recordUsage(ProductionOrder $lockedOrder, array $rows, array $lineRows = []): void
     {
+        $lines = $lockedOrder->productLines()->get()->keyBy('id');
+
+        foreach ($lineRows as $lineRow) {
+            $lines->get((int) $lineRow['id'])?->update([
+                'actual_kg' => $this->calculator->round((string) $lineRow['actual_kg'], 4),
+            ]);
+        }
+
         $sources = $lockedOrder->batchConsumptions()
             ->with(['batch.productVariant', 'batch.productionOrder'])
             ->get()
@@ -93,10 +103,7 @@ class BatchSourceDrawdown
                 }
             }
 
-            $source->update([
-                'used_kg' => $this->calculator->round((string) $row['used_kg'], 4),
-                'leftover_kg' => $leftoverKg,
-            ]);
+            $source->update(['leftover_kg' => $leftoverKg]);
         }
 
         if ($errors !== []) {

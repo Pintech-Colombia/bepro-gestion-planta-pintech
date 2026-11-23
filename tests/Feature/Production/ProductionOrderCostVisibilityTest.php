@@ -207,7 +207,7 @@ test('export payload without costs omits remnant costs and CIF', function () {
     attachRemnantWithConsumption($this->productionOrder);
 
     $payload = app(BuildProductionOrderExportDataAction::class)
-        ->execute($this->productionOrder, includeCosts: false);
+        ->execute($this->productionOrder);
 
     expect($payload['product'])->not->toHaveKey('cif_percentage')
         ->and($payload['remnant'])->not->toHaveKey('cost_per_gallon')
@@ -220,7 +220,7 @@ test('operator export payload does not expose cost fields', function () {
     $this->actingAs($operator);
 
     $payload = app(BuildProductionOrderExportDataAction::class)
-        ->execute($this->productionOrder, includeCosts: false);
+        ->execute($this->productionOrder);
 
     expect($payload)->not->toHaveKey('cost_summary');
     expect($payload['details'][0])->not->toHaveKey('unit_cost');

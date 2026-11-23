@@ -142,9 +142,9 @@ class CreateProductionOrderAction
                 ProductionOrderPackagingPlan::createForVariant((int) $order->id, (int) $packData['product_variant_id'], $packData['planned_units']);
             }
 
-            // Los productos que la fórmula lleva como ingrediente, con sus kilos y sus fuentes preseleccionadas (saldos y
-            // después lotes de la bodega de la orden). Crear no exige que alcancen: completar sí exige fuentes.
-            $this->productLines->planFromFormula($order, $formula, $userId);
+            // Los productos que la fórmula lleva como ingrediente, con sus kilos y sin fuentes: de dónde sale cada kilo lo
+            // elige una persona en la orden. Enviar a revisión y completar exigen que cada línea tenga fuentes.
+            $this->productLines->planFromFormula($order, $formula);
 
             // Al final: lo que impide crear la orden se avisa antes de preguntar si se acepta lo que falta. Crearla no exige
             // stock, porque puede usar saldo y gastar menos que la fórmula: lo que no deja completarla es el consumo real.

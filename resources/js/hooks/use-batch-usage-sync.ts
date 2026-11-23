@@ -4,6 +4,8 @@ import { formatForInput } from '@/lib/formatters';
 import type {
     ProductionOrderBatchConsumption,
     ProductionOrderBatchUsageRow,
+    ProductionOrderProductLine,
+    ProductionOrderProductLineUsageRow,
     ProductionOrderSetData,
 } from '@/types/production-orders';
 
@@ -22,7 +24,6 @@ export function mapBatchSourceToUsageRow(
 
     return {
         id: source.id,
-        used_kg: formatForInput(source.used_kg),
         has_leftover: source.leftover_kg !== null,
         leftover_kg: formatForInput(source.leftover_kg),
     };
@@ -70,4 +71,54 @@ export function useBatchUsageSync({
             ),
         );
     }, [sourceIds, sources, setData]);
+}
+
+/** Lo gastado de un producto a partir de lo guardado (al enviar a revisión); lo que ya se escribió se conserva. */
+export function mapProductLineToUsageRow(
+    line: ProductionOrderProductLine,
+    edited?: ProductionOrderProductLineUsageRow,
+): ProductionOrderProductLineUsageRow {
+    return edited ?? { id: line.id, actual_kg: formatForInput(line.actual_kg) };
+}
+
+/**
+ * Agregar la primera fuente de un producto que la fórmula no lleva crea su línea (y quitar la última la borra): aquí se
+ * rehace la lista de productos del formulario con las líneas de ahora, sin perder lo escrito.
+ */
+export function useProductLineUsageSync({
+    lines,
+    currentRows,
+    setData,
+}: {
+    lines: ProductionOrderProductLine[];
+    currentRows: ProductionOrderProductLineUsageRow[];
+    setData: ProductionOrderSetData;
+}) {
+    const currentRowsRef = useRef(currentRows);
+    const lineIds = useMemo(
+        () => lines.map((line) => line.id).join(','),
+        [lines],
+    );
+
+    useEffect(() => {
+        currentRowsRef.current = currentRows;
+    }, [currentRows]);
+
+    useEffect(() => {
+        const current = currentRowsRef.current;
+
+        if (current.map((row) => row.id).join(',') === lineIds) {
+            return;
+        }
+
+        setData(
+            'product_lines',
+            lines.map((line) =>
+                mapProductLineToUsageRow(
+                    line,
+                    current.find((row) => row.id === line.id),
+                ),
+            ),
+        );
+    }, [lineIds, lines, setData]);
 }

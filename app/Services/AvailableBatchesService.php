@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
  * Cuántas unidades de cada lote de PT quedan **libres** en una bodega: su stock menos las unidades **comprometidas**,
  * las de las fuentes de lote sin aplicar en órdenes abiertas (pendientes, en curso o en revisión). El hermano de
  * `AvailableRemnantsService`, en unidades enteras en vez de kilos. Una orden cancelada o completada ya no compromete
- * nada. Una sola fuente para la preselección de la OP, la acción que agrega un lote y las salidas de PT, que no toman lo
+ * nada. Una sola fuente para el buscador de la OP, la acción que agrega un lote y las salidas de PT, que no toman lo
  * comprometido.
  */
 class AvailableBatchesService
@@ -116,22 +116,6 @@ class AvailableBatchesService
     }
 
     /**
-     * Los lotes de los productos con unidades en la bodega, del más antiguo al más nuevo (el orden de despacho), con su
-     * presentación y su OP (para los kilos por unidad) y las unidades libres. Sin las que no tienen nada libre.
-     *
-     * @param  list<int>  $productIds
-     * @return Collection<int, array{batch: FinishedProductBatch, free_units: string}>
-     */
-    public function forProducts(array $productIds, int $warehouseId, bool $lock = false): Collection
-    {
-        if ($productIds === []) {
-            return collect();
-        }
-
-        return $this->freeBatches($productIds, $warehouseId, $lock);
-    }
-
-    /**
      * Los lotes que se pueden agregar a la orden: los de su bodega con unidades libres, de cualquier producto (la línea
      * filtra el suyo; «Agregar producto» elige otro), del más antiguo al más nuevo. Cada uno con el producto y el color de
      * la OP que lo fabricó, el lote, la presentación y los kilos por unidad. El costo de traslado, solo con «Ver costos».
@@ -140,7 +124,7 @@ class AvailableBatchesService
      */
     public function forOrder(ProductionOrder $order, bool $includeCosts): array
     {
-        return $this->freeBatches(null, (int) $order->warehouse_id, lock: false)
+        return $this->freeBatches((int) $order->warehouse_id)
             ->map(function (array $row) use ($includeCosts): array {
                 /** @var FinishedProductBatch $batch */
                 $batch = $row['batch'];
@@ -165,23 +149,16 @@ class AvailableBatchesService
     }
 
     /**
-     * Los lotes con unidades libres en la bodega (de los productos dados, o de todos con null), del más antiguo al más
-     * nuevo, con lo que necesitan los kilos por unidad.
+     * Los lotes con unidades libres en la bodega, del más antiguo al más nuevo, con lo que necesitan los kilos por unidad.
      *
-     * @param  list<int>|null  $productIds
      * @return Collection<int, array{batch: FinishedProductBatch, free_units: string}>
      */
-    private function freeBatches(?array $productIds, int $warehouseId, bool $lock): Collection
+    private function freeBatches(int $warehouseId): Collection
     {
-        $query = FinishedProductBatch::query()
-            ->when($productIds !== null, fn (Builder $batches) => $batches->whereIn('product_id', $productIds))
+        $batches = FinishedProductBatch::query()
             ->whereHas('stocks', fn (Builder $stocks) => $stocks->forWarehouse($warehouseId)->available())
-            ->with(['product:id,name', 'productVariant', 'productionOrder', 'stocks' => fn ($stocks) => $stocks->forWarehouse($warehouseId)]);
-
-        // Con bloqueo, por id: el mismo orden en que se bloquean al completar.
-        $batches = $lock
-            ? $query->orderBy('id')->lockForUpdate()->get()
-            : $query->get();
+            ->with(['product:id,name', 'productVariant', 'productionOrder', 'stocks' => fn ($stocks) => $stocks->forWarehouse($warehouseId)])
+            ->get();
 
         $committed = $this->committedUnits($batches->modelKeys(), $warehouseId);
 

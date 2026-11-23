@@ -154,6 +154,30 @@ export function formatNumber(
 }
 
 /**
+ * El rango de calidad de un producto, solo los números: «95 – 105», «≥ 6», «≤ 7,5». Null si no tiene ninguna cota.
+ * Una sola fuente para el detalle del producto y los campos de la OP, con un decimal como el PDF.
+ */
+export function formatQualityRange(
+    lower: number | string | null | undefined,
+    upper: number | string | null | undefined,
+): string | null {
+    const hasLower = !isEmptyNumber(lower);
+    const hasUpper = !isEmptyNumber(upper);
+    const format = (value: number | string | null | undefined) =>
+        formatNumber(value, { maxDecimals: 1 });
+
+    if (hasLower && hasUpper) {
+        return `${format(lower)} – ${format(upper)}`;
+    }
+
+    if (hasLower) {
+        return `≥ ${format(lower)}`;
+    }
+
+    return hasUpper ? `≤ ${format(upper)}` : null;
+}
+
+/**
  * Moneda (usa la base optimizada)
  */
 export function formatCurrency(
