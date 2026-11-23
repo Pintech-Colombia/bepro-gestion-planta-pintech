@@ -133,6 +133,11 @@ export function ProductsToUseCard({
         errors,
         'remnant_consumption_ids',
     );
+    // Una línea que ya no es de la orden (otra persona le quitó su última fuente) vuelve en `product_lines.N.id`: sin
+    // esto, enviar o completar fallaría sin decir nada. Lo gastado (`product_lines.N.actual_kg`) lo pinta la tabla.
+    const productLineIdError = Object.entries(errors).find(([key]) =>
+        /^product_lines\.\d+\.id$/.test(key),
+    )?.[1];
 
     return (
         <Card>
@@ -144,7 +149,10 @@ export function ProductsToUseCard({
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                <FormError id="product_lines" message={errors.product_lines} />
+                <FormError
+                    id="product_lines"
+                    message={errors.product_lines ?? productLineIdError}
+                />
                 <FormError
                     id="batch_consumptions"
                     message={errors.batch_consumptions}
@@ -306,9 +314,11 @@ function ProductLineBlock({
         .map((source) => usageRows.find((row) => row.id === source.id))
         .filter((row) => row?.has_leftover)
         .reduce((sum, row) => sum + (parseDecimal(row?.leftover_kg) ?? 0), 0);
-    const overfill = canRecordUsage
-        ? lineOverfillWarning(lineActualKg, leftoverTotal, line.covered_kg)
-        : null;
+    // Con un lote sin peso por galón no se sabe cuánto traen las fuentes: no hay contra qué comparar.
+    const overfill =
+        canRecordUsage && !line.has_unknown_kg
+            ? lineOverfillWarning(lineActualKg, leftoverTotal, line.covered_kg)
+            : null;
     const takenBatchIds = new Set(
         batchSources.map((source) => source.finished_product_batch_id),
     );

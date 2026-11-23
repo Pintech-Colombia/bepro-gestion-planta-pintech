@@ -763,11 +763,83 @@ it('previews the cost of each product row of the consumption table, the same as 
         'batch_consumptions' => [['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => '5.7']],
     ])->assertOk()->json();
 
-    // El renglón del producto cuesta lo que sus fuentes: los 20 cuñetes menos lo que vuelve al saldo.
+    // El renglón del producto cuesta lo que sus fuentes: los 20 cuñetes menos lo que vuelve al saldo. El costo por kilo
+    // es sobre lo que salió de ellos (468 − 5,7 = 462,3 kg), así la fila cuadra consigo misma.
     expect($preview['product_lines'])->toHaveCount(1)
         ->and($preview['product_lines'][0]['id'])->toBe($line->id)
         ->and($preview['product_lines'][0]['cost'])->toBe('4491297.0844')
-        ->and($preview['product_lines'][0]['cost'])->toBe($preview['summary']['bulk']['products_used']);
+        ->and($preview['product_lines'][0]['cost'])->toBe($preview['summary']['bulk']['products_used'])
+        ->and($preview['product_lines'][0]['unit_cost'])->toBe(bcdiv('4491297.0844', '462.3', 4));
+
+    // Guardado al enviar a revisión: el detalle da el mismo costo por kilo.
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_lines.0.cost', '4491297.0844')
+            ->where('order.product_lines.0.unit_cost', bcdiv('4491297.0844', '462.3', 4)));
+});
+
+it('ignores in the preview a lot that someone else removed while the screen was open', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+    $staleId = $source->id;
+    // Otra pestaña u otra persona quitó el lote; esta pantalla todavía lo manda.
+    $source->delete();
+
+    $preview = $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $staleId, 'has_leftover' => true, 'leftover_kg' => '5.7']],
+    ])->assertOk()->json();
+
+    // Sin el lote, la línea no tiene de dónde salir: no cuesta nada (completar sí avisa que la orden cambió).
+    expect($preview['products'])->toBe([])
+        ->and($preview['summary']['bulk']['products_used'])->toBe('0.0000');
+});
+
+it('answers on the line id when the screen sends a product line the order no longer has', function () {
+    $order = opsRalOrder($this);
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+
+    // La pantalla manda su línea y otra que ya se borró (le quitaron su última fuente): la tarjeta pinta esta llave.
+    $this->post(route('production-orders.complete', $order), [
+        'product_lines' => [['id' => $line->id, 'actual_kg' => '462.3'], ['id' => $line->id + 1000, 'actual_kg' => '1']],
+    ])->assertSessionHasErrors(['product_lines.1.id' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
+});
+
+it('caps a leftover typed heavier than one unit in the preview, so the cost never goes negative', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+    $preview = fn (string $leftoverKg): array => $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => $leftoverKg]],
+    ])->assertOk()->json();
+
+    // 200 kg escritos en un cuñete de 23,4: cuenta como el cuñete entero (completar lo rechaza con su mensaje).
+    $typedTooMuch = $preview('200');
+
+    expect($typedTooMuch['product_lines'][0]['cost'])->toBe($preview('23.4')['product_lines'][0]['cost'])
+        ->and(bccomp($typedTooMuch['product_lines'][0]['cost'], '0', 4))->toBe(1)
+        ->and(bccomp($typedTooMuch['summary']['bulk']['products_used'], '0', 4))->toBe(1);
+});
+
+it('does not tell what is missing nor a cost per kilo when a lot has no weight per gallon', function () {
+    $order = opsRalOrder($this);
+    // La OP de origen sin peso por galón (un lote viejo): no se sabe cuántos kilos trae cada cuñete.
+    $this->origin->update(['density_kg_per_gallon' => null]);
+
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_lines.0.has_unknown_kg', true)
+            ->where('order.product_lines.0.missing_kg', null)
+            // El costo sí se sabe (unidades × costo de traslado); el costo por kilo no.
+            ->where('order.product_lines.0.cost', '4538165.7700')
+            ->where('order.product_lines.0.unit_cost', null));
 });
 
 it('prints the product inside its step with its lot, and the open bucket line only while producing', function () {

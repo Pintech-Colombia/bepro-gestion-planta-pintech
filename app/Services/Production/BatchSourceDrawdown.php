@@ -144,6 +144,28 @@ class BatchSourceDrawdown
     }
 
     /**
+     * Lo que quedó en el envase abierto de una fuente de lote: lo guardado si ya se aplicó; si no, lo que está escrito
+     * en la pantalla (`$typed`, vista previa) o lo guardado. Mientras se escribe puede pasar del peso de una unidad
+     * (completar lo rechaza): se toma hasta ese peso para que la vista previa no muestre un costo negativo.
+     *
+     * @param  array{leftover_kg: string|null}|null  $typed
+     */
+    public function leftoverKg(ProductionOrderBatchConsumption $source, ?array $typed = null): ?string
+    {
+        $leftoverKg = ! $source->isApplied() && $typed !== null
+            ? $typed['leftover_kg']
+            : ($source->leftover_kg !== null ? (string) $source->leftover_kg : null);
+
+        if ($leftoverKg === null || $source->isApplied()) {
+            return $leftoverKg;
+        }
+
+        $kgPerUnit = $source->batch->kgPerUnit();
+
+        return $kgPerUnit !== null ? $this->calculator->min($leftoverKg, $kgPerUnit, 4) : $leftoverKg;
+    }
+
+    /**
      * 422 si alguna línea de la fórmula no tiene ni un saldo ni un lote.
      */
     public function ensureFormulaLinesHaveSources(ProductionOrder $order): void
@@ -184,9 +206,7 @@ class BatchSourceDrawdown
             return $source->consumed_cost !== null ? (string) $source->consumed_cost : null;
         }
 
-        $leftoverKg = $typed !== null
-            ? $typed['leftover_kg']
-            : ($source->leftover_kg !== null ? (string) $source->leftover_kg : null);
+        $leftoverKg = $this->leftoverKg($source, $typed);
 
         $batch = $source->batch;
         $transferUnitCost = $batch->transfer_unit_cost !== null

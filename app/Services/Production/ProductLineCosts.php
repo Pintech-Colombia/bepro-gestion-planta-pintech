@@ -14,11 +14,12 @@ use App\Services\DecimalCalculator;
  * consumo. Una sola cuenta para el detalle de la orden y la vista previa de costos.
  *
  * - Cubierto = los kilos de sus saldos + unidades × kilos por unidad de sus lotes (lo que traen, no lo gastado). Un lote
- *   sin peso por galón no suma y `has_unknown_kg` lo avisa.
+ *   sin peso por galón no suma y `has_unknown_kg` lo avisa: entonces no se sabe cuánto falta ni el costo por kilo.
  * - Costo = el de sus saldos (`RemnantDrawdown::lineCost`) + el de sus lotes (`BatchSourceDrawdown::lineCost`): el real
  *   si ya se aplicó, el estimado si no. No depende de lo gastado: sale de lo que se saca de bodega. Si una fuente no se
  *   puede estimar, el costo de la línea es null (no se muestra un total incompleto).
- * - Costo por kilo = costo ÷ cubierto.
+ * - Costo por kilo = costo ÷ lo que salió de las fuentes (cubierto − lo que quedó en los envases abiertos): el costo ya
+ *   descuenta lo que volvió al saldo, así que los kilos también.
  */
 class ProductLineCosts
 {
@@ -51,6 +52,7 @@ class ProductLineCosts
                 ->filter(fn (ProductionOrderBatchConsumption $source): bool => (int) $source->production_order_product_line_id === (int) $line->id);
 
             $kilos = $remnants->map(fn (RemnantConsumption $consumption): string => (string) $consumption->quantity_kg)->all();
+            $leftovers = [];
             $costs = [];
             $hasUnknownKg = false;
             $costKnown = true;
@@ -70,6 +72,7 @@ class ProductLineCosts
                     $hasUnknownKg = true;
                 } else {
                     $kilos[] = $this->calculator->mul((string) $source->units, $kgPerUnit, 4);
+                    $leftovers[] = (string) ($this->batchSources->leftoverKg($source, $batchUsage[$source->id] ?? null) ?? '0');
                 }
 
                 $cost = $withCost ? $this->batchSources->lineCost($source, $batchUsage[$source->id] ?? null) : null;
@@ -78,14 +81,16 @@ class ProductLineCosts
             }
 
             $covered = $this->calculator->sum($kilos, 4);
+            $used = $this->calculator->sub($covered, $this->calculator->sum($leftovers, 4), 4);
             $cost = $withCost && $costKnown && $costs !== [] ? $this->calculator->sum($costs, 4) : null;
 
             $rows[(int) $line->id] = [
                 'covered_kg' => $covered,
                 'has_unknown_kg' => $hasUnknownKg,
                 'cost' => $cost,
-                'unit_cost' => $cost !== null && $this->calculator->isPositive($covered)
-                    ? $this->calculator->div($cost, $covered, 4)
+                // Con kilos desconocidos el costo cuenta el lote y los kilos no: el cociente saldría inflado.
+                'unit_cost' => $cost !== null && ! $hasUnknownKg && $this->calculator->isPositive($used)
+                    ? $this->calculator->div($cost, $used, 4)
                     : null,
             ];
         }

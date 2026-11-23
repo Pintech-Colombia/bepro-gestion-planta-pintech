@@ -415,7 +415,8 @@ class BuildProductionOrderShowDataAction
     {
         $covered = $costs['covered_kg'];
         $planned = $line->planned_kg !== null ? (string) $line->planned_kg : null;
-        $missing = $planned !== null ? $this->calculator->sub($planned, $covered, 4) : null;
+        // Con un lote sin peso por galón no se sabe cuánto cubre: tampoco cuánto falta (el buscador no propone).
+        $missing = $planned !== null && ! $costs['has_unknown_kg'] ? $this->calculator->sub($planned, $covered, 4) : null;
 
         return [
             'id' => $line->id,
