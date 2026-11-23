@@ -5,7 +5,7 @@
 # (`8.3.36-fpm-nginx-trixie`) y no la de serversideup (`-vX.Y.Z`): Dependabot solo entiende la primera y propone el
 # parche de PHP siguiente. serversideup recompila cada semana con los arreglos de Debian sin cambiar la etiqueta: ese
 # digest nuevo no lo propone Dependabot, lo avisa Trivy (workflow `security`).
-FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS node_base
+FROM node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64 AS node_base
 
 # Base común: la imagen de serversideup trae pdo_pgsql, zip, pcntl y opcache; faltan estas.
 # Los paquetes de Debian se ponen al día al construir: un arreglo de seguridad de Debian llega antes que el digest
