@@ -202,13 +202,18 @@ class QuotationController extends Controller
         return redirect()->route('sales-orders.show', $order);
     }
 
-    public function exportPdf(Quotation $quotation): \Illuminate\Http\Response
+    public function exportPdf(Request $request, Quotation $quotation): \Illuminate\Http\Response
     {
         $this->authorize('exportPdf', $quotation);
 
         $filename = 'COT. '.($quotation->quotation_number ?? $quotation->id).'.pdf';
+        $pdf = $this->renderQuotationPdf->execute($quotation);
 
-        return $this->renderQuotationPdf->execute($quotation)->stream($filename);
+        if ($request->boolean('download')) {
+            return $pdf->download($filename);
+        }
+
+        return $pdf->stream($filename);
     }
 
     /**

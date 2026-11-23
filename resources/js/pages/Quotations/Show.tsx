@@ -9,6 +9,12 @@ import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import { PlantDateInput } from '@/components/plant-date-input';
+import {
+    SharePdfButton,
+    useCanSharePdf,
+} from '@/components/quotations/share-pdf-button';
+import type { SharePdfErrorState } from '@/components/quotations/share-pdf-button';
+import { RetryableError } from '@/components/retryable-error';
 import { StatusBadge } from '@/components/status-badge';
 import {
     AlertDialog,
@@ -41,7 +47,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
+import { quotationPdfFilename } from '@/lib/pdf-share';
 import { quotationName } from '@/lib/quotation-name';
 import {
     convertToOrder as quotationsConvertToOrder,
@@ -137,6 +145,16 @@ export default function QuotationsShow({
     });
 
     const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+    const [pdfShareError, setPdfShareError] = useState<{
+        quotationId: number;
+        state: SharePdfErrorState;
+    } | null>(null);
+    const isMobile = useIsMobile();
+    const canSharePdf = useCanSharePdf();
+    const activePdfShareError =
+        pdfShareError?.quotationId === quotation.id
+            ? pdfShareError.state
+            : null;
 
     const { plantToday } = usePage().props;
     const convertForm = useForm({
@@ -184,19 +202,66 @@ export default function QuotationsShow({
                                 </Button>
                             )}
                             {can.exportPdf && (
-                                <Button variant="outline" asChild>
-                                    <a
-                                        href={
-                                            quotationsExportPdf(quotation.id)
-                                                .url
-                                        }
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        <FileText className="size-4" />
-                                        Ver PDF
-                                    </a>
-                                </Button>
+                                <>
+                                    {(isMobile || canSharePdf) && (
+                                        <SharePdfButton
+                                            key={quotation.id}
+                                            quotationId={quotation.id}
+                                            quotationNumber={
+                                                quotation.quotation_number
+                                            }
+                                            variant={
+                                                isMobile ? 'default' : 'outline'
+                                            }
+                                            onErrorChange={(state) =>
+                                                setPdfShareError(
+                                                    state
+                                                        ? {
+                                                              quotationId:
+                                                                  quotation.id,
+                                                              state,
+                                                          }
+                                                        : null,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                    <Button variant="outline" asChild>
+                                        {isMobile ? (
+                                            <a
+                                                href={
+                                                    quotationsExportPdf(
+                                                        quotation.id,
+                                                        {
+                                                            query: {
+                                                                download: 1,
+                                                            },
+                                                        },
+                                                    ).url
+                                                }
+                                                download={quotationPdfFilename(
+                                                    quotation,
+                                                )}
+                                            >
+                                                <FileText className="size-4" />
+                                                Ver PDF
+                                            </a>
+                                        ) : (
+                                            <a
+                                                href={
+                                                    quotationsExportPdf(
+                                                        quotation.id,
+                                                    ).url
+                                                }
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <FileText className="size-4" />
+                                                Ver PDF
+                                            </a>
+                                        )}
+                                    </Button>
+                                </>
                             )}
                             {can.update && (
                                 <Button asChild>
@@ -416,6 +481,13 @@ export default function QuotationsShow({
                         </>
                     }
                 />
+
+                {activePdfShareError && (
+                    <RetryableError
+                        message={activePdfShareError.message}
+                        onRetry={activePdfShareError.retry}
+                    />
+                )}
 
                 {can.updateStatus && statusOptions.length > 0 && (
                     <Card>

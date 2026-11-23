@@ -263,7 +263,42 @@ it('exports quotation pdf', function () {
 
     expect($response->headers->get('content-disposition'))
         ->toStartWith('inline;')
-        ->toContain('.pdf');
+        ->toContain('COT. 1.pdf');
+
+    $downloadResponse = $this->actingAs($this->comercialUser)
+        ->get(route('quotations.export-pdf', ['quotation' => $quotation, 'download' => 1]))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+
+    expect($downloadResponse->headers->get('content-disposition'))
+        ->toStartWith('attachment;')
+        ->toContain('COT. 1.pdf');
+});
+
+it('forbids exporting quotation pdf without permission or ownership', function () {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'quotation_number' => 7,
+    ]);
+
+    $role = Role::findOrCreate('lector_cotizaciones', 'web');
+    $role->syncPermissions([Permission::QuotationsViewAll->value]);
+
+    $viewerWithoutExport = User::factory()->create(['email_verified_at' => now()]);
+    $viewerWithoutExport->assignRole($role);
+
+    $this->actingAs($viewerWithoutExport)
+        ->get(route('quotations.export-pdf', $quotation))
+        ->assertForbidden();
+
+    $this->actingAs($viewerWithoutExport)
+        ->get(route('quotations.export-pdf', ['quotation' => $quotation, 'download' => 1]))
+        ->assertForbidden();
+
+    $this->actingAs($this->otherComercial)
+        ->get(route('quotations.export-pdf', ['quotation' => $quotation, 'download' => 1]))
+        ->assertForbidden();
 });
 
 it('renders quotation pdf template with bepro layout sections', function () {
