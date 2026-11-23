@@ -248,15 +248,19 @@ class ProductionOrderConsumptionCheck
 
         $order->loadMissing('consumptionReasons');
         $reasons = $order->consumptionReasons->whereNotNull('product_id')->pluck('reason', 'product_id');
-        $isCompleted = $order->status === ProductionOrderStatus::Completed;
+        $exceeding = array_filter($this->evaluateProducts($order, null, $tolerance), fn (array $row): bool => $row['exceeds']);
+        // El costo de las líneas, una sola vez para todos los productos que se pasan (solo completada y si hay alguno).
+        $lineCosts = $order->status === ProductionOrderStatus::Completed && $exceeding !== []
+            ? $this->productLineCosts->forOrder($order, true)
+            : null;
 
         return array_values(array_map(
             fn (array $row): array => [
                 ...$row,
                 'reason' => $reasons->get($row['product_id']),
-                'extra_cost' => $isCompleted ? $this->productExtraCost($order, $row) : null,
+                'extra_cost' => $lineCosts !== null ? $this->productExtraCost($order, $row, $lineCosts) : null,
             ],
-            array_filter($this->evaluateProducts($order, null, $tolerance), fn (array $row): bool => $row['exceeds']),
+            $exceeding,
         ));
     }
 
@@ -412,24 +416,24 @@ class ProductionOrderConsumptionCheck
 
     /**
      * Lo que costó el exceso de un producto: (gastado − planeado) × su costo por kilo en la orden, el de sus líneas
-     * (`ProductLineCosts`: costo ÷ lo que salió de sus fuentes, con lo que volvió al saldo ya descontado). Null si
-     * ninguna línea del producto tiene costo por kilo (por ejemplo, un lote sin peso por galón).
+     * (`ProductLineCosts`: costo ÷ lo que salió de sus fuentes, con lo que volvió al saldo ya descontado). Null si alguna
+     * línea del producto no tiene costo por kilo (por ejemplo, un lote sin peso por galón): el exceso es del producto
+     * entero, y calcularlo con solo una parte de sus líneas mostraría una cifra que parece completa y no lo es.
+     * `$lineCosts` es el resultado de `ProductLineCosts::forOrder`, si ya se calculó; sin él, se calcula aquí.
      *
      * @param  ProductConsumptionRow  $row
+     * @param  array<int, array{covered_kg: string, used_kg: string, has_unknown_kg: bool, cost: string|null, unit_cost: string|null}>|null  $lineCosts
      */
-    public function productExtraCost(ProductionOrder $order, array $row): ?string
+    public function productExtraCost(ProductionOrder $order, array $row, ?array $lineCosts = null): ?string
     {
         $lineIds = $order->productLines
             ->filter(fn (ProductionOrderProductLine $line): bool => (int) $line->product_id === $row['product_id'])
             ->map(fn (ProductionOrderProductLine $line): int => (int) $line->id)
             ->all();
-        // Las líneas con costo por kilo (sin él, por ejemplo un lote sin peso por galón, no se sabe).
-        $costs = array_filter(
-            array_intersect_key($this->productLineCosts->forOrder($order, true), array_flip($lineIds)),
-            fn (array $costs): bool => $costs['unit_cost'] !== null,
-        );
+        $costs = array_intersect_key($lineCosts ?? $this->productLineCosts->forOrder($order, true), array_flip($lineIds));
 
-        if ($costs === []) {
+        // Sin el costo por kilo de todas sus líneas no hay cifra: ni parcial ni estimada.
+        if ($costs === [] || in_array(null, array_column($costs, 'unit_cost'), true)) {
             return null;
         }
 

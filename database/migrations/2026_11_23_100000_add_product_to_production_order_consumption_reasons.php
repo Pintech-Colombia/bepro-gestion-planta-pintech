@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Schema;
  *
  * Compatible con volver a la imagen anterior: agrega una columna nula y deja nula `raw_material_id`, que esa imagen
  * siempre escribe. El CHECK solo en PostgreSQL (SQLite no admite agregarlo después de crear la tabla).
+ *
+ * Costo de volver atrás con motivos de producto ya guardados: la imagen anterior no se cae, pero los lee como de una
+ * materia prima con id vacío (en la OP en revisión sale un campo «Motivo · MP #0» con el texto) y, si se vuelve a enviar
+ * o a completar esa OP, los borra porque no corresponden a ninguna materia prima. El borrado queda en la auditoría.
  */
 return new class extends Migration
 {

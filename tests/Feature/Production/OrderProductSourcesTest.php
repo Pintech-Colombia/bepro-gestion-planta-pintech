@@ -1468,3 +1468,50 @@ it('lists the product in the overconsumption alert with the cost of the excess',
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('order.product_overconsumption.0.extra_cost', $extraCost));
 });
+
+it('leaves the cost of the excess empty when one line of the product has no cost per kilo', function () {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+    // El mismo blanco en otro paso, que sale de un lote sin peso por galón: sin su costo por kilo, la cifra sería parcial.
+    $otherOrigin = ProductionOrder::create([
+        'order_number' => 'OP-2026-0002',
+        'lot_number' => 1683,
+        'product_id' => $this->white->id,
+        'formula_id' => $this->origin->formula_id,
+        'warehouse_id' => $this->warehouse->id,
+        'quantity' => 10,
+        'status' => ProductionOrderStatus::Completed->value,
+        'planned_date' => now(),
+        'created_by' => $this->user->id,
+    ]);
+    $unknownLot = opsBatch($this, $otherOrigin, units: 5, transferUnitCost: '226908.2885');
+    $second = ProductionOrderProductLine::create([
+        'production_order_id' => $order->id,
+        'product_id' => $this->white->id,
+        'step_order' => 3,
+        'planned_kg' => '10',
+        'origin' => ProductionOrderProductLineOrigin::Formula,
+    ]);
+    ProductionOrderBatchConsumption::create([
+        'production_order_id' => $order->id,
+        'production_order_product_line_id' => $second->id,
+        'finished_product_batch_id' => $unknownLot->id,
+        'warehouse_id' => $this->warehouse->id,
+        'units' => 1,
+        'created_by' => $this->user->id,
+    ]);
+
+    opsComplete($this, $order, opsRows($order), actualKg: '300', extra: [
+        'product_overconsumption_reasons' => [$this->white->id => 'Se ajustó el tono con más blanco'],
+    ])->assertSessionHasNoErrors();
+
+    // 2 líneas × 300 = 600 kg contra 472,3 planeados: se pasa, pero sin cifra.
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_overconsumption.0.consumed', '600.0000')
+            ->where('order.product_overconsumption.0.extra_cost', null));
+
+    expect(Alert::query()->where('production_order_id', $order->id)->sole()->message)
+        ->toContain('ESMALTE BLANCO +27%')
+        ->not->toContain('kg, +$');
+});

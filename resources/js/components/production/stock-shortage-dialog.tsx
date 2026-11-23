@@ -76,11 +76,19 @@ function ShortageFigures({
     );
 }
 
-function GroupTitle({ children }: { children: string }) {
+/** Un grupo del diálogo: su título (solo si hay dos grupos) y su lista, con el divisor solo entre sus elementos. */
+function ShortageGroup({
+    title,
+    children,
+}: {
+    title: string | null;
+    children: React.ReactNode;
+}) {
     return (
-        <li className="pt-3 text-xs font-medium tracking-wide text-muted-foreground uppercase first:pt-0">
-            {children}
-        </li>
+        <section>
+            {title && <h3 className="text-sm font-medium">{title}</h3>}
+            <ul className="divide-y divide-border">{children}</ul>
+        </section>
     );
 }
 
@@ -118,66 +126,77 @@ export function StockShortageDialog({
                     </AlertDialogDescription>
                 </AlertDialogHeader>
 
-                <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto text-sm">
-                    {shortages.length > 0 && productShortages.length > 0 && (
-                        <GroupTitle>Materia prima</GroupTitle>
-                    )}
-                    {shortages.map((shortage) => (
-                        <li key={shortage.code} className="space-y-2 py-3">
-                            <p className="font-mono font-medium break-words">
-                                {shortage.code}
-                            </p>
-                            <ShortageFigures
-                                required={shortage.required}
-                                available={shortage.available}
-                                missing={shortage.missing}
-                                unit={shortage.unit}
-                            />
-                            {!shortage.has_reference_price && (
-                                <p className="text-xs text-muted-foreground">
-                                    Sin precio de referencia: lo que falta no
-                                    suma al costo estimado.
-                                </p>
-                            )}
-                        </li>
-                    ))}
-                    {productShortages.length > 0 && (
-                        <GroupTitle>Producto terminado</GroupTitle>
-                    )}
-                    {productShortages.map((shortage) => (
-                        <li
-                            key={`pt-${shortage.product_id}`}
-                            className="space-y-2 py-3"
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto text-sm">
+                    {shortages.length > 0 && (
+                        <ShortageGroup
+                            title={
+                                productShortages.length > 0
+                                    ? 'Materia prima'
+                                    : null
+                            }
                         >
-                            <p className="font-medium break-words">
-                                {shortage.name}
-                            </p>
-                            <ShortageFigures
-                                required={shortage.required}
-                                available={shortage.available}
-                                missing={shortage.missing}
-                                unit={shortage.unit}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Libre en la bodega: saldos{' '}
-                                <FormattedNumber
-                                    value={shortage.remnants_kg}
-                                    kind="quantity"
-                                    className="tabular-nums"
-                                />{' '}
-                                kg · lotes{' '}
-                                <FormattedNumber
-                                    value={shortage.lots_kg}
-                                    kind="quantity"
-                                    className="tabular-nums"
-                                />{' '}
-                                kg
-                                {shortage.has_unknown_kg &&
-                                    '. Un lote no tiene peso por galón: sus kilos no suman.'}
-                            </p>
-                        </li>
-                    ))}
-                </ul>
+                            {shortages.map((shortage) => (
+                                <li
+                                    key={shortage.code}
+                                    className="space-y-2 py-3"
+                                >
+                                    <p className="font-mono font-medium break-words">
+                                        {shortage.code}
+                                    </p>
+                                    <ShortageFigures
+                                        required={shortage.required}
+                                        available={shortage.available}
+                                        missing={shortage.missing}
+                                        unit={shortage.unit}
+                                    />
+                                    {!shortage.has_reference_price && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Sin precio de referencia: lo que
+                                            falta no suma al costo estimado.
+                                        </p>
+                                    )}
+                                </li>
+                            ))}
+                        </ShortageGroup>
+                    )}
+                    {productShortages.length > 0 && (
+                        <ShortageGroup title="Producto terminado">
+                            {productShortages.map((shortage) => (
+                                <li
+                                    key={`pt-${shortage.product_id}`}
+                                    className="space-y-2 py-3"
+                                >
+                                    <p className="font-medium break-words">
+                                        {shortage.name}
+                                    </p>
+                                    <ShortageFigures
+                                        required={shortage.required}
+                                        available={shortage.available}
+                                        missing={shortage.missing}
+                                        unit={shortage.unit}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Libre en la bodega: saldos{' '}
+                                        <FormattedNumber
+                                            value={shortage.remnants_kg}
+                                            kind="quantity"
+                                            className="tabular-nums"
+                                        />{' '}
+                                        kg · lotes{' '}
+                                        <FormattedNumber
+                                            value={shortage.lots_kg}
+                                            kind="quantity"
+                                            className="tabular-nums"
+                                        />{' '}
+                                        kg
+                                        {shortage.has_unknown_kg &&
+                                            '. Un lote no tiene peso por galón: sus kilos no suman.'}
+                                    </p>
+                                </li>
+                            ))}
+                        </ShortageGroup>
+                    )}
+                </div>
 
                 <AlertDialogFooter className="sm:justify-between">
                     <AlertDialogCancel disabled={processing}>
