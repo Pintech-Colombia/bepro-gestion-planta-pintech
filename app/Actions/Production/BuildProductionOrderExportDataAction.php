@@ -6,6 +6,7 @@ namespace App\Actions\Production;
 
 use App\Models\ProductionOrder;
 use App\Services\TimezoneService;
+use App\Support\NumberFormat;
 
 class BuildProductionOrderExportDataAction
 {
@@ -35,6 +36,27 @@ class BuildProductionOrderExportDataAction
             ? "{$productionOrder->lot_number} del {$manufacturedOn}"
             : (string) $productionOrder->lot_number;
 
+        // El rango de calidad del producto junto a cada casilla, con el mismo texto en el PDF y el Excel.
+        $product = $productionOrder->product;
+        $orderData['expected_ranges'] = [
+            'fineness' => $this->expectedRange($product?->quality_fineness_lower, $product?->quality_fineness_upper, 'HG'),
+            'viscosity' => $this->expectedRange($product?->quality_viscosity_lower, $product?->quality_viscosity_upper, 'KU'),
+            'solids' => $this->expectedRange($product?->quality_solids_lower, $product?->quality_solids_upper, '%'),
+        ];
+
         return $orderData;
+    }
+
+    /**
+     * «Esperado: 95,0 – 105,0 KU», «Esperado: >= 6,0 HG» o null si el producto no tiene ninguna cota.
+     */
+    private function expectedRange(string|int|float|null $lower, string|int|float|null $upper, string $unit): ?string
+    {
+        return match (true) {
+            $lower !== null && $upper !== null => 'Esperado: '.NumberFormat::measurement($lower, 1).' – '.NumberFormat::measurement($upper, 1)." {$unit}",
+            $lower !== null => 'Esperado: >= '.NumberFormat::measurement($lower, 1)." {$unit}",
+            $upper !== null => 'Esperado: <= '.NumberFormat::measurement($upper, 1)." {$unit}",
+            default => null,
+        };
     }
 }

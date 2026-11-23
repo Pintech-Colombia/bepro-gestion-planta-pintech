@@ -921,7 +921,8 @@ it('lists the same remnants in the order detail and in the refresh endpoint', fu
         ->assertInertia(fn (AssertableInertia $page) => $page->where('order.available_remnants', $fromEndpoint));
 });
 
-it('the pdf and the excel of a pending order list its planned remnants', function () {
+// El saldo ya no va en una sección aparte: es una fuente de su producto, en su renglón de la tabla de materia prima.
+it('the pdf and the excel of a pending order print its planned remnants as sources of the product', function () {
     $this->sourceOrder->update(['color' => 'RAL 3020']);
     $this->targetOrder->update(['status' => ProductionOrderStatus::Pending]);
     planRemnant($this, $this->targetOrder, $this->remnant, '12.5', 'Tanque 3')->assertSessionHasNoErrors();
@@ -930,15 +931,12 @@ it('the pdf and the excel of a pending order list its planned remnants', functio
     $pdfHtml = view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render();
     $excelHtml = view('excel.production-order', ['order' => $payload])->render();
 
-    foreach ([$pdfHtml, $excelHtml] as $html) {
-        expect($html)->toContain('SALDOS DE PT A USAR')
-            ->and($html)->toContain("SALDO · {$this->sourceOrder->order_number}")
-            ->and($html)->toContain('SOURCE PRODUCT RAL 3020')
-            ->and($html)->toContain('Tanque 3');
-    }
+    $source = "Saldo · Lote {$this->sourceOrder->lot_number} ({$this->sourceOrder->order_number}) · 12,5 kg · Tanque 3";
 
-    expect($pdfHtml)->toContain('12,5')
-        ->and($excelHtml)->toContain('12.5000');
+    foreach ([$pdfHtml, $excelHtml] as $html) {
+        expect($html)->toContain($source)
+            ->and($html)->not->toContain('SALDOS DE PT A USAR');
+    }
 });
 
 it('the remnants listing shows the kilos committed in open orders', function () {

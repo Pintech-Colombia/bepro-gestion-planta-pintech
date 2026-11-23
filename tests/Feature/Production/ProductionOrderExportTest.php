@@ -245,8 +245,8 @@ test('the order pdf and excel date the lot with its manufacturing date, not the 
         ->and($payload['manufactured_on'])->toBe('2026-10-04')
         ->and($pdfHtml)->toMatch('/>\s*04\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>\s*<td[^>]*>\s*2026\s*</')
         ->and($pdfHtml)->not->toMatch('/>\s*20\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>/')
-        ->and($excelHtml)->toContain('04/10/2026')
-        ->and($excelHtml)->not->toContain('20/10/2026')
+        ->and($excelHtml)->toMatch('/>\s*04\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>\s*<td[^>]*>\s*2026\s*</')
+        ->and($excelHtml)->not->toMatch('/>\s*20\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>/')
         ->and($pdfHtml)->toContain('02/12/2020')
         ->and($excelHtml)->toContain('02/12/2020');
 });
@@ -329,9 +329,9 @@ test('el pdf y el excel imprimen el rendimiento y la cantidad proyectada en galo
     expect($pdfHtml)
         ->toContain('333 gal')
         ->not->toContain('RENDIMIENTO REAL')
-        ->and($excelHtml)->toContain('1,248.00 gal')
-        ->and($excelHtml)->toContain('333.00 gal')
-        ->and($excelHtml)->not->toContain('333.00 kg');
+        ->and($excelHtml)->toContain('333 gal')
+        ->and($excelHtml)->not->toContain('333 kg')
+        ->and($excelHtml)->not->toContain('RENDIMIENTO REAL');
 });
 
 test('the order pdf shows formula instructions, density per gallon, solids and expected quality ranges', function () {

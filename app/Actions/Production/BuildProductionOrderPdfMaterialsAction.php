@@ -25,7 +25,7 @@ class BuildProductionOrderPdfMaterialsAction
      *
      * El producto terminado que la orden lleva como ingrediente va en la misma tabla, como en la hoja de planta: en su
      * paso (los agregados en la orden, al final), con sus kilos planeados, lo gastado y de dónde sale (`kind` =
-     * `product`, `sources`, `leftovers`, `has_batches`). Una fila de MP lleva `kind` = `material`.
+     * `product`, `observations`: un renglón por línea de la celda). Una fila de MP lleva `kind` = `material`.
      *
      * @return array{mode: string, rows: list<array<string, mixed>>, totals: array{planned_quantity: string, kg: string, grams: string, actual_quantity: string}}
      */
@@ -102,27 +102,35 @@ class BuildProductionOrderPdfMaterialsAction
     }
 
     /**
-     * Una fila por línea de producto: el nombre (va en la columna del código), lo planeado en kg, lo gastado y sus fuentes
-     * («Lote 1682 (OP-2026-0001) · 20 × Cuñete 4G», «Saldo · Lote 1620 (OP-2026-0001) · 10 kg»). Con la orden completada,
-     * lo que quedó en un cuñete abierto.
+     * Una fila por línea de producto: el nombre (va en la columna del código), lo planeado en kg, lo gastado y lo que va
+     * en OBSERVACIONES, igual en el PDF y el Excel:
+     * - sus fuentes («Saldo · Lote 1620 (OP-2026-0001) · 10 kg», «Lote 1682 (OP-2026-0001) · 20 × Cuñete 4G»), o una
+     *   raya para que la planta anote de dónde sale si nadie lo eligió;
+     * - mientras se produce y con un lote elegido, la raya de lo que quedó en un cuñete abierto (desde la revisión ya
+     *   está registrado);
+     * - lo que quedó, una vez registrado.
      *
      * @return list<array<string, mixed>>
      */
     private function productRows(ProductionOrder $order): array
     {
+        $isProducing = in_array($order->status, [ProductionOrderStatus::Pending, ProductionOrderStatus::InProgress], true);
+
         return $order->productLines
-            ->map(function (ProductionOrderProductLine $line) use ($order): array {
+            ->map(function (ProductionOrderProductLine $line) use ($order, $isProducing): array {
                 $remnants = $order->remnantConsumptions
                     ->filter(fn (RemnantConsumption $consumption): bool => (int) $consumption->production_order_product_line_id === (int) $line->id);
                 $lots = $order->batchConsumptions
                     ->filter(fn (ProductionOrderBatchConsumption $source): bool => (int) $source->production_order_product_line_id === (int) $line->id);
 
                 $sources = [
+                    // Con la nota del saldo («Tanque 3»): le dice a la planta dónde está.
                     ...$remnants->map(fn (RemnantConsumption $consumption): string => sprintf(
-                        'Saldo · Lote %s (%s) · %s kg',
+                        'Saldo · Lote %s (%s) · %s kg%s',
                         $consumption->remnant?->sourceOrder?->lot_number,
                         $consumption->remnant?->sourceOrder?->order_number,
                         NumberFormat::quantity((string) $consumption->quantity_kg),
+                        filled($consumption->notes) ? ' · '.$consumption->notes : '',
                     ))->all(),
                     ...$lots->map(fn (ProductionOrderBatchConsumption $source): string => sprintf(
                         'Lote %s (%s) · %s × %s',
@@ -149,9 +157,11 @@ class BuildProductionOrderPdfMaterialsAction
                     'raw_material_name' => (string) $line->product?->name,
                     'planned_quantity' => $line->planned_kg !== null ? (string) $line->planned_kg : '0',
                     'actual_quantity' => $line->actual_kg !== null ? (string) $line->actual_kg : null,
-                    'sources' => array_values($sources),
-                    'has_batches' => $lots->isNotEmpty(),
-                    'leftovers' => $leftovers,
+                    'observations' => [
+                        ...($sources !== [] ? $sources : ['De dónde sale: ______________________']),
+                        ...($isProducing && $lots->isNotEmpty() ? ['Quedó en cuñete abierto: ________ kg'] : []),
+                        ...$leftovers,
+                    ],
                 ]);
             })
             ->values()

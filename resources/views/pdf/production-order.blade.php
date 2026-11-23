@@ -13,16 +13,11 @@
         $pdfTotals = $pdfMaterials['totals'] ?? ['kg' => '0', 'grams' => '0'];
 
         $lineAdjustmentsCount = count($order['line_adjustments'] ?? []);
-        // La hoja que se imprime para producir deja dónde anotar lo que quedó en un cuñete abierto. Desde la revisión ya
-        // está registrado (se pide al enviarla), así que la raya solo va mientras se produce.
-        $isOpenOrder = in_array($order['status'] ?? '', ['pending', 'in_progress'], true);
         $isCancelled = ($order['status'] ?? '') === 'cancelled';
-        // Las fuentes de cada producto ocupan renglones de más dentro de su fila.
+        // Las observaciones de cada producto (fuentes, rayas, lo que quedó) ocupan renglones de más dentro de su fila.
         $productExtraLines = collect($pdfRows)
             ->where('kind', 'product')
-            ->sum(fn (array $row): int => max(count($row['sources'] ?? []), 1) - 1
-                + ($isOpenOrder && ($row['has_batches'] ?? false) ? 1 : 0)
-                + count($row['leftovers'] ?? []));
+            ->sum(fn (array $row): int => max(count($row['observations'] ?? []) - 1, 0));
         $effectiveLoad = count($pdfRows)
             + ($lineAdjustmentsCount > 0 ? $lineAdjustmentsCount + 2 : 0)
             + $productExtraLines
@@ -56,36 +51,10 @@
             $finalNotesLines = 1;
         }
 
-        $productData = $order['product'] ?? [];
-        $formatExpectedRange = static function (mixed $lower, mixed $upper, string $unit): ?string {
-            if ($lower !== null && $upper !== null) {
-                return 'Esperado: '.NumberFormat::measurement($lower, 1).' – '.NumberFormat::measurement($upper, 1)." {$unit}";
-            }
-            if ($lower !== null) {
-                return 'Esperado: >= '.NumberFormat::measurement($lower, 1)." {$unit}";
-            }
-            if ($upper !== null) {
-                return 'Esperado: <= '.NumberFormat::measurement($upper, 1)." {$unit}";
-            }
-
-            return null;
-        };
-
-        $finenessRange = $formatExpectedRange(
-            $productData['quality_fineness_lower'] ?? null,
-            $productData['quality_fineness_upper'] ?? null,
-            'HG'
-        );
-        $viscosityRange = $formatExpectedRange(
-            $productData['quality_viscosity_lower'] ?? null,
-            $productData['quality_viscosity_upper'] ?? null,
-            'KU'
-        );
-        $solidsRange = $formatExpectedRange(
-            $productData['quality_solids_lower'] ?? null,
-            $productData['quality_solids_upper'] ?? null,
-            '%'
-        );
+        // «Esperado: 95,0 – 105,0 KU»: lo arma BuildProductionOrderExportDataAction, igual para el Excel.
+        $finenessRange = $order['expected_ranges']['fineness'] ?? null;
+        $viscosityRange = $order['expected_ranges']['viscosity'] ?? null;
+        $solidsRange = $order['expected_ranges']['solids'] ?? null;
 
         $formulaNotes = $order['formula']['notes'] ?? null;
     @endphp
@@ -491,20 +460,10 @@
                     <td class="text-center">{{ $kg > 0 ? NumberFormat::quantity($kg) : '' }}</td>
                     <td class="text-center">{{ $grams > 0 ? NumberFormat::units($grams) : '' }}</td>
                     <td class="small-text">
-                        @if(($row['kind'] ?? 'material') === 'product')
-                            {{-- De dónde sale el producto; si nadie lo eligió, la planta lo anota. --}}
-                            @forelse($row['sources'] ?? [] as $source)
-                                {{ $source }}@if(!$loop->last)<br>@endif
-                            @empty
-                                De dónde sale: ______________________
-                            @endforelse
-                            @if($isOpenOrder && ($row['has_batches'] ?? false))
-                                <br>Quedó en cuñete abierto: ________ kg
-                            @endif
-                            @foreach($row['leftovers'] ?? [] as $leftover)
-                                <br>{{ $leftover }}
-                            @endforeach
-                        @endif
+                        {{-- De dónde sale el producto, la raya de lo que quedó y lo registrado (BuildProductionOrderPdfMaterialsAction). --}}
+                        @foreach($row['observations'] ?? [] as $observation)
+                            {{ $observation }}@if(!$loop->last)<br>@endif
+                        @endforeach
                     </td>
                     <td class="text-center">
                         {{ isset($row['actual_quantity']) ? NumberFormat::quantity($row['actual_quantity']) : '' }}
@@ -547,20 +506,10 @@
                     <td class="text-center">{{ $kg > 0 ? NumberFormat::quantity($kg) : '' }}</td>
                     <td class="text-center">{{ $grams > 0 ? NumberFormat::units($grams) : '' }}</td>
                     <td class="small-text">
-                        @if(($row['kind'] ?? 'material') === 'product')
-                            {{-- De dónde sale el producto; si nadie lo eligió, la planta lo anota. --}}
-                            @forelse($row['sources'] ?? [] as $source)
-                                {{ $source }}@if(!$loop->last)<br>@endif
-                            @empty
-                                De dónde sale: ______________________
-                            @endforelse
-                            @if($isOpenOrder && ($row['has_batches'] ?? false))
-                                <br>Quedó en cuñete abierto: ________ kg
-                            @endif
-                            @foreach($row['leftovers'] ?? [] as $leftover)
-                                <br>{{ $leftover }}
-                            @endforeach
-                        @endif
+                        {{-- De dónde sale el producto, la raya de lo que quedó y lo registrado (BuildProductionOrderPdfMaterialsAction). --}}
+                        @foreach($row['observations'] ?? [] as $observation)
+                            {{ $observation }}@if(!$loop->last)<br>@endif
+                        @endforeach
                     </td>
                     <td class="text-center">
                         {{ isset($row['actual_quantity']) ? NumberFormat::quantity($row['actual_quantity']) : '' }}
