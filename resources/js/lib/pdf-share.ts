@@ -1,0 +1,145 @@
+export type PdfDeliveryOutcome =
+    'share' | 'download' | 'needs_gesture' | 'aborted';
+
+export type PdfResponseValidation =
+    | { valid: true }
+    | {
+          valid: false;
+          reason: 'session_expired' | 'http_error' | 'invalid_content_type';
+          requiresReload: boolean;
+      };
+
+type PdfResponseMeta = {
+    ok: boolean;
+    redirected: boolean;
+    status: number;
+    contentType: string | null;
+};
+
+type ShareNavigator = Pick<Partial<Navigator>, 'share' | 'canShare'>;
+
+/** Nombre del archivo PDF de la cotización, igual al que envía el servidor. */
+export function quotationPdfFilename(quotation: {
+    id: number;
+    quotation_number: number | null;
+}): string {
+    return `COT. ${quotation.quotation_number ?? quotation.id}.pdf`;
+}
+
+/** Título corto para la hoja de compartir del sistema. */
+export function quotationPdfTitle(quotation: {
+    id: number;
+    quotation_number: number | null;
+}): string {
+    return `Cotización ${quotation.quotation_number ?? quotation.id}`;
+}
+
+export function isPdfContentType(contentType: string | null): boolean {
+    if (!contentType) {
+        return false;
+    }
+
+    return contentType.toLowerCase().split(';')[0].trim() === 'application/pdf';
+}
+
+/**
+ * Comprueba que el `fetch` devolvió el PDF real y no una redirección silenciosa al inicio de sesión (302 seguido por
+ * `fetch` -> 200 con HTML) ni un error del servidor.
+ */
+export function validatePdfResponse(
+    response: PdfResponseMeta,
+): PdfResponseValidation {
+    if (
+        response.redirected ||
+        response.status === 401 ||
+        response.status === 419
+    ) {
+        return {
+            valid: false,
+            reason: 'session_expired',
+            requiresReload: true,
+        };
+    }
+
+    if (!response.ok) {
+        return {
+            valid: false,
+            reason: 'http_error',
+            requiresReload: false,
+        };
+    }
+
+    if (!isPdfContentType(response.contentType)) {
+        return {
+            valid: false,
+            reason: 'invalid_content_type',
+            requiresReload: true,
+        };
+    }
+
+    return { valid: true };
+}
+
+function errorName(error: unknown): string | null {
+    if (typeof error !== 'object' || error === null || !('name' in error)) {
+        return null;
+    }
+
+    return typeof error.name === 'string' ? error.name : null;
+}
+
+/**
+ * Decide si se comparte el archivo, se descarga, se pide un segundo toque (gesto vencido en Safari de iOS) o se
+ * descarta en silencio (el usuario cerró la hoja de compartir).
+ */
+export function resolvePdfShareAction(options: {
+    canShare: boolean;
+    error?: unknown;
+    fromReadyFile?: boolean;
+}): PdfDeliveryOutcome {
+    if (!options.canShare) {
+        return 'download';
+    }
+
+    if (options.error === undefined) {
+        return 'share';
+    }
+
+    const name = errorName(options.error);
+
+    if (name === 'AbortError') {
+        return 'aborted';
+    }
+
+    if (name === 'NotAllowedError' && !options.fromReadyFile) {
+        return 'needs_gesture';
+    }
+
+    return 'download';
+}
+
+/** Comprueba si el navegador soporta compartir un archivo PDF sin descargarlo antes. */
+export function canBrowserSharePdf(
+    nav: ShareNavigator | undefined = typeof navigator !== 'undefined'
+        ? navigator
+        : undefined,
+): boolean {
+    if (
+        !nav ||
+        typeof nav.share !== 'function' ||
+        typeof nav.canShare !== 'function' ||
+        typeof File === 'undefined'
+    ) {
+        return false;
+    }
+
+    try {
+        const probe = new File([''], 'probe.pdf', {
+            type: 'application/pdf',
+        });
+
+        return nav.canShare({ files: [probe] });
+    } catch {
+        return false;
+    }
+}
