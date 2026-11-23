@@ -12,6 +12,7 @@ import { PriorityBadge } from '@/components/priority-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
+import { withReturnTo } from '@/lib/navigation';
 import {
     create as salesOrdersCreate,
     index as salesOrdersIndex,
@@ -87,8 +88,6 @@ export default function SalesOrdersIndex({
             label: 'Fecha requerida',
         },
     ];
-
-    const title = can.manage ? 'Gestión de pedidos' : 'Pedidos';
 
     const columns: DataListingColumn<SalesOrderRow>[] = [
         {
@@ -169,11 +168,11 @@ export default function SalesOrdersIndex({
 
     return (
         <>
-            <Head title={title} />
+            <Head title="Pedidos" />
 
             <div className="space-y-6 p-6">
                 <PageHeader
-                    title={title}
+                    title="Pedidos"
                     description={
                         can.manage
                             ? 'Administración de todos los pedidos de clientes.'
@@ -201,7 +200,9 @@ export default function SalesOrdersIndex({
                 <DataListing
                     rows={orders.data}
                     rowKey={(order) => order.id}
-                    rowHref={(order) => salesOrdersShow(order.id).url}
+                    rowHref={(order) =>
+                        withReturnTo(salesOrdersShow(order.id).url)
+                    }
                     columns={columns}
                     empty={
                         <>

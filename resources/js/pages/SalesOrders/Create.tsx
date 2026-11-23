@@ -24,6 +24,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { clearListErrors } from '@/lib/form-errors';
 import { UNITS_MAX_DIGITS } from '@/lib/number-types';
+import { newRowKey } from '@/lib/row-key';
 import {
     create as salesOrdersCreate,
     index as salesOrdersIndex,
@@ -51,6 +52,7 @@ type ProductOption = {
 };
 
 type ItemRow = {
+    row_key: string;
     product_id: string;
     product_variant_id: string;
     quantity: string;
@@ -60,21 +62,27 @@ type ItemRow = {
 type Props = {
     clients: ClientOption[];
     products: ProductOption[];
+    priorityOptions: { value: string; label: string }[];
 };
 
-export default function SalesOrdersCreate({ clients, products }: Props) {
-    const { data, setData, post, processing, errors, clearErrors } = useForm({
-        client_id: '',
-        client_business_name: '',
-        client_nit: '',
-        client_contact_name: '',
-        client_phone: '',
-        priority: 'medium',
-        required_date: '',
-        shipping_address: '',
-        notes: '',
-        items: [] as ItemRow[],
-    });
+export default function SalesOrdersCreate({
+    clients,
+    products,
+    priorityOptions,
+}: Props) {
+    const { data, setData, post, processing, errors, clearErrors, transform } =
+        useForm({
+            client_id: '',
+            client_business_name: '',
+            client_nit: '',
+            client_contact_name: '',
+            client_phone: '',
+            priority: 'medium',
+            required_date: '',
+            shipping_address: '',
+            notes: '',
+            items: [] as ItemRow[],
+        });
 
     // El cliente elegido: la nota de la dirección cambia si tiene una registrada o no (D-CLI3).
     const selectedClient = clients.find((c) => String(c.id) === data.client_id);
@@ -92,6 +100,16 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         // Las cantidades son unidades enteras (<IntegerInput>): se envían como se escribieron.
+        // `row_key` solo sirve como `key` de React y no se envía al servidor.
+        transform((formData) => ({
+            ...formData,
+            items: formData.items.map((item) => ({
+                product_id: item.product_id,
+                product_variant_id: item.product_variant_id,
+                quantity: item.quantity,
+                color: item.color,
+            })),
+        }));
         post(salesOrderStore().url);
     };
 
@@ -99,6 +117,7 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
         setData('items', [
             ...data.items,
             {
+                row_key: newRowKey(),
                 product_id: '',
                 product_variant_id: '',
                 quantity: '',
@@ -245,15 +264,16 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="low">
-                                                    Baja
-                                                </SelectItem>
-                                                <SelectItem value="medium">
-                                                    Media
-                                                </SelectItem>
-                                                <SelectItem value="high">
-                                                    Alta
-                                                </SelectItem>
+                                                {priorityOptions.map(
+                                                    (option) => (
+                                                        <SelectItem
+                                                            key={option.value}
+                                                            value={option.value}
+                                                        >
+                                                            {option.label}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     )}
@@ -398,7 +418,7 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
 
                                         return (
                                             <FormLineItem
-                                                key={index}
+                                                key={item.row_key}
                                                 index={index}
                                                 onRemove={() =>
                                                     removeItem(index)
@@ -523,7 +543,7 @@ export default function SalesOrdersCreate({ clients, products }: Props) {
                     </Card>
 
                     <FormActions
-                        submitLabel="Guardar Pedido"
+                        submitLabel="Guardar pedido"
                         processing={processing}
                         cancelHref={salesOrdersIndex().url}
                     />

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\SalesOrderPriority;
 use App\Enums\SystemRole;
 use App\Models\Client;
 use App\Models\Product;
@@ -12,6 +13,7 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Support\EnumOptions;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -140,15 +142,40 @@ it('allows comercial to view their own orders', function () {
     $user = User::factory()->create();
     $user->assignRole(SystemRole::Commercial->value);
 
-    $order = SalesOrder::factory()->create(['created_by' => $user->id]);
+    $order = SalesOrder::factory()->create([
+        'created_by' => $user->id,
+        'required_date' => '2026-12-01',
+        'shipping_address' => 'Calle 10 # 20-30, Cali',
+    ]);
 
     $this->actingAs($user)
         ->get(route('sales-orders.index'))
         ->assertOk();
 
     $this->actingAs($user)
-        ->get(route('sales-orders.show', $order))
-        ->assertOk();
+        ->get(route('sales-orders.show', ['sales_order' => $order, 'return_to' => '/sales-orders?status=pending']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('SalesOrders/Show')
+            ->where('order.required_date', '2026-12-01')
+            ->where('order.shipping_address', 'Calle 10 # 20-30, Cali')
+            ->where('order.creator.name', $user->name)
+            ->where('priorityOptions', EnumOptions::for(SalesOrderPriority::cases()))
+            ->where('returnTo', '/sales-orders?status=pending')
+        );
+});
+
+it('sends priority options on sales order create', function () {
+    $user = User::factory()->create();
+    $user->assignRole(SystemRole::Commercial->value);
+
+    $this->actingAs($user)
+        ->get(route('sales-orders.create'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('SalesOrders/Create')
+            ->where('priorityOptions', EnumOptions::for(SalesOrderPriority::cases()))
+        );
 });
 
 it('prevents comercial from viewing other users orders', function () {
