@@ -1,7 +1,7 @@
 # Imágenes base fijadas por versión exacta y digest: la misma compilación da siempre el mismo resultado, aunque Docker Hub
 # republique la etiqueta. Dependabot (ecosistema docker) propone las subidas: no volver a etiquetas flotantes como
 # `8.3-fpm` o `latest`. Node va sobre trixie, la misma versión de Debian que la imagen de PHP a la que se copia.
-FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS node_base
+FROM node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64 AS node_base
 FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer_bin
 
 # Stage 1: Build environment and Composer dependencies
