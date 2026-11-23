@@ -314,6 +314,10 @@ class ProductionOrderController extends Controller
             // No se guardó nada: el formulario muestra lo que falta y, si lo aceptan, se reenvía con la confirmación.
             Inertia::flash('stockShortages', $exception->shortages);
 
+            if ($exception->productShortages !== []) {
+                Inertia::flash('productShortages', $exception->productShortages);
+            }
+
             return back();
         }
 

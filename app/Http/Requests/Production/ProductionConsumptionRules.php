@@ -152,9 +152,10 @@ trait ProductionConsumptionRules
     }
 
     /**
-     * El motivo de cada materia prima que se pasó de lo planeado más allá de la tolerancia, por id de la materia prima.
-     * Cuáles lo necesitan lo decide `ProductionOrderConsumptionCheck` en la acción, con lo real ya convertido: aquí solo
-     * la forma. Los de una materia prima que no lo necesita se ignoran.
+     * El motivo de cada materia prima que se pasó de lo planeado más allá de la tolerancia, por id de la materia prima, y
+     * el de cada producto terminado, por id del producto (llave aparte: los ids no chocan). Cuáles lo necesitan lo decide
+     * `ProductionOrderConsumptionCheck` en la acción, con lo real ya convertido: aquí solo la forma. Los de uno que no lo
+     * necesita se ignoran.
      *
      * @return array<string, list<string>>
      */
@@ -163,6 +164,8 @@ trait ProductionConsumptionRules
         return [
             'overconsumption_reasons' => ['nullable', 'array'],
             'overconsumption_reasons.*' => ['nullable', 'string', 'max:'.ProductionOrderConsumptionCheck::REASON_MAX_LENGTH],
+            'product_overconsumption_reasons' => ['nullable', 'array'],
+            'product_overconsumption_reasons.*' => ['nullable', 'string', 'max:'.ProductionOrderConsumptionCheck::REASON_MAX_LENGTH],
         ];
     }
 
@@ -378,6 +381,8 @@ trait ProductionConsumptionRules
             'batch_consumptions.*.leftover_kg' => 'kilos que quedaron',
             'overconsumption_reasons' => 'motivos del sobreconsumo',
             'overconsumption_reasons.*' => 'motivo del sobreconsumo',
+            'product_overconsumption_reasons' => 'motivos del sobreconsumo de producto',
+            'product_overconsumption_reasons.*' => 'motivo del sobreconsumo',
         ];
     }
 }

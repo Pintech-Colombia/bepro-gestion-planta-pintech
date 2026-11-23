@@ -27,6 +27,8 @@ import type {
     ProductionOrderOverconsumption,
     ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
+    ProductionOrderProductConsumptionReason,
+    ProductionOrderProductOverconsumption,
     ProductionOrderSetData,
     RawMaterialOption,
     VariantOption,
@@ -61,6 +63,9 @@ type ResultsCardProps = {
     /** Lo que el servidor marca como pasado de lo planeado, y los motivos guardados. */
     overconsumption?: ProductionOrderOverconsumption[];
     consumptionReasons?: ProductionOrderConsumptionReason[];
+    /** Lo mismo para los productos terminados de la fórmula (en kilos, motivos aparte). */
+    productOverconsumption?: ProductionOrderProductOverconsumption[];
+    productConsumptionReasons?: ProductionOrderProductConsumptionReason[];
     /** Los productos que la orden lleva como ingrediente: renglones de la tabla de consumo. */
     productRows?: ProductTableRow[];
     onProductActualChange?: (index: number, value: string) => void;
@@ -87,6 +92,8 @@ export function ResultsCard({
     canPrintLabels = false,
     overconsumption = [],
     consumptionReasons = [],
+    productOverconsumption = [],
+    productConsumptionReasons = [],
     productRows = [],
     onProductActualChange,
 }: ResultsCardProps) {
@@ -97,6 +104,18 @@ export function ResultsCard({
             materialCodes.set(
                 row.raw_material_id,
                 row.raw_material_name ?? `MP #${row.raw_material_id}`,
+            );
+        }
+    }
+
+    // El nombre de cada producto de la orden por id, en el orden de la tabla (agregados al final).
+    const productNames = new Map<number, string>();
+
+    for (const row of productRows) {
+        if (!productNames.has(row.line.product_id)) {
+            productNames.set(
+                row.line.product_id,
+                row.line.product_name ?? `PT #${row.line.product_id}`,
             );
         }
     }
@@ -221,14 +240,45 @@ export function ResultsCard({
                         isReadOnly={isReadOnly}
                         showCosts={showCosts}
                         overconsumption={overconsumption}
+                        productOverconsumption={productOverconsumption}
                         productRows={productRows}
                         onProductActualChange={onProductActualChange}
                         errors={errors as Record<string, string | undefined>}
                     />
                     <OverconsumptionReasons
-                        overconsumption={overconsumption}
-                        storedReasons={consumptionReasons}
-                        codes={materialCodes}
+                        field="overconsumption_reasons"
+                        title="Consumo por encima de lo planeado"
+                        description="Por materia prima, sumando todos sus pasos y ajustes de línea."
+                        rows={overconsumption.map((row) => ({
+                            ...row,
+                            id: row.raw_material_id,
+                            label: row.code,
+                        }))}
+                        storedIds={consumptionReasons.map(
+                            (reason) => reason.raw_material_id,
+                        )}
+                        labels={materialCodes}
+                        fallbackLabel={(id) => `MP #${id}`}
+                        data={data}
+                        setData={setData}
+                        errors={errors as Record<string, string | undefined>}
+                        isReadOnly={isReadOnly}
+                        showCosts={showCosts}
+                    />
+                    <OverconsumptionReasons
+                        field="product_overconsumption_reasons"
+                        title="Producto terminado por encima de lo planeado"
+                        description="Por producto, sumando todas sus líneas, en kilos."
+                        rows={productOverconsumption.map((row) => ({
+                            ...row,
+                            id: row.product_id,
+                            label: row.name,
+                        }))}
+                        storedIds={productConsumptionReasons.map(
+                            (reason) => reason.product_id,
+                        )}
+                        labels={productNames}
+                        fallbackLabel={(id) => `PT #${id}`}
                         data={data}
                         setData={setData}
                         errors={errors as Record<string, string | undefined>}

@@ -72,7 +72,14 @@ class CompleteProductionOrderAction
             // El % con que se evalúa el consumo queda en la orden: si cambia después, la completada sigue mostrando
             // lo que se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
             $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
-            $this->consumptionCheck->recordReasons($lockedOrder, $data['ingredients'], $data['overconsumption_reasons'] ?? [], $userId);
+            $this->consumptionCheck->recordReasons(
+                $lockedOrder,
+                $data['ingredients'],
+                $data['overconsumption_reasons'] ?? [],
+                $userId,
+                $data['product_lines'] ?? [],
+                $data['product_overconsumption_reasons'] ?? [],
+            );
 
             // Lo real gastado de cada producto y, por lote, lo que quedó pesado. Toda línea de la fórmula con alguna fuente.
             $this->batchSources->recordUsage($lockedOrder, $data['batch_consumptions'] ?? [], $data['product_lines'] ?? []);

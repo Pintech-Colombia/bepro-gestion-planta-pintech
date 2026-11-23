@@ -32,7 +32,11 @@ import {
     create as productionOrderCreate,
     index as productionOrderIndex,
 } from '@/routes/production-orders';
-import type { StockShortage, VariantOption } from '@/types/production-orders';
+import type {
+    ProductShortage,
+    StockShortage,
+    VariantOption,
+} from '@/types/production-orders';
 
 type FormulaOption = {
     id: number;
@@ -75,6 +79,9 @@ export default function ProductionOrdersCreate({
         });
 
     const [shortages, setShortages] = useState<StockShortage[]>([]);
+    const [productShortages, setProductShortages] = useState<ProductShortage[]>(
+        [],
+    );
     const [shortagesOpen, setShortagesOpen] = useState(false);
 
     // Cuando cambia el producto, actualizamos las fórmulas disponibles
@@ -123,9 +130,10 @@ export default function ProductionOrdersCreate({
             confirm_stock_shortage: confirmStockShortage,
         }));
         post(productionOrderStore().url, {
-            onFlash: ({ stockShortages }) => {
-                if (stockShortages?.length) {
-                    setShortages(stockShortages);
+            onFlash: ({ stockShortages, productShortages }) => {
+                if (stockShortages?.length || productShortages?.length) {
+                    setShortages(stockShortages ?? []);
+                    setProductShortages(productShortages ?? []);
                     setShortagesOpen(true);
                 }
             },
@@ -517,6 +525,7 @@ export default function ProductionOrdersCreate({
                 <StockShortageDialog
                     open={shortagesOpen}
                     shortages={shortages}
+                    productShortages={productShortages}
                     processing={processing}
                     onCancel={() => setShortagesOpen(false)}
                     onConfirm={() => createOrder(true)}

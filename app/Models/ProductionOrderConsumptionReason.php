@@ -14,23 +14,27 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
- * El motivo por el que una materia prima se pasó de lo planeado en una OP, más allá de la tolerancia de consumo
- * (`ProductionOrderConsumptionCheck`). Uno por OP y materia prima: lo escribe quien envía a revisión o completa.
+ * El motivo por el que una materia prima, o un producto terminado que la OP lleva como ingrediente, se pasó de lo
+ * planeado más allá de la tolerancia de consumo (`ProductionOrderConsumptionCheck`). Uno por OP y materia prima, o por
+ * OP y producto (nunca los dos): lo escribe quien envía a revisión o completa.
  *
  * @property int $id
  * @property int $production_order_id
- * @property int $raw_material_id
+ * @property int|null $raw_material_id
+ * @property int|null $product_id
  * @property string $reason
  * @property int $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read ProductionOrder $productionOrder
- * @property-read RawMaterial $rawMaterial
+ * @property-read RawMaterial|null $rawMaterial
+ * @property-read Product|null $product
  * @property-read User $createdBy
  */
 #[Fillable([
     'production_order_id',
     'raw_material_id',
+    'product_id',
     'reason',
     'created_by',
 ])]
@@ -48,20 +52,22 @@ class ProductionOrderConsumptionReason extends Model
         return LogOptions::defaults()
             ->useLogName('ordenes_produccion')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['production_order_id', 'raw_material_id', 'reason'])
+            ->logOnly(['production_order_id', 'raw_material_id', 'product_id', 'reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
 
-    /** «OP-2026-0001 · S-7»: se entiende y se busca en el log sin cruzar ids. */
+    /** «OP-2026-0001 · S-7» o «OP-2026-0001 · ESMALTE BLANCO»: se entiende y se busca en el log sin cruzar ids. */
     protected function auditIdentifier(): Attribute
     {
         return Attribute::get(function (): string {
-            $this->loadMissing(['productionOrder:id,order_number', 'rawMaterial:id,code']);
+            $this->loadMissing(['productionOrder:id,order_number', 'rawMaterial:id,code', 'product:id,name']);
 
             return implode(' · ', [
                 $this->productionOrder->order_number ?? "OP #{$this->production_order_id}",
-                $this->rawMaterial->code ?? "MP #{$this->raw_material_id}",
+                $this->product_id !== null
+                    ? ($this->product->name ?? "PT #{$this->product_id}")
+                    : ($this->rawMaterial->code ?? "MP #{$this->raw_material_id}"),
             ]);
         });
     }
@@ -74,6 +80,11 @@ class ProductionOrderConsumptionReason extends Model
     public function rawMaterial(): BelongsTo
     {
         return $this->belongsTo(RawMaterial::class, 'raw_material_id');
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'product_id');
     }
 
     public function createdBy(): BelongsTo

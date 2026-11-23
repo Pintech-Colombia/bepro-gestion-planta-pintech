@@ -11,11 +11,13 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/ui/spinner';
-import type { StockShortage } from '@/types/production-orders';
+import type { ProductShortage, StockShortage } from '@/types/production-orders';
 
 type StockShortageDialogProps = {
     open: boolean;
     shortages: StockShortage[];
+    /** Lo que falta del producto terminado de la fórmula, de sus saldos y lotes libres. */
+    productShortages?: ProductShortage[];
     /** Mientras se crea la orden, el diálogo sigue abierto y no se puede cerrar. */
     processing: boolean;
     onCancel: () => void;
@@ -48,13 +50,49 @@ function ShortageFigure({
     );
 }
 
+/** Requerido, disponible y lo que falta, en tres columnas: igual para una materia prima y un producto. */
+function ShortageFigures({
+    required,
+    available,
+    missing,
+    unit,
+}: {
+    required: string;
+    available: string;
+    missing: string;
+    unit: string;
+}) {
+    return (
+        <dl className="grid grid-cols-3 gap-2">
+            <ShortageFigure label="Requerido" value={required} unit={unit} />
+            <ShortageFigure label="Disponible" value={available} unit={unit} />
+            <ShortageFigure
+                label="Falta"
+                value={missing}
+                unit={unit}
+                className="font-medium text-warning-text"
+            />
+        </dl>
+    );
+}
+
+function GroupTitle({ children }: { children: string }) {
+    return (
+        <li className="pt-3 text-xs font-medium tracking-wide text-muted-foreground uppercase first:pt-0">
+            {children}
+        </li>
+    );
+}
+
 /**
- * Avisa, antes de crear una orden, de todas las materias primas que no alcanzan. No impide crearla: la orden puede usar
- * saldo y gastar menos de lo que pide la fórmula, y lo que no deja completarla es el consumo real.
+ * Avisa, antes de crear una orden, de todas las materias primas y los productos terminados de la fórmula que no alcanzan
+ * en la bodega. No impide crearla: la orden puede usar saldo y gastar menos de lo que pide la fórmula, y lo que no deja
+ * completarla es el consumo real (y, en un producto, que no tenga de dónde salir).
  */
 export function StockShortageDialog({
     open,
     shortages,
+    productShortages = [],
     processing,
     onCancel,
     onConfirm,
@@ -72,7 +110,7 @@ export function StockShortageDialog({
             <AlertDialogContent className="flex max-h-dvh flex-col">
                 <AlertDialogHeader>
                     <AlertDialogTitle>
-                        Falta materia prima para esta orden
+                        Falta inventario para esta orden
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                         Puedes crearla, pero no se podrá completar hasta que
@@ -81,35 +119,62 @@ export function StockShortageDialog({
                 </AlertDialogHeader>
 
                 <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto text-sm">
+                    {shortages.length > 0 && productShortages.length > 0 && (
+                        <GroupTitle>Materia prima</GroupTitle>
+                    )}
                     {shortages.map((shortage) => (
                         <li key={shortage.code} className="space-y-2 py-3">
                             <p className="font-mono font-medium break-words">
                                 {shortage.code}
                             </p>
-                            <dl className="grid grid-cols-3 gap-2">
-                                <ShortageFigure
-                                    label="Requerido"
-                                    value={shortage.required}
-                                    unit={shortage.unit}
-                                />
-                                <ShortageFigure
-                                    label="Disponible"
-                                    value={shortage.available}
-                                    unit={shortage.unit}
-                                />
-                                <ShortageFigure
-                                    label="Falta"
-                                    value={shortage.missing}
-                                    unit={shortage.unit}
-                                    className="font-medium text-warning-text"
-                                />
-                            </dl>
+                            <ShortageFigures
+                                required={shortage.required}
+                                available={shortage.available}
+                                missing={shortage.missing}
+                                unit={shortage.unit}
+                            />
                             {!shortage.has_reference_price && (
                                 <p className="text-xs text-muted-foreground">
                                     Sin precio de referencia: lo que falta no
                                     suma al costo estimado.
                                 </p>
                             )}
+                        </li>
+                    ))}
+                    {productShortages.length > 0 && (
+                        <GroupTitle>Producto terminado</GroupTitle>
+                    )}
+                    {productShortages.map((shortage) => (
+                        <li
+                            key={`pt-${shortage.product_id}`}
+                            className="space-y-2 py-3"
+                        >
+                            <p className="font-medium break-words">
+                                {shortage.name}
+                            </p>
+                            <ShortageFigures
+                                required={shortage.required}
+                                available={shortage.available}
+                                missing={shortage.missing}
+                                unit={shortage.unit}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Libre en la bodega: saldos{' '}
+                                <FormattedNumber
+                                    value={shortage.remnants_kg}
+                                    kind="quantity"
+                                    className="tabular-nums"
+                                />{' '}
+                                kg · lotes{' '}
+                                <FormattedNumber
+                                    value={shortage.lots_kg}
+                                    kind="quantity"
+                                    className="tabular-nums"
+                                />{' '}
+                                kg
+                                {shortage.has_unknown_kg &&
+                                    '. Un lote no tiene peso por galón: sus kilos no suman.'}
+                            </p>
                         </li>
                     ))}
                 </ul>

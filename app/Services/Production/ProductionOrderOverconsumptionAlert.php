@@ -26,7 +26,8 @@ class ProductionOrderOverconsumptionAlert
 
     /**
      * Al completar una OP, una sola alerta con todas las materias primas que se pasaron de lo planeado más allá de la
-     * tolerancia, ajustes de línea incluidos (`ProductionOrderConsumptionCheck`). Lleva el costo del exceso y el margen
+     * tolerancia, ajustes de línea incluidos, y los productos terminados de la fórmula que se pasaron
+     * (`ProductionOrderConsumptionCheck`). Lleva el costo del exceso y el margen
      * real por presentación de la OP (`ProductionOrderCostSummary`): el admin decide si revisa la planta, ajusta la
      * fórmula o sube el margen. Nada se reajusta solo.
      *
@@ -34,7 +35,8 @@ class ProductionOrderOverconsumptionAlert
      */
     public function evaluate(ProductionOrder $order): void
     {
-        $rows = $this->consumptionCheck->forOrder($order);
+        // Materias primas y productos terminados de la fórmula, con la misma tolerancia.
+        $rows = [...$this->consumptionCheck->forOrder($order), ...$this->consumptionCheck->productsForOrder($order)];
 
         if ($rows === []) {
             return;
@@ -58,7 +60,7 @@ class ProductionOrderOverconsumptionAlert
                 $detail .= ', +'.NumberFormat::cost($row['extra_cost']);
             }
 
-            return sprintf('%s +%s (%s)', $row['code'] ?? "MP #{$row['raw_material_id']}", $this->consumptionCheck->excessLabel($row), $detail);
+            return sprintf('%s +%s (%s)', $this->consumptionCheck->label($row), $this->consumptionCheck->excessLabel($row), $detail);
         })->implode('; ');
 
         $message = sprintf('%s · %s: %s.', $order->order_number, $order->productDisplayName(), $materials);

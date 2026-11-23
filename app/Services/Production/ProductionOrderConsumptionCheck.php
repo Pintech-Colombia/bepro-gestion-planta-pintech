@@ -9,8 +9,10 @@ use App\Models\ProductionOrder;
 use App\Models\ProductionOrderConsumptionReason;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
+use App\Models\ProductionOrderProductLine;
 use App\Services\DecimalCalculator;
 use App\Support\NumberFormat;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -26,6 +28,11 @@ use Illuminate\Validation\ValidationException;
  * El motivo se pide solo si lo real **sin ajustes** pasa el límite: el exceso que viene de ajustes de línea ya tiene el
  * suyo. La alerta cuenta todo (`exceeds`), porque el costo es real.
  *
+ * Lo mismo para el producto terminado que la OP lleva como ingrediente (PR E2a de PT consumible), aparte y en kilos: lo
+ * gastado de todas sus líneas contra lo planeado de todas sus líneas, con el mismo %. Un producto sin nada planeado (solo
+ * líneas agregadas en la orden) no se evalúa. No tiene ajustes de línea: si se pasa, pide motivo. Su motivo va en
+ * `product_overconsumption_reasons.<id del producto>`, una llave aparte para que un id de MP y uno de producto no choquen.
+ *
  * @phpstan-type ConsumptionRow array{
  *   raw_material_id: int,
  *   code: string|null,
@@ -39,6 +46,18 @@ use Illuminate\Validation\ValidationException;
  *   exceeds: bool,
  *   needs_reason: bool
  * }
+ * @phpstan-type ProductConsumptionRow array{
+ *   product_id: int,
+ *   name: string|null,
+ *   unit: string,
+ *   planned: string,
+ *   consumed: string,
+ *   limit: string,
+ *   tolerance_percentage: string,
+ *   excess_percentage: string,
+ *   exceeds: bool,
+ *   needs_reason: bool
+ * }
  */
 class ProductionOrderConsumptionCheck
 {
@@ -46,6 +65,7 @@ class ProductionOrderConsumptionCheck
 
     public function __construct(
         private readonly DecimalCalculator $calculator,
+        private readonly ProductLineCosts $productLineCosts,
     ) {}
 
     /** El % vigente para las OP que se evalúan ahora (`config/production.php`). */
@@ -67,7 +87,6 @@ class ProductionOrderConsumptionCheck
         $order->loadMissing(['details.rawMaterial.unitOfMeasure', 'lineAdjustments']);
 
         $tolerance = $tolerancePercentage ?? $this->currentTolerancePercentage();
-        $factor = $this->calculator->add('1', $this->calculator->div($tolerance, '100', 8), 8);
 
         $adjustedByMaterial = [];
         foreach ($order->lineAdjustments as $adjustment) {
@@ -102,27 +121,87 @@ class ProductionOrderConsumptionCheck
             }
 
             $consumed = $this->calculator->add($material['actual'], $adjustedByMaterial[$id] ?? '0', 4);
-            $limit = $this->calculator->mul($material['planned'], $factor, 8);
 
             $rows[] = [
                 'raw_material_id' => $id,
                 'code' => $material['code'],
                 'unit' => $material['unit'],
-                'planned' => $material['planned'],
-                'consumed' => $consumed,
+                ...$this->measure($material['planned'], $consumed, $material['actual'], $tolerance),
                 'consumed_without_adjustments' => $material['actual'],
-                'limit' => $this->calculator->round($limit, 4),
-                'tolerance_percentage' => $tolerance,
-                'excess_percentage' => $this->calculator->round(
-                    $this->calculator->mul($this->calculator->div($this->calculator->sub($consumed, $material['planned'], 8), $material['planned'], 8), '100', 8),
-                    2,
-                ),
-                'exceeds' => $this->calculator->cmp($consumed, $limit, 8) > 0,
-                'needs_reason' => $this->calculator->cmp($material['actual'], $limit, 8) > 0,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Cada producto planeado de la orden, en kilos, con lo gastado y si se pasa.
+     *
+     * @param  array<int, string>|null  $actualByLine  id de la línea de producto => lo gastado en kilos. Sin él, lo guardado
+     *                                                 (`actual_kg`; vacío cuenta como 0).
+     * @param  string|null  $tolerancePercentage  sin él, el vigente
+     * @return list<ProductConsumptionRow>
+     */
+    public function evaluateProducts(ProductionOrder $order, ?array $actualByLine = null, ?string $tolerancePercentage = null): array
+    {
+        $order->loadMissing('productLines.product:id,name');
+
+        $tolerance = $tolerancePercentage ?? $this->currentTolerancePercentage();
+
+        /** @var array<int, array{name: string|null, planned: string, actual: string}> $products */
+        $products = [];
+        foreach ($order->productLines as $line) {
+            /** @var ProductionOrderProductLine $line */
+            $id = (int) $line->product_id;
+            $actual = $actualByLine !== null && array_key_exists((int) $line->id, $actualByLine)
+                ? (string) $actualByLine[(int) $line->id]
+                : (string) ($line->actual_kg ?? '0');
+
+            $products[$id] ??= ['name' => $line->product?->name, 'planned' => '0', 'actual' => '0'];
+            $products[$id]['planned'] = $this->calculator->add($products[$id]['planned'], (string) ($line->planned_kg ?? '0'), 4);
+            $products[$id]['actual'] = $this->calculator->add($products[$id]['actual'], $actual === '' ? '0' : $actual, 4);
+        }
+
+        $rows = [];
+        foreach ($products as $id => $product) {
+            if (! $this->calculator->isPositive($product['planned'])) {
+                continue;
+            }
+
+            $rows[] = [
+                'product_id' => $id,
+                'name' => $product['name'],
+                'unit' => 'kg',
+                ...$this->measure($product['planned'], $product['actual'], $product['actual'], $tolerance),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * El límite, el exceso y si se pasa: una sola cuenta para materias primas y productos. `$consumedForReason` es lo que
+     * pide motivo (en una MP, sin sus ajustes de línea).
+     *
+     * @return array{planned: string, consumed: string, limit: string, tolerance_percentage: string, excess_percentage: string, exceeds: bool, needs_reason: bool}
+     */
+    private function measure(string $planned, string $consumed, string $consumedForReason, string $tolerance): array
+    {
+        $factor = $this->calculator->add('1', $this->calculator->div($tolerance, '100', 8), 8);
+        $limit = $this->calculator->mul($planned, $factor, 8);
+
+        return [
+            'planned' => $planned,
+            'consumed' => $consumed,
+            'limit' => $this->calculator->round($limit, 4),
+            'tolerance_percentage' => $tolerance,
+            'excess_percentage' => $this->calculator->round(
+                $this->calculator->mul($this->calculator->div($this->calculator->sub($consumed, $planned, 8), $planned, 8), '100', 8),
+                2,
+            ),
+            'exceeds' => $this->calculator->cmp($consumed, $limit, 8) > 0,
+            'needs_reason' => $this->calculator->cmp($consumedForReason, $limit, 8) > 0,
+        ];
     }
 
     /**
@@ -134,20 +213,14 @@ class ProductionOrderConsumptionCheck
      */
     public function forOrder(ProductionOrder $order): array
     {
-        $tolerance = match ($order->status) {
-            ProductionOrderStatus::Completed => $order->consumption_tolerance_percentage !== null
-                ? (string) $order->consumption_tolerance_percentage
-                : null,
-            ProductionOrderStatus::PendingReview => $this->currentTolerancePercentage(),
-            default => null,
-        };
+        $tolerance = $this->shownTolerance($order);
 
         if ($tolerance === null) {
             return [];
         }
 
         $order->loadMissing('consumptionReasons');
-        $reasons = $order->consumptionReasons->pluck('reason', 'raw_material_id');
+        $reasons = $order->consumptionReasons->whereNotNull('raw_material_id')->pluck('reason', 'raw_material_id');
         $isCompleted = $order->status === ProductionOrderStatus::Completed;
 
         return array_values(array_map(
@@ -161,53 +234,127 @@ class ProductionOrderConsumptionCheck
     }
 
     /**
-     * Enviar a revisión y completar: con lo real ya convertido, 422 si a una materia prima que se pasa le falta el
-     * motivo (`overconsumption_reasons.<id de la materia prima>`); si no, guarda los motivos. El de una materia prima
-     * que ya no lo necesita se borra. Corre dentro de la transacción de la acción, con la orden bloqueada.
+     * Lo mismo que `forOrder` para los productos: los que se pasan, con su motivo y, completada, el costo del exceso.
+     *
+     * @return list<ProductConsumptionRow&array{reason: string|null, extra_cost: string|null}>
+     */
+    public function productsForOrder(ProductionOrder $order): array
+    {
+        $tolerance = $this->shownTolerance($order);
+
+        if ($tolerance === null) {
+            return [];
+        }
+
+        $order->loadMissing('consumptionReasons');
+        $reasons = $order->consumptionReasons->whereNotNull('product_id')->pluck('reason', 'product_id');
+        $isCompleted = $order->status === ProductionOrderStatus::Completed;
+
+        return array_values(array_map(
+            fn (array $row): array => [
+                ...$row,
+                'reason' => $reasons->get($row['product_id']),
+                'extra_cost' => $isCompleted ? $this->productExtraCost($order, $row) : null,
+            ],
+            array_filter($this->evaluateProducts($order, null, $tolerance), fn (array $row): bool => $row['exceeds']),
+        ));
+    }
+
+    /**
+     * Enviar a revisión y completar: con lo real ya convertido, 422 si a una materia prima o a un producto que se pasa
+     * le falta el motivo (`overconsumption_reasons.<id de la materia prima>`, `product_overconsumption_reasons.<id del
+     * producto>`); si no, guarda los motivos. El de uno que ya no lo necesita se borra. Corre dentro de la transacción de
+     * la acción, con la orden bloqueada.
      *
      * @param  array<int|string, array<string, mixed>>  $ingredients  las líneas enviadas, con `actual_quantity` ya en la
      *                                                                unidad de la materia prima (`ProductionOrderLineUnits`)
      * @param  array<int|string, mixed>  $reasons  id de la materia prima => motivo
+     * @param  array<int|string, array<string, mixed>>  $productLines  las líneas de producto enviadas: id, actual_kg
+     * @param  array<int|string, mixed>  $productReasons  id del producto => motivo
      *
      * @throws ValidationException si falta un motivo
      */
-    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId): void
+    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId, array $productLines = [], array $productReasons = []): void
     {
         $actualByLine = collect($ingredients)
             ->mapWithKeys(fn (array $row): array => [(int) $row['id'] => (string) $row['actual_quantity']])
             ->all();
-        $needing = array_values(array_filter($this->evaluate($order, $actualByLine), fn (array $row): bool => $row['needs_reason']));
-        $written = [];
+        $actualByProductLine = collect($productLines)
+            ->mapWithKeys(fn (array $row): array => [(int) $row['id'] => (string) ($row['actual_kg'] ?? '0')])
+            ->all();
         $errors = [];
 
-        foreach ($needing as $row) {
-            $reason = trim((string) ($reasons[$row['raw_material_id']] ?? ''));
-
-            if ($reason === '') {
-                $errors["overconsumption_reasons.{$row['raw_material_id']}"] = $this->reasonRequiredMessage($row);
-
-                continue;
-            }
-
-            $written[$row['raw_material_id']] = $reason;
-        }
+        $writtenMaterials = $this->typedReasons(
+            array_filter($this->evaluate($order, $actualByLine), fn (array $row): bool => $row['needs_reason']),
+            'raw_material_id',
+            'overconsumption_reasons',
+            $reasons,
+            $errors,
+        );
+        $writtenProducts = $this->typedReasons(
+            array_filter($this->evaluateProducts($order, $actualByProductLine), fn (array $row): bool => $row['needs_reason']),
+            'product_id',
+            'product_overconsumption_reasons',
+            $productReasons,
+            $errors,
+        );
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
 
-        $existing = $order->consumptionReasons()->get()->keyBy('raw_material_id');
+        $stored = $order->consumptionReasons()->get();
+        $this->saveReasons($order, $stored->whereNotNull('raw_material_id')->keyBy('raw_material_id'), 'raw_material_id', $writtenMaterials, $userId);
+        $this->saveReasons($order, $stored->whereNotNull('product_id')->keyBy('product_id'), 'product_id', $writtenProducts, $userId);
 
-        foreach ($existing as $rawMaterialId => $stored) {
-            /** @var ProductionOrderConsumptionReason $stored */
-            if (! array_key_exists((int) $rawMaterialId, $written)) {
-                // Uno por uno, para que la auditoría registre cada borrado.
+        $order->unsetRelation('consumptionReasons');
+    }
+
+    /**
+     * Los motivos escritos de lo que lo necesita, por id; un 422 por cada uno que falta.
+     *
+     * @param  array<int, array<string, mixed>>  $needing
+     * @param  array<int|string, mixed>  $typed
+     * @param  array<string, string>  $errors
+     * @return array<int, string>
+     */
+    private function typedReasons(array $needing, string $idKey, string $field, array $typed, array &$errors): array
+    {
+        $written = [];
+
+        foreach ($needing as $row) {
+            $id = (int) $row[$idKey];
+            $reason = trim((string) ($typed[$id] ?? ''));
+
+            if ($reason === '') {
+                $errors["{$field}.{$id}"] = $this->reasonRequiredMessage($row);
+
+                continue;
+            }
+
+            $written[$id] = $reason;
+        }
+
+        return $written;
+    }
+
+    /**
+     * Guarda los motivos escritos y borra los que ya no se necesitan, uno por uno para que la auditoría registre cada
+     * cambio.
+     *
+     * @param  Collection<int|string, ProductionOrderConsumptionReason>  $existing
+     * @param  array<int, string>  $written
+     */
+    private function saveReasons(ProductionOrder $order, Collection $existing, string $idKey, array $written, int $userId): void
+    {
+        foreach ($existing as $id => $stored) {
+            if (! array_key_exists((int) $id, $written)) {
                 $stored->delete();
             }
         }
 
-        foreach ($written as $rawMaterialId => $reason) {
-            $stored = $existing->get($rawMaterialId);
+        foreach ($written as $id => $reason) {
+            $stored = $existing->get($id);
 
             if ($stored !== null) {
                 $stored->update(['reason' => $reason]);
@@ -216,13 +363,26 @@ class ProductionOrderConsumptionCheck
             }
 
             $order->consumptionReasons()->create([
-                'raw_material_id' => $rawMaterialId,
+                $idKey => $id,
                 'reason' => $reason,
                 'created_by' => $userId,
             ]);
         }
+    }
 
-        $order->unsetRelation('consumptionReasons');
+    /**
+     * El % con que la orden muestra lo que se pasó: completada, el que se guardó al completar (una anterior a la
+     * tolerancia no lo tiene y no marca nada); en revisión, el vigente; si no, ninguno.
+     */
+    private function shownTolerance(ProductionOrder $order): ?string
+    {
+        return match ($order->status) {
+            ProductionOrderStatus::Completed => $order->consumption_tolerance_percentage !== null
+                ? (string) $order->consumption_tolerance_percentage
+                : null,
+            ProductionOrderStatus::PendingReview => $this->currentTolerancePercentage(),
+            default => null,
+        };
     }
 
     /**
@@ -251,15 +411,52 @@ class ProductionOrderConsumptionCheck
     }
 
     /**
-     * «S-7: 55,6 kg de 38,65 planeados (+43,9%)».
+     * Lo que costó el exceso de un producto: (gastado − planeado) × su costo por kilo en la orden, el de sus líneas
+     * (`ProductLineCosts`: costo ÷ lo que salió de sus fuentes, con lo que volvió al saldo ya descontado). Null si
+     * ninguna línea del producto tiene costo por kilo (por ejemplo, un lote sin peso por galón).
      *
-     * @param  ConsumptionRow  $row
+     * @param  ProductConsumptionRow  $row
+     */
+    public function productExtraCost(ProductionOrder $order, array $row): ?string
+    {
+        $lineIds = $order->productLines
+            ->filter(fn (ProductionOrderProductLine $line): bool => (int) $line->product_id === $row['product_id'])
+            ->map(fn (ProductionOrderProductLine $line): int => (int) $line->id)
+            ->all();
+        // Las líneas con costo por kilo (sin él, por ejemplo un lote sin peso por galón, no se sabe).
+        $costs = array_filter(
+            array_intersect_key($this->productLineCosts->forOrder($order, true), array_flip($lineIds)),
+            fn (array $costs): bool => $costs['unit_cost'] !== null,
+        );
+
+        if ($costs === []) {
+            return null;
+        }
+
+        // Con varias líneas, el costo por kilo ponderado: el costo total sobre los kilos que salieron de sus fuentes.
+        $cost = $this->calculator->sum(array_map(fn (array $costs): string => (string) $costs['cost'], $costs), 8);
+        $kilos = $this->calculator->sum(array_column($costs, 'used_kg'), 8);
+
+        if (! $this->calculator->isPositive($kilos)) {
+            return null;
+        }
+
+        return $this->calculator->round(
+            $this->calculator->mul($this->calculator->sub($row['consumed'], $row['planned'], 4), $this->calculator->div($cost, $kilos, 8), 8),
+            4,
+        );
+    }
+
+    /**
+     * «S-7: 55,6 kg de 38,65 planeados (+43,9%)» o «ESMALTE BLANCO: 510 kg de 462,3 planeados (+10,3%)».
+     *
+     * @param  ConsumptionRow|ProductConsumptionRow  $row
      */
     public function summary(array $row): string
     {
         return sprintf(
             '%s: %s%s de %s planeados (+%s)',
-            $row['code'] ?? "MP #{$row['raw_material_id']}",
+            $this->label($row),
             NumberFormat::quantity($row['consumed']),
             $row['unit'] !== null ? " {$row['unit']}" : '',
             NumberFormat::quantity($row['planned']),
@@ -270,14 +467,26 @@ class ProductionOrderConsumptionCheck
     /**
      * El exceso con un decimal: con dos se lee mal, y sin decimales un 10,3 % parecería estar en el límite.
      *
-     * @param  ConsumptionRow  $row
+     * @param  ConsumptionRow|ProductConsumptionRow  $row
      */
     public function excessLabel(array $row): string
     {
         return NumberFormat::percent($this->calculator->round($row['excess_percentage'], 1));
     }
 
-    /** @param  ConsumptionRow  $row */
+    /**
+     * El código de la MP o el nombre del producto.
+     *
+     * @param  ConsumptionRow|ProductConsumptionRow  $row
+     */
+    public function label(array $row): string
+    {
+        return isset($row['product_id'])
+            ? ($row['name'] ?? "PT #{$row['product_id']}")
+            : ($row['code'] ?? "MP #{$row['raw_material_id']}");
+    }
+
+    /** @param  ConsumptionRow|ProductConsumptionRow  $row */
     private function reasonRequiredMessage(array $row): string
     {
         return __(':summary. Se pasó más del :tolerance de lo planeado: escribe el motivo.', [

@@ -32,7 +32,7 @@ class ProductLineCosts
     /**
      * @param  bool  $withCost  sin «Ver costos», o con la orden cancelada (las fuentes no se usaron), sin costo
      * @param  array<int, array{leftover_kg: string|null}>|null  $batchUsage  lo que quedó escrito por fuente de lote (vista previa)
-     * @return array<int, array{covered_kg: string, has_unknown_kg: bool, cost: string|null, unit_cost: string|null}> por id de línea
+     * @return array<int, array{covered_kg: string, used_kg: string, has_unknown_kg: bool, cost: string|null, unit_cost: string|null}> por id de línea
      */
     public function forOrder(ProductionOrder $order, bool $withCost, ?array $batchUsage = null): array
     {
@@ -86,6 +86,8 @@ class ProductLineCosts
 
             $rows[(int) $line->id] = [
                 'covered_kg' => $covered,
+                // Lo que salió de las fuentes: cubierto − lo que volvió al saldo. Es el divisor del costo por kilo.
+                'used_kg' => $used,
                 'has_unknown_kg' => $hasUnknownKg,
                 'cost' => $cost,
                 // Con kilos desconocidos el costo cuenta el lote y los kilos no: el cociente saldría inflado.

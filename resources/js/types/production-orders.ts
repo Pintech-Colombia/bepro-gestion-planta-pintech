@@ -16,6 +16,20 @@ export type StockShortage = {
     has_reference_price: boolean;
 };
 
+/** Lo que falta de un producto terminado de la fórmula al crear la orden, en kilos (`ProductLineShortages`). */
+export type ProductShortage = {
+    product_id: number;
+    name: string;
+    unit: string;
+    required: string;
+    available: string;
+    remnants_kg: string;
+    lots_kg: string;
+    /** Algún lote libre no tiene peso por galón: sus kilos no suman en lo disponible. */
+    has_unknown_kg: boolean;
+    missing: string;
+};
+
 export type VariantOption = {
     id: number;
     presentation_label: string;
@@ -75,6 +89,27 @@ export type ProductionOrderOverconsumption = {
 export type ProductionOrderConsumptionReason = {
     raw_material_id: number;
     code: string | null;
+    reason: string;
+};
+
+/** Un producto terminado de la fórmula que se pasó de lo planeado (en kilos), como una materia prima. */
+export type ProductionOrderProductOverconsumption = {
+    product_id: number;
+    name: string | null;
+    unit: string;
+    planned: string;
+    consumed: string;
+    excess_percentage: string;
+    tolerance_percentage: string;
+    needs_reason: boolean;
+    reason: string | null;
+    /** Solo con «Ver costos» y la orden completada. */
+    extra_cost?: string | null;
+};
+
+export type ProductionOrderProductConsumptionReason = {
+    product_id: number;
+    name: string | null;
     reason: string;
 };
 
@@ -270,6 +305,8 @@ export type ProductionOrder = {
     consumption_tolerance_percentage?: string | null;
     overconsumption?: ProductionOrderOverconsumption[];
     consumption_reasons?: ProductionOrderConsumptionReason[];
+    product_overconsumption?: ProductionOrderProductOverconsumption[];
+    product_consumption_reasons?: ProductionOrderProductConsumptionReason[];
     qr_landing_url?: string | null;
     qr_image_url?: string | null;
     submitted_at?: string | null;
@@ -390,6 +427,8 @@ export type ProductionOrderFormData = {
     packaging: ProductionOrderPackagingFormRow[];
     /** Motivo por id de la materia prima; el servidor dice cuáles se necesitan. */
     overconsumption_reasons: Record<string, string>;
+    /** Motivo por id del producto terminado de la fórmula (llave aparte de la de las materias primas). */
+    product_overconsumption_reasons: Record<string, string>;
     /** Por lote de PT usado: lo que quedó en un envase abierto. */
     batch_consumptions: ProductionOrderBatchUsageRow[];
     /** Por producto usado: lo real gastado, en kilos. */
