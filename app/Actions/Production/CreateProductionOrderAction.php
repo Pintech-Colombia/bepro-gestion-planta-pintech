@@ -18,6 +18,7 @@ use App\Services\DecimalCalculator;
 use App\Services\FormulaService;
 use App\Services\Inventory\FifoStockAllocatorService;
 use App\Services\Production\ProductLinePlanner;
+use App\Services\Production\ProductLineShortages;
 use App\Services\YearlySequenceNumberGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,7 @@ class CreateProductionOrderAction
         private readonly DecimalCalculator $calculator,
         private readonly YearlySequenceNumberGenerator $sequence,
         private readonly ProductLinePlanner $productLines,
+        private readonly ProductLineShortages $productLineShortages,
     ) {}
 
     /**
@@ -148,11 +150,13 @@ class CreateProductionOrderAction
 
             // Al final: lo que impide crear la orden se avisa antes de preguntar si se acepta lo que falta. Crearla no exige
             // stock, porque puede usar saldo y gastar menos que la fórmula: lo que no deja completarla es el consumo real.
+            // Lo mismo con el producto terminado que lleva la fórmula: saldos y lotes libres de la bodega.
             if (! (bool) ($data['confirm_stock_shortage'] ?? false)) {
                 $shortages = $this->fifoStockAllocator->stockShortages($requirementsByMaterialId, $warehouseId);
+                $productShortages = $this->productLineShortages->forOrder($order);
 
-                if ($shortages !== []) {
-                    throw new StockShortageException($shortages);
+                if ($shortages !== [] || $productShortages !== []) {
+                    throw new StockShortageException($shortages, $productShortages);
                 }
             }
 

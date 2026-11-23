@@ -1,6 +1,6 @@
 import type { Auth } from '@/types/auth';
 import type { SharedEnums } from '@/types/enums';
-import type { StockShortage } from '@/types/production-orders';
+import type { ProductShortage, StockShortage } from '@/types/production-orders';
 import type {
     NewAlert,
     RecentAlert,
@@ -16,6 +16,8 @@ declare module '@inertiajs/core' {
             error?: string;
             /** Lo que falta para crear una orden. No es una notificación: lo muestra el formulario, en su diálogo. */
             stockShortages?: StockShortage[];
+            /** Lo que falta del producto terminado de la fórmula, en el mismo diálogo. */
+            productShortages?: ProductShortage[];
         };
         sharedPageProps: {
             name: string;

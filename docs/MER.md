@@ -429,14 +429,17 @@ Ajustes de línea registrados durante la orden.
 ### 2.5.3b `production_order_consumption_reasons`
 
 Motivo de cada materia prima que se pasó de lo planeado en la OP más allá de la tolerancia de consumo (sumando sus
-líneas y sus ajustes de línea; el exceso que viene solo de ajustes no lo pide). Lo escribe quien envía a revisión o
-completa; si la materia prima deja de pasarse, se borra al guardar. Auditado (log `ordenes_produccion`).
+líneas y sus ajustes de línea; el exceso que viene solo de ajustes no lo pide), o de cada producto terminado que la OP
+lleva como ingrediente (lo gastado de todas sus líneas contra lo planeado, en kilos, con el mismo %). Cada fila es de una
+materia prima **o** de un producto (CHECK en PostgreSQL). Lo escribe quien envía a revisión o completa; si deja de
+pasarse, se borra al guardar. Auditado (log `ordenes_produccion`).
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
 | `production_order_id` | BIGINT |  | FK → `production_orders` (CASCADE) |
-| `raw_material_id` | BIGINT |  | FK → `raw_materials` (RESTRICT) |
+| `raw_material_id` | BIGINT | sí | FK → `raw_materials` (RESTRICT). Único con la OP. Nulo en el motivo de un producto |
+| `product_id` | BIGINT | sí | FK → `products` (RESTRICT). Único con la OP. Nulo en el motivo de una materia prima |
 | `reason` | VARCHAR(500) |  |  |
 | `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
 | `created_at` | TIMESTAMP | sí |  |

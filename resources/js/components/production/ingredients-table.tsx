@@ -10,6 +10,7 @@ import type {
     ProductionOrderIngredientFormRow,
     ProductionOrderOverconsumption,
     ProductionOrderProductLine,
+    ProductionOrderProductOverconsumption,
     ProductionOrderSetData,
 } from '@/types/production-orders';
 
@@ -40,6 +41,8 @@ type IngredientsTableProps = {
     showCosts?: boolean;
     /** Las materias primas que se pasan (lo dice el servidor), por id: se marcan en cada una de sus líneas. */
     overconsumption?: ProductionOrderOverconsumption[];
+    /** Los productos que se pasan, por id: se marcan en cada una de sus líneas. */
+    productOverconsumption?: ProductionOrderProductOverconsumption[];
     /** Los productos que lleva la orden, cada uno en su paso; los agregados en la orden, al final. */
     productRows?: ProductTableRow[];
     onProductActualChange?: (index: number, value: string) => void;
@@ -53,12 +56,16 @@ export function IngredientsTable({
     isReadOnly,
     showCosts = true,
     overconsumption = [],
+    productOverconsumption = [],
     productRows = [],
     onProductActualChange,
     errors = {},
 }: IngredientsTableProps) {
     const exceeding = new Map(
         overconsumption.map((row) => [row.raw_material_id, row]),
+    );
+    const exceedingProducts = new Map(
+        productOverconsumption.map((row) => [row.product_id, row]),
     );
     // Por paso, como se agregan en planta; dentro del mismo paso, la materia prima primero. Sin paso (un producto
     // agregado en la orden), al final.
@@ -115,6 +122,9 @@ export function IngredientsTable({
                                     <ProductRow
                                         key={`pt-${tableRow.product.line.id}`}
                                         product={tableRow.product}
+                                        exceeding={exceedingProducts.get(
+                                            tableRow.product.line.product_id,
+                                        )}
                                         isReadOnly={isReadOnly}
                                         showCosts={showCosts}
                                         onActualChange={onProductActualChange}
@@ -245,12 +255,15 @@ export function IngredientsTable({
 
 function ProductRow({
     product,
+    exceeding,
     isReadOnly,
     showCosts,
     onActualChange,
     error,
 }: {
     product: ProductTableRow;
+    /** Si el producto se pasó de lo planeado (todas sus líneas), con el exceso. */
+    exceeding?: ProductionOrderProductOverconsumption;
     isReadOnly: boolean;
     showCosts: boolean;
     onActualChange?: (index: number, value: string) => void;
@@ -276,6 +289,14 @@ function ProductRow({
                         >
                             PT
                         </span>
+                        {exceeding && (
+                            <span
+                                className={`${pillClasses} ${toneClasses.warning}`}
+                                title="Se pasó de lo planeado (todas sus líneas)"
+                            >
+                                {excessLabel(exceeding)}
+                            </span>
+                        )}
                     </span>
                 </td>
                 <td className="p-3 text-right align-top whitespace-nowrap text-muted-foreground">

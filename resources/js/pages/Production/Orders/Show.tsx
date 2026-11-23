@@ -157,6 +157,12 @@ export default function ProductionOrderShow({
                     reason.reason,
                 ]),
             ),
+            product_overconsumption_reasons: Object.fromEntries(
+                (order.product_consumption_reasons ?? []).map((reason) => [
+                    String(reason.product_id),
+                    reason.reason,
+                ]),
+            ),
             // Por lote de PT usado: lo que la planta registró al enviar a revisión (quien aprueba lo ve y lo corrige).
             batch_consumptions: batchSources.map((source) =>
                 mapBatchSourceToUsageRow(source),
@@ -520,6 +526,12 @@ export default function ProductionOrderShow({
                             canPrintLabels={can.printLabels}
                             overconsumption={order.overconsumption ?? []}
                             consumptionReasons={order.consumption_reasons ?? []}
+                            productOverconsumption={
+                                order.product_overconsumption ?? []
+                            }
+                            productConsumptionReasons={
+                                order.product_consumption_reasons ?? []
+                            }
                             productRows={productRows}
                             onProductActualChange={updateProductActual}
                         />

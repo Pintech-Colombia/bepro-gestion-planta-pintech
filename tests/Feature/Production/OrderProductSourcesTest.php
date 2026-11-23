@@ -11,6 +11,7 @@ use App\Enums\ProductionOrderStatus;
 use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
 use App\Enums\SystemRole;
+use App\Models\Alert;
 use App\Models\FinishedInventoryMovement;
 use App\Models\FinishedProductBatch;
 use App\Models\FinishedProductBatchStock;
@@ -22,6 +23,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductionCost;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderBatchConsumption;
+use App\Models\ProductionOrderConsumptionReason;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderPackagingPlan;
 use App\Models\ProductionOrderProductLine;
@@ -35,12 +37,14 @@ use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\AvailableBatchesService;
+use App\Services\DecimalCalculator;
 use App\Services\FinishedInventory\FinishedInventoryMovementService;
 use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\Production\ProductLinePlanner;
 use App\Services\Production\RemnantConsumptionLineBackfill;
+use App\Support\NumberFormat;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -278,11 +282,11 @@ function opsRalOrder(object $test, string $quantity = '154.1', ProductionOrderSt
 /**
  * Completa (o envía a revisión) la OP con lo que mostraría la pantalla: el ingrediente tal cual lo planeado, 10 galones
  * envasados, los saldos, lo gastado de cada producto (`$actualKg`) y los lotes de la orden. `$batchRows` lleva por lote
- * lo que quedó.
+ * lo que quedó; `$extra`, campos de más (los motivos de sobreconsumo, por ejemplo).
  *
  * @param  list<array<string, mixed>>|null  $batchRows  null: no envía la lista de lotes
  */
-function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, string $route = 'production-orders.complete', ?string $actualKg = '462.3'): TestResponse
+function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, string $route = 'production-orders.complete', ?string $actualKg = '462.3', array $extra = []): TestResponse
 {
     $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
     $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
@@ -296,6 +300,7 @@ function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, st
         'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
         'product_lines' => $actualKg === null ? null : opsLineRows($order, $actualKg),
         'batch_consumptions' => $batchRows,
+        ...$extra,
     ], fn ($value) => $value !== null));
 }
 
@@ -1321,4 +1326,192 @@ it('runs the second plant case: matte black into 2-in-1 matte, 10 whole buckets 
         ->and($lotSource->fresh()->leftover_kg)->toBeNull()
         ->and((string) InventoryBatch::query()->where('raw_material_id', $container->id)->value('remaining_quantity'))->toBe('50.0000')
         ->and($plan->fresh()->labels_used)->toBe(10);
+});
+
+// --- E2a: faltantes del producto al crear y tolerancia de consumo ---
+
+/** Crea la OP de RAL 7016 por la ruta, sin aceptar faltantes: `$gallons` × 3 kg de blanco. */
+function opsStoreRal(object $test, string $gallons, bool $confirm = false): TestResponse
+{
+    return $test->from(route('production-orders.create'))->post(route('production-orders.store'), [
+        'product_id' => $test->ral->id,
+        'formula_id' => $test->ralFormula->id,
+        'warehouse_id' => $test->warehouse->id,
+        'quantity' => $gallons,
+        'planned_date' => plantToday(),
+        'packaging' => [['product_variant_id' => $test->ralGallon->id, 'planned_units' => 10]],
+        'confirm_stock_shortage' => $confirm,
+    ]);
+}
+
+it('warns at creation about the finished product the formula needs and the warehouse does not have free', function () {
+    opsOriginRemnant($this, '10');
+
+    // 300 gal × 3 kg = 900 kg de blanco; libres: el saldo de 10 kg y 25 cuñetes de 23,4 kg (585). La MP sí alcanza.
+    opsStoreRal($this, '300')
+        ->assertRedirect(route('production-orders.create'))
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlash('stockShortages', [])
+        ->assertInertiaFlash('productShortages', [[
+            'product_id' => $this->white->id,
+            'name' => 'ESMALTE BLANCO',
+            'unit' => 'kg',
+            'required' => '900.0000',
+            'available' => '595.0000',
+            'remnants_kg' => '10.0000',
+            'lots_kg' => '585.0000',
+            'has_unknown_kg' => false,
+            'missing' => '305.0000',
+        ]]);
+
+    expect(ProductionOrder::query()->where('product_id', $this->ral->id)->exists())->toBeFalse();
+
+    // Aceptado, la orden se crea igual: el faltante avisa, no impide.
+    opsStoreRal($this, '300', confirm: true)->assertSessionHasNoErrors();
+    expect(ProductionOrder::query()->where('product_id', $this->ral->id)->count())->toBe(1);
+});
+
+it('does not warn when the free remnants and lots cover the product', function () {
+    // 10 gal × 3 = 30 kg; hay 585 kg libres en el lote.
+    opsStoreRal($this, '10')->assertInertiaFlashMissing('productShortages');
+
+    expect(ProductionOrder::query()->where('product_id', $this->ral->id)->count())->toBe(1);
+});
+
+it('does not count what another open order committed, nor the kilos of a lot without weight per gallon', function () {
+    // Otra OP abierta comprometió 20 de los 25 cuñetes: quedan 5 libres (117 kg).
+    opsRalOrder($this);
+
+    opsStoreRal($this, '300')->assertInertiaFlash('productShortages.0.lots_kg', '117.0000')
+        ->assertInertiaFlash('productShortages.0.missing', '783.0000');
+
+    // Sin peso por galón en la OP del lote, sus kilos no se saben: no suman y el faltante lo dice.
+    $this->origin->update(['density_kg_per_gallon' => null]);
+
+    opsStoreRal($this, '300')->assertInertiaFlash('productShortages.0.lots_kg', '0.0000')
+        ->assertInertiaFlash('productShortages.0.has_unknown_kg', true)
+        ->assertInertiaFlash('productShortages.0.missing', '900.0000');
+});
+
+it('asks why when the product used passes the tolerance, on submitting and on completing', function (string $route) {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+
+    // 462,3 planeados × 1,10 = 508,53: justo en el límite no se pasa.
+    opsComplete($this, $order, opsRows($order), $route, actualKg: '508.53')->assertSessionHasNoErrors();
+})->with(['completar' => 'production-orders.complete', 'enviar a revisión' => 'production-orders.submit-for-review']);
+
+it('rejects without the reason of a product that passed the tolerance, and saves it apart from the raw materials', function () {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+    $key = "product_overconsumption_reasons.{$this->white->id}";
+
+    opsComplete($this, $order, opsRows($order), 'production-orders.submit-for-review', actualKg: '510')
+        ->assertSessionHasErrors([$key => 'ESMALTE BLANCO: 510 kg de 462,3 planeados (+10,3%). Se pasó más del 10% de lo planeado: escribe el motivo.']);
+    expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress);
+
+    // Un motivo con la llave de las MP no sirve para el producto.
+    opsComplete($this, $order, opsRows($order), 'production-orders.submit-for-review', actualKg: '510', extra: [
+        'overconsumption_reasons' => [$this->white->id => 'Se botó un cuñete'],
+    ])->assertSessionHasErrors([$key]);
+
+    opsComplete($this, $order, opsRows($order), 'production-orders.submit-for-review', actualKg: '510', extra: [
+        'product_overconsumption_reasons' => [$this->white->id => 'Se ajustó el tono con más blanco'],
+    ])->assertSessionHasNoErrors();
+
+    $reason = ProductionOrderConsumptionReason::query()->where('production_order_id', $order->id)->sole();
+    expect($reason->product_id)->toBe($this->white->id)
+        ->and($reason->raw_material_id)->toBeNull()
+        ->and($reason->reason)->toBe('Se ajustó el tono con más blanco');
+
+    // En revisión, el detalle lo marca y trae el motivo para editarlo.
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_overconsumption.0.product_id', $this->white->id)
+            ->where('order.product_overconsumption.0.consumed', '510.0000')
+            ->where('order.product_overconsumption.0.needs_reason', true)
+            ->where('order.product_overconsumption.0.reason', 'Se ajustó el tono con más blanco')
+            ->where('order.product_consumption_reasons.0.product_id', $this->white->id)
+            ->where('order.overconsumption', []));
+
+    // Quien aprueba corrige lo gastado: ya no se pasa y el motivo se borra.
+    opsComplete($this, $order, opsRows($order), actualKg: '462.3')->assertSessionHasNoErrors();
+    expect(ProductionOrderConsumptionReason::query()->where('production_order_id', $order->id)->exists())->toBeFalse();
+});
+
+it('does not ask anything when less product was used, nor for a line added in the order without plan', function () {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+    // La línea de la fórmula se vuelve agregada (sin plan): lo gastado no se compara con nada.
+    $added = opsRalOrder($this, lotUnits: 1);
+    ProductionOrderProductLine::query()->where('production_order_id', $added->id)->update(['planned_kg' => null, 'step_order' => null, 'origin' => ProductionOrderProductLineOrigin::Added]);
+
+    opsComplete($this, $order, opsRows($order), actualKg: '300')->assertSessionHasNoErrors();
+    opsComplete($this, $added, opsRows($added), actualKg: '900')->assertSessionHasNoErrors();
+});
+
+it('lists the product in the overconsumption alert with the cost of the excess', function () {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+
+    opsComplete($this, $order, opsRows($order), actualKg: '510', extra: [
+        'product_overconsumption_reasons' => [$this->white->id => 'Se ajustó el tono con más blanco'],
+    ])->assertSessionHasNoErrors();
+
+    // 47,7 kg de más × el costo por kilo de la línea (20 cuñetes ÷ 468 kg = 9.696,9354).
+    $extraCost = app(DecimalCalculator::class)->round(bcmul('47.7', bcdiv('4538165.7700', '468', 12), 12), 4);
+    $alert = Alert::query()->where('production_order_id', $order->id)->sole();
+
+    expect($alert->message)->toContain('ESMALTE BLANCO +10,3% (510 de 462,3 kg, +'.NumberFormat::cost($extraCost).')');
+
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_overconsumption.0.extra_cost', $extraCost));
+});
+
+it('leaves the cost of the excess empty when one line of the product has no cost per kilo', function () {
+    config(['production.consumption_tolerance_percentage' => '10.00']);
+    $order = opsRalOrder($this);
+    // El mismo blanco en otro paso, que sale de un lote sin peso por galón: sin su costo por kilo, la cifra sería parcial.
+    $otherOrigin = ProductionOrder::create([
+        'order_number' => 'OP-2026-0002',
+        'lot_number' => 1683,
+        'product_id' => $this->white->id,
+        'formula_id' => $this->origin->formula_id,
+        'warehouse_id' => $this->warehouse->id,
+        'quantity' => 10,
+        'status' => ProductionOrderStatus::Completed->value,
+        'planned_date' => now(),
+        'created_by' => $this->user->id,
+    ]);
+    $unknownLot = opsBatch($this, $otherOrigin, units: 5, transferUnitCost: '226908.2885');
+    $second = ProductionOrderProductLine::create([
+        'production_order_id' => $order->id,
+        'product_id' => $this->white->id,
+        'step_order' => 3,
+        'planned_kg' => '10',
+        'origin' => ProductionOrderProductLineOrigin::Formula,
+    ]);
+    ProductionOrderBatchConsumption::create([
+        'production_order_id' => $order->id,
+        'production_order_product_line_id' => $second->id,
+        'finished_product_batch_id' => $unknownLot->id,
+        'warehouse_id' => $this->warehouse->id,
+        'units' => 1,
+        'created_by' => $this->user->id,
+    ]);
+
+    opsComplete($this, $order, opsRows($order), actualKg: '300', extra: [
+        'product_overconsumption_reasons' => [$this->white->id => 'Se ajustó el tono con más blanco'],
+    ])->assertSessionHasNoErrors();
+
+    // 2 líneas × 300 = 600 kg contra 472,3 planeados: se pasa, pero sin cifra.
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_overconsumption.0.consumed', '600.0000')
+            ->where('order.product_overconsumption.0.extra_cost', null));
+
+    expect(Alert::query()->where('production_order_id', $order->id)->sole()->message)
+        ->toContain('ESMALTE BLANCO +27%')
+        ->not->toContain('kg, +$');
 });

@@ -69,6 +69,7 @@ class BuildProductionOrderShowDataAction
             'warehouse',
             'lineAdjustments.rawMaterial',
             'consumptionReasons.rawMaterial:id,code',
+            'consumptionReasons.product:id,name',
             'submittedBy:id,name',
             'reviewedBy:id,name',
             'qualityResponsibleUser:id,name,job_title',
@@ -205,12 +206,35 @@ class BuildProductionOrderShowDataAction
                 'reason' => $row['reason'],
                 ...($includeCosts ? ['extra_cost' => $row['extra_cost']] : []),
             ], $this->consumptionCheck->forOrder($productionOrder)),
+            // Los productos que se pasaron de lo planeado, igual que las materias primas (en kilos).
+            'product_overconsumption' => array_map(fn (array $row): array => [
+                'product_id' => $row['product_id'],
+                'name' => $row['name'],
+                'unit' => $row['unit'],
+                'planned' => $row['planned'],
+                'consumed' => $row['consumed'],
+                'excess_percentage' => $row['excess_percentage'],
+                'tolerance_percentage' => $row['tolerance_percentage'],
+                'needs_reason' => $row['needs_reason'],
+                'reason' => $row['reason'],
+                ...($includeCosts ? ['extra_cost' => $row['extra_cost']] : []),
+            ], $this->consumptionCheck->productsForOrder($productionOrder)),
             // Los motivos guardados, para volver a editarlos si la orden vuelve de revisión.
             'consumption_reasons' => $productionOrder->consumptionReasons
+                ->whereNotNull('raw_material_id')
                 ->sortBy('raw_material_id')
                 ->map(fn ($reason): array => [
                     'raw_material_id' => (int) $reason->raw_material_id,
                     'code' => $reason->rawMaterial?->code,
+                    'reason' => $reason->reason,
+                ])
+                ->values(),
+            'product_consumption_reasons' => $productionOrder->consumptionReasons
+                ->whereNotNull('product_id')
+                ->sortBy('product_id')
+                ->map(fn ($reason): array => [
+                    'product_id' => (int) $reason->product_id,
+                    'name' => $reason->product?->name,
                     'reason' => $reason->reason,
                 ])
                 ->values(),
