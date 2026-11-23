@@ -8,9 +8,17 @@
 FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS node_base
 
 # Base común: la imagen de serversideup trae pdo_pgsql, zip, pcntl y opcache; faltan estas.
+# Los paquetes de Debian se ponen al día al construir: un arreglo de seguridad de Debian llega antes que el digest
+# semanal de serversideup (el 2026-11-23 Trivy frenó por Kerberos y `linux-libc-dev`, ya corregidos en Debian y todavía
+# no en la base). PHP no viene de apt (lo compila la imagen oficial), así que esto no lo toca; nginx sí, en su parche.
+# La imagen se construye una vez y se despliega por digest: staging y producción corren los mismos paquetes.
 FROM serversideup/php:8.3.36-fpm-nginx-trixie@sha256:5e3477965b0e732d8830d0230a3892f58ebf846c31669aed3fed67d2c222e850 AS base
 USER root
-RUN install-php-extensions intl bcmath gd pgsql
+RUN install-php-extensions intl bcmath gd pgsql \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 USER www-data
 
 # Compila Composer y la pantalla una sola vez. Wayfinder corre `php artisan` durante `npm run build`: por eso parte de
