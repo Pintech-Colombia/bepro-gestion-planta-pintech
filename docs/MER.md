@@ -578,7 +578,6 @@ por unidad y el costo (`BatchSourceDrawdown`).
 | `finished_product_batch_id` | BIGINT |  | FK → `finished_product_batches` (RESTRICT). Índice (`finished_product_batch_id`, `warehouse_id`) |
 | `warehouse_id` | BIGINT |  | FK → `warehouses` (RESTRICT). La bodega de la OP |
 | `units` | INT |  | Unidades enteras que salen al completar |
-| `used_kg` | DECIMAL(12,4) | sí | **Sin uso** desde que lo gastado va por línea (`production_order_product_lines.actual_kg`); se retira en una migración posterior |
 | `leftover_kg` | DECIMAL(12,4) | sí | Lo que quedó en el envase abierto, pesado (no pasa de una unidad). Nulo: no quedó nada |
 | `kg_per_unit` | DECIMAL(12,4) | sí | Galones de la presentación × peso por galón de la OP del lote, fijado al completar |
 | `consumed_cost` | DECIMAL(16,4) | sí | Al completar: unidades × costo de traslado − valor de lo que volvió al saldo |

@@ -372,7 +372,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('production-orders/{production_order}/packaging-plans/{plan}', [PackagingPlanController::class, 'destroy'])->name('production-orders.packaging-plans.destroy');
         Route::post('production-orders/{production_order}/consume-remnant', [RemnantConsumptionController::class, 'store'])->name('production-orders.consume-remnant');
         Route::delete('production-orders/{production_order}/remnant-consumptions/{consumption}', [RemnantConsumptionController::class, 'destroy'])->name('production-orders.remnant-consumptions.destroy');
-        Route::get('production-orders/{production_order}/available-remnants', [RemnantConsumptionController::class, 'availableRemnants'])->name('production-orders.available-remnants');
         Route::post('production-orders/{production_order}/batch-consumptions', [BatchConsumptionController::class, 'store'])->name('production-orders.batch-consumptions.store');
         Route::patch('production-orders/{production_order}/batch-consumptions/{batch_consumption}', [BatchConsumptionController::class, 'update'])->name('production-orders.batch-consumptions.update');
         Route::delete('production-orders/{production_order}/batch-consumptions/{batch_consumption}', [BatchConsumptionController::class, 'destroy'])->name('production-orders.batch-consumptions.destroy');

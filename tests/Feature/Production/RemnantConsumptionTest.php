@@ -333,7 +333,7 @@ it('does not plan remnants in a completed or cancelled order', function (Product
     $this->targetOrder->update(['status' => $status]);
 
     planRemnant($this, $this->targetOrder, $this->remnant, 5)->assertForbidden();
-    $this->getJson(route('production-orders.available-remnants', $this->targetOrder))->assertForbidden();
+    expect(offeredRemnants($this, $this->targetOrder))->toBe([]);
 
     expect(RemnantConsumption::query()->count())->toBe(0);
 })->with([
@@ -352,7 +352,7 @@ it('in review only who can review the order plans remnants', function () {
 
     $this->actingAs($operator);
     planRemnant($this, $this->targetOrder, $this->remnant, 5)->assertForbidden();
-    $this->getJson(route('production-orders.available-remnants', $this->targetOrder))->assertForbidden();
+    expect(offeredRemnants($this, $this->targetOrder))->toBe([]);
 
     expect(RemnantConsumption::query()->count())->toBe(1);
 });
@@ -452,7 +452,7 @@ it('offers the free kilos and leaves out the remnants with nothing free', functi
     planRemnant($this, $other, $this->remnant, 20)->assertSessionHasNoErrors();
     planRemnant($this, $other, $this->remnant2, 25)->assertSessionHasNoErrors();
 
-    $remnants = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json();
+    $remnants = offeredRemnants($this, $this->targetOrder);
 
     expect($remnants)->toHaveCount(1)
         ->and($remnants[0]['id'])->toBe($this->remnant->id)
@@ -478,7 +478,7 @@ it('offers every remnant of the warehouse, oldest first, with no cut at 50', fun
         $remnantIds[] = $remnant->id;
     }
 
-    $offered = collect($this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json())
+    $offered = collect(offeredRemnants($this, $this->targetOrder))
         ->pluck('id')
         ->all();
 
@@ -486,16 +486,16 @@ it('offers every remnant of the warehouse, oldest first, with no cut at 50', fun
         ->and($offered)->toBe($remnantIds);
 });
 
-it('consumes in FIFO order via json endpoint', function () {
-    $remnants = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json();
+it('offers the remnants in the order detail oldest first', function () {
+    $remnants = offeredRemnants($this, $this->targetOrder);
 
     expect($remnants)->toHaveCount(2)
         ->and($remnants[0]['id'])->toBe($this->remnant->id)
         ->and($remnants[1]['id'])->toBe($this->remnant2->id);
 });
 
-it('returns curated fields in available remnants json', function () {
-    $remnant = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json()[0];
+it('offers each remnant in the order detail with only the fields the picker needs', function () {
+    $remnant = offeredRemnants($this, $this->targetOrder)[0];
 
     expect($remnant)->toHaveKey('id')
         ->toHaveKey('source_order_number')
@@ -508,21 +508,21 @@ it('returns curated fields in available remnants json', function () {
         ->not->toHaveKey('notes');
 });
 
-it('excludes consumed remnants from json endpoint', function () {
+it('does not offer consumed remnants in the order detail', function () {
     $this->remnant->update([
         'available_quantity_gallons' => 0,
         'available_quantity_kg' => 0,
         'status' => RemnantStatus::Consumed,
     ]);
 
-    $remnants = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json();
+    $remnants = offeredRemnants($this, $this->targetOrder);
 
     expect($remnants)->toHaveCount(1)
         ->and($remnants[0]['id'])->toBe($this->remnant2->id);
 });
 
 it('envía los kilos libres como texto', function () {
-    $remnant = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json()[0];
+    $remnant = offeredRemnants($this, $this->targetOrder)[0];
 
     expect($remnant['available_quantity_kg'])->toBe('50.0000');
 });
@@ -878,47 +878,26 @@ it('gives no estimated cost to a planned line when the remnant has fewer kilos l
     expect(app(RemnantDrawdown::class)->lineCost($this->remnant->consumptions()->firstOrFail()))->toBeNull();
 });
 
-it('precarga en la ficha los mismos saldos y en el mismo orden que el endpoint', function () {
-    // La ficha (`BuildProductionOrderShowDataAction`) repite la consulta del endpoint. Con la misma fecha y sin
-    // desempate, cada una puede devolver un orden distinto.
+it('ofrece en la ficha los saldos del más antiguo al más nuevo, desempatados por id', function () {
+    // Con la misma fecha y sin desempate, el orden sería arbitrario.
     // En PostgreSQL un UPDATE reubica la fila al final de la tabla, así que tocar el saldo más antiguo lo devolvería
     // último sin el desempate. En SQLite el caso no se reproduce; el CI corre los dos motores.
     $sameMoment = now()->subDay();
     ProductionRemnant::whereKey([$this->remnant->id, $this->remnant2->id])->update(['created_at' => $sameMoment]);
     ProductionRemnant::whereKey($this->remnant->id)->update(['notes' => 'reubicado al final de la tabla']);
 
-    $fromEndpoint = collect($this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json())
-        ->pluck('id')
-        ->all();
-
-    expect($fromEndpoint)->toBe([$this->remnant->id, $this->remnant2->id]);
-
-    $this->get(route('production-orders.show', $this->targetOrder))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('order.available_remnants', fn ($remnants) => collect($remnants)->pluck('id')->all() === $fromEndpoint)
-            ->etc());
+    expect(collect(offeredRemnants($this, $this->targetOrder))->pluck('id')->all())->toBe([$this->remnant->id, $this->remnant2->id]);
 });
 
 it('names each available remnant with its product, color and lot', function () {
     $this->sourceOrder->update(['color' => 'RAL 3020']);
 
-    $remnant = $this->get(route('production-orders.available-remnants', $this->targetOrder))->assertOk()->json()[0];
+    $remnant = offeredRemnants($this, $this->targetOrder)[0];
 
     expect($remnant['id'])->toBe($this->remnant->id)
         ->and($remnant['product_name'])->toBe('SOURCE PRODUCT RAL 3020')
         ->and($remnant['source_lot_number'])->toBe($this->sourceOrder->lot_number)
         ->and($remnant['source_order_number'])->toBe($this->sourceOrder->order_number);
-});
-
-it('lists the same remnants in the order detail and in the refresh endpoint', function () {
-    $this->sourceOrder->update(['color' => 'RAL 3020']);
-
-    $fromEndpoint = $this->get(route('production-orders.available-remnants', $this->targetOrder))->json();
-
-    $this->get(route('production-orders.show', $this->targetOrder))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('order.available_remnants', $fromEndpoint));
 });
 
 // El saldo ya no va en una sección aparte: es una fuente de su producto, en su renglón de la tabla de materia prima.
@@ -973,3 +952,17 @@ it('the migration marks the existing rows as already applied', function () {
 
     expect($line->applied_at?->toDateTimeString())->toBe('2026-10-01 10:00:00');
 });
+
+/** Los saldos que el buscador de la orden ofrece: los que llegan con el detalle (vacío si no se puede planear). */
+function offeredRemnants(object $test, ProductionOrder $order): array
+{
+    $offered = null;
+
+    $test->get(route('production-orders.show', $order))
+        ->assertOk()
+        ->assertInertia(function (AssertableInertia $page) use (&$offered) {
+            $offered = $page->toArray()['props']['order']['available_remnants'];
+        });
+
+    return $offered;
+}

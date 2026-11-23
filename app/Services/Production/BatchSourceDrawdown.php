@@ -8,7 +8,6 @@ use App\Enums\FinishedInventoryMovementReason;
 use App\Enums\NumberType;
 use App\Enums\ProductionOrderProductLineOrigin;
 use App\Models\FinishedProductBatch;
-use App\Models\ProductionCost;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderBatchConsumption;
 use App\Models\ProductionOrderProductLine;
@@ -231,7 +230,9 @@ class BatchSourceDrawdown
             return null;
         }
 
-        $originRemnant = ProductionRemnant::query()->where('source_order_id', $originOrder->id)->first();
+        // Por la relación y no por consulta: el detalle, la vista previa y el resumen calculan el mismo lote sobre los
+        // mismos modelos, y así el saldo y el costo de la OP de origen se leen una sola vez por petición.
+        $originRemnant = $originOrder->remnant;
 
         return $this->calculator->sub(
             $total,
@@ -251,7 +252,7 @@ class BatchSourceDrawdown
             return (string) $originRemnant->cost_per_gallon;
         }
 
-        $bulkPerGallon = ProductionCost::query()->where('production_order_id', $originOrder->id)->value('unit_cost');
+        $bulkPerGallon = $originOrder->productionCost?->unit_cost;
 
         return $this->costCalculator->transferCost(
             (string) ($bulkPerGallon ?? '0'),
