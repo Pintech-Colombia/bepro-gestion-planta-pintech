@@ -27,7 +27,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $finished_product_batch_id
  * @property int $warehouse_id
  * @property int $units
- * @property string|null $used_kg
  * @property string|null $leftover_kg
  * @property string|null $kg_per_unit
  * @property string|null $consumed_cost
@@ -47,7 +46,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'finished_product_batch_id',
     'warehouse_id',
     'units',
-    'used_kg',
     'leftover_kg',
     'kg_per_unit',
     'consumed_cost',
@@ -74,7 +72,6 @@ class ProductionOrderBatchConsumption extends Model
                 'finished_product_batch_id',
                 'warehouse_id',
                 'units',
-                'used_kg',
                 'leftover_kg',
                 'kg_per_unit',
                 'consumed_cost',
@@ -88,7 +85,6 @@ class ProductionOrderBatchConsumption extends Model
     {
         return [
             'units' => WholeUnits::class,
-            'used_kg' => 'decimal:4',
             'leftover_kg' => 'decimal:4',
             'kg_per_unit' => 'decimal:4',
             'consumed_cost' => 'decimal:4',

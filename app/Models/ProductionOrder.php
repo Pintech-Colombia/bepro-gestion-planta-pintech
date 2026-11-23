@@ -77,6 +77,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read Collection|FinishedProductBatch[] $finishedProductBatches
  * @property-read QrCode|null $qrCode
  * @property-read ProductionRemnant|null $remnant
+ * @property-read ProductionCost|null $productionCost
  * @property-read Collection|RemnantConsumption[] $remnantConsumptions
  * @property-read Collection|ProductionOrderProductLine[] $productLines
  * @property-read Collection|ProductionOrderBatchConsumption[] $batchConsumptions
@@ -307,6 +308,14 @@ class ProductionOrder extends Model
     public function remnant(): HasOne
     {
         return $this->hasOne(ProductionRemnant::class, 'source_order_id');
+    }
+
+    /**
+     * El costo granel guardado al completar la orden (uno por orden, índice único).
+     */
+    public function productionCost(): HasOne
+    {
+        return $this->hasOne(ProductionCost::class, 'production_order_id');
     }
 
     /**

@@ -911,7 +911,7 @@ it('does not estimate a lot with a leftover when its origin order has no weight 
     expect(app(BatchSourceDrawdown::class)->lineCost($source->fresh()))->not->toBeNull();
 
     // Completar rechaza lo que quedó sin peso por galón: la vista previa tampoco lo estima.
-    $source->update(['used_kg' => '462.3', 'leftover_kg' => '5.7']);
+    $source->update(['leftover_kg' => '5.7']);
     $this->origin->update(['density_kg_per_gallon' => null]);
 
     expect(app(BatchSourceDrawdown::class)->lineCost($source->fresh()))->toBeNull();
@@ -1140,7 +1140,7 @@ it('previews the cost with the leftover being typed, not the saved one', functio
         ->and($source->fresh()->leftover_kg)->toBeNull();
 
     // Guardado «sí, 5,7» al enviar; quien aprueba responde «no» sin guardar: vuelven a pagarse los 20 cuñetes enteros.
-    $source->update(['used_kg' => '462.3', 'leftover_kg' => '5.7']);
+    $source->update(['leftover_kg' => '5.7']);
     expect($preview([['id' => $source->id, 'has_leftover' => false, 'leftover_kg' => '5.7']])['summary']['bulk']['products_used'])->toBe('4538165.7700')
         // Sin la lista, lo guardado.
         ->and($preview(null)['summary']['bulk']['products_used'])->toBe('4491297.0844');
@@ -1514,4 +1514,24 @@ it('leaves the cost of the excess empty when one line of the product has no cost
     expect(Alert::query()->where('production_order_id', $order->id)->sole()->message)
         ->toContain('ESMALTE BLANCO +27%')
         ->not->toContain('kg, +$');
+});
+
+it('reads the origin remnant and cost of a lot once per request, however many places show its cost', function () {
+    $order = opsRalOrder($this);
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+
+    // El detalle calcula el costo del lote en su fila, en el renglón del producto y en el resumen de costos.
+    $lookups = 0;
+    DB::listen(function ($query) use (&$lookups) {
+        if (preg_match('/from "?(production_remnants|production_costs)"? where .*"?(source_order_id|production_order_id)"? (=|in)/i', $query->sql)) {
+            $lookups++;
+        }
+    });
+
+    $this->get(route('production-orders.show', $order))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('order.batch_consumptions.0.consumed_cost', '4491297.0844'));
+
+    // Una vez el saldo y una vez el costo de la OP de origen (más las de la propia orden, que no dependen del lote).
+    expect($lookups)->toBeLessThanOrEqual(4);
 });

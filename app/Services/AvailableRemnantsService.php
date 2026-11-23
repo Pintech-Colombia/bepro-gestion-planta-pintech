@@ -30,8 +30,8 @@ class AvailableRemnantsService
     /**
      * Los saldos que se pueden planear en la orden: todos los de su bodega con kilos libres, de cualquier producto, del
      * más antiguo al más nuevo (para que se gasten primero), desempatado por id: con la misma fecha, el orden sería
-     * arbitrario. Sin tope: el selector busca. Una sola fuente para la lista que llega con el detalle de la orden y la
-     * que la refresca (`RemnantConsumptionController::availableRemnants`).
+     * arbitrario. Sin tope: el selector busca. La lista llega con el detalle de la orden y la usa también el aviso de
+     * faltantes al crearla (`ProductLineShortages`).
      *
      * @return list<array{id: int, product_id: int, source_order_number: string, source_lot_number: int, product_name: string, available_quantity_kg: string}>
      */

@@ -240,7 +240,7 @@ export default function RemnantsIndex({
             <div className="space-y-6 p-6">
                 <PageHeader
                     title="Saldos de producción"
-                    description="Producto terminado sobrante de órdenes completadas, disponible para reutilizar en nuevas mezclas."
+                    description="Producto terminado que sobró al completar una orden o quedó en un cuñete abierto, disponible para reutilizar en nuevas mezclas."
                 />
 
                 <DataTableFilters
