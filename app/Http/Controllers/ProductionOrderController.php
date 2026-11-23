@@ -36,6 +36,7 @@ use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
 use App\Services\Production\ProductionOrderCostSummary;
 use App\Services\TimezoneService;
@@ -68,6 +69,7 @@ class ProductionOrderController extends Controller
         private readonly RejectProductionOrderReviewAction $rejectProductionOrderReview,
         private readonly UpdateProductionOrderColorAction $updateProductionOrderColor,
         private readonly TimezoneService $timezoneService,
+        private readonly BatchSourceDrawdown $batchSources,
     ) {}
 
     /**
@@ -200,12 +202,11 @@ class ProductionOrderController extends Controller
     /**
      * Exportar orden de producción como PDF (ficha industrial FPR-01).
      */
-    public function exportPdf(Request $request, ProductionOrder $productionOrder): \Illuminate\Http\Response
+    public function exportPdf(ProductionOrder $productionOrder): \Illuminate\Http\Response
     {
         $this->authorize('view', $productionOrder);
 
-        $includeCosts = $request->user()?->can('previewCosts', $productionOrder) ?? false;
-        $orderData = $this->buildProductionOrderExportData->execute($productionOrder, $includeCosts);
+        $orderData = $this->buildProductionOrderExportData->execute($productionOrder);
         $filename = "orden-produccion-{$orderData['order_number']}.pdf";
 
         // Copia opaca y pequeña, como en la cotización: sin Imagick, DomPDF recorre la transparencia píxel por píxel y,
@@ -243,12 +244,11 @@ class ProductionOrderController extends Controller
      * NOTE: Diseñado para una orden individual. Si se requiere exportación
      * masiva desde el índice en el futuro, se deberá refactorizar esta clase.
      */
-    public function exportExcel(Request $request, ProductionOrder $productionOrder): BinaryFileResponse
+    public function exportExcel(ProductionOrder $productionOrder): BinaryFileResponse
     {
         $this->authorize('view', $productionOrder);
 
-        $includeCosts = $request->user()?->can('previewCosts', $productionOrder) ?? false;
-        $orderData = $this->buildProductionOrderExportData->execute($productionOrder, $includeCosts);
+        $orderData = $this->buildProductionOrderExportData->execute($productionOrder);
         $filename = "orden-produccion-{$orderData['order_number']}.xlsx";
 
         return Excel::download(new ProductionOrderExport($orderData), $filename);
@@ -461,6 +461,7 @@ class ProductionOrderController extends Controller
                 packaging: $validated['packaging'] ?? [],
                 remnantGallons: $this->completionLines->remnantGallons($validated['remnant_quantity_kg'] ?? null, $density),
                 density: $density,
+                batchUsage: isset($validated['batch_consumptions']) ? $this->batchSources->typedUsage($validated['batch_consumptions']) : null,
             )
         );
     }

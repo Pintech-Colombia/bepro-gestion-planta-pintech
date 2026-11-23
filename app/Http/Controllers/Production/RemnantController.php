@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Production;
 use App\Actions\Production\CorrectRemnantAction;
 use App\Actions\Production\WriteOffRemnantAction;
 use App\Enums\Permission;
+use App\Enums\RemnantMovementType;
 use App\Enums\RemnantStatus;
 use App\Filters\RemnantFilter;
 use App\Http\Controllers\Controller;
@@ -58,8 +59,9 @@ class RemnantController extends Controller
         // Lo planeado en órdenes abiertas que todavía no se descontó, por orden: la misma cuenta que limita lo que se puede
         // planear, y la que ven los diálogos de baja y corrección.
         $plannedOrders = $this->availableRemnants->plannedOrders($remnants->getCollection()->modelKeys());
+        $openedUnitKg = $this->openedUnitKilos($remnants->getCollection()->modelKeys());
 
-        $remnants->through(function (ProductionRemnant $remnant) use ($plannedOrders, $canViewCosts): array {
+        $remnants->through(function (ProductionRemnant $remnant) use ($plannedOrders, $canViewCosts, $openedUnitKg): array {
             $orders = $plannedOrders[$remnant->id] ?? [];
             $committed = $this->availableRemnants->plannedTotal($orders);
 
@@ -75,6 +77,9 @@ class RemnantController extends Controller
                 'available_quantity_gallons' => (float) $remnant->available_quantity_gallons,
                 'available_quantity_kg' => (float) $remnant->available_quantity_kg,
                 'committed_quantity_kg' => $committed === null ? null : (float) $committed,
+                // Los kilos que volvieron de cuñetes abiertos en otras OP, solo cuando lo disponible pasa lo que dejó su OP:
+                // ahí explican la diferencia y no parece un error.
+                'opened_units_kg' => $this->exceedsOriginal($remnant) ? ($openedUnitKg[$remnant->id] ?? null) : null,
                 'planned_orders' => $orders,
                 'density_kg_per_gallon' => (float) $remnant->density_kg_per_gallon,
                 'cost_per_gallon' => $canViewCosts && $remnant->cost_per_gallon !== null ? (float) $remnant->cost_per_gallon : null,
@@ -120,6 +125,7 @@ class RemnantController extends Controller
         ]);
 
         $plannedOrders = $this->availableRemnants->plannedOrders([$remnant->id])[$remnant->id] ?? [];
+        $openedUnitKg = $this->openedUnitKilos([$remnant->id])[$remnant->id] ?? null;
 
         $movements = $remnant->movements()
             ->with(['productionOrder:id,order_number', 'user:id,name'])
@@ -156,6 +162,10 @@ class RemnantController extends Controller
                 'original_quantity_gallons' => (string) $remnant->original_quantity_gallons,
                 'available_quantity_kg' => (string) $remnant->available_quantity_kg,
                 'available_quantity_gallons' => (string) $remnant->available_quantity_gallons,
+                // Lo que recibió de cuñetes abiertos en otras OP (null si nada) y si por eso tiene más de lo que dejó su OP.
+                // Un saldo que nació de un cuñete abierto tiene lo original en 0: su OP no dejó sobrante.
+                'opened_units_kg' => $openedUnitKg,
+                'exceeds_original' => $this->exceedsOriginal($remnant),
                 'committed_quantity_kg' => $this->availableRemnants->plannedTotal($plannedOrders),
                 'planned_orders' => $plannedOrders,
                 'density_kg_per_gallon' => (string) $remnant->density_kg_per_gallon,
@@ -173,6 +183,34 @@ class RemnantController extends Controller
                 'adjust' => $user->can('adjust', $remnant),
             ],
         ]);
+    }
+
+    /**
+     * Los kilos que cada saldo recibió de cuñetes abiertos (movimientos «Cuñete abierto»), en una sola consulta.
+     *
+     * @param  list<int>  $remnantIds
+     * @return array<int, string> id del saldo => kilos (solo los que recibieron)
+     */
+    private function openedUnitKilos(array $remnantIds): array
+    {
+        if ($remnantIds === []) {
+            return [];
+        }
+
+        return ProductionRemnantMovement::query()
+            ->whereIn('production_remnant_id', $remnantIds)
+            ->where('type', RemnantMovementType::OpenedUnit->value)
+            ->groupBy('production_remnant_id')
+            ->selectRaw('production_remnant_id, SUM(quantity_kg) AS opened_kg')
+            ->pluck('opened_kg', 'production_remnant_id')
+            // SQLite suma en coma flotante: se redondea a la escala de la columna.
+            ->map(fn (string|int|float $kilos): string => $this->calculator->round($kilos, 4))
+            ->all();
+    }
+
+    private function exceedsOriginal(ProductionRemnant $remnant): bool
+    {
+        return $this->calculator->cmp((string) $remnant->available_quantity_kg, (string) $remnant->original_quantity_kg, 4) > 0;
     }
 
     /**

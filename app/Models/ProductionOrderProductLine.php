@@ -26,6 +26,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $product_id
  * @property int|null $step_order
  * @property string|null $planned_kg
+ * @property string|null $actual_kg
  * @property ProductionOrderProductLineOrigin $origin
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -39,6 +40,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'product_id',
     'step_order',
     'planned_kg',
+    'actual_kg',
     'origin',
 ])]
 class ProductionOrderProductLine extends Model
@@ -55,7 +57,7 @@ class ProductionOrderProductLine extends Model
         return LogOptions::defaults()
             ->useLogName('ordenes_produccion')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['production_order_id', 'product_id', 'step_order', 'planned_kg', 'origin'])
+            ->logOnly(['production_order_id', 'product_id', 'step_order', 'planned_kg', 'actual_kg', 'origin'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -65,6 +67,7 @@ class ProductionOrderProductLine extends Model
         return [
             'step_order' => 'integer',
             'planned_kg' => 'decimal:4',
+            'actual_kg' => 'decimal:4',
             'origin' => ProductionOrderProductLineOrigin::class,
         ];
     }

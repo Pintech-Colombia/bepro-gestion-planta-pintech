@@ -49,14 +49,24 @@ class BatchSourceDrawdown
     ) {}
 
     /**
-     * Al enviar a revisión o completar, con la OP bloqueada y la lista ya comparada (`ensureMatches`): guarda en cada
-     * fuente de lote los kilos usados y lo que quedó, pesado (nulo si no quedó nada). Lo que quedó no pasa de una unidad.
-     * 422 si una línea de la fórmula no tiene ninguna fuente: lo normal es un olvido y la orden quedaría sin ese costo.
+     * Al enviar a revisión o completar, con la OP bloqueada y las listas ya comparadas (`ensureMatches`): guarda lo real
+     * gastado de cada línea de producto y, en cada fuente de lote, lo que quedó, pesado (nulo si no quedó nada). Lo que
+     * quedó no pasa de una unidad. 422 si una línea de la fórmula no tiene ninguna fuente: lo normal es un olvido y la
+     * orden quedaría sin ese costo.
      *
-     * @param  list<array<string, mixed>>  $rows  `batch_consumptions` validado: id, used_kg, has_leftover, leftover_kg
+     * @param  list<array<string, mixed>>  $rows  `batch_consumptions` validado: id, has_leftover, leftover_kg
+     * @param  list<array<string, mixed>>  $lineRows  `product_lines` validado: id, actual_kg
      */
-    public function recordUsage(ProductionOrder $lockedOrder, array $rows): void
+    public function recordUsage(ProductionOrder $lockedOrder, array $rows, array $lineRows = []): void
     {
+        $lines = $lockedOrder->productLines()->get()->keyBy('id');
+
+        foreach ($lineRows as $lineRow) {
+            $lines->get((int) $lineRow['id'])?->update([
+                'actual_kg' => $this->calculator->round((string) $lineRow['actual_kg'], 4),
+            ]);
+        }
+
         $sources = $lockedOrder->batchConsumptions()
             ->with(['batch.productVariant', 'batch.productionOrder'])
             ->get()
@@ -70,9 +80,7 @@ class BatchSourceDrawdown
                 continue;
             }
 
-            $leftoverKg = filter_var($row['has_leftover'] ?? false, FILTER_VALIDATE_BOOLEAN) && isset($row['leftover_kg'])
-                ? $this->calculator->round((string) $row['leftover_kg'], 4)
-                : null;
+            $leftoverKg = $this->leftoverFrom($row);
 
             if ($leftoverKg !== null) {
                 $kgPerUnit = $source->batch->kgPerUnit();
@@ -95,10 +103,7 @@ class BatchSourceDrawdown
                 }
             }
 
-            $source->update([
-                'used_kg' => $this->calculator->round((string) $row['used_kg'], 4),
-                'leftover_kg' => $leftoverKg,
-            ]);
+            $source->update(['leftover_kg' => $leftoverKg]);
         }
 
         if ($errors !== []) {
@@ -106,6 +111,58 @@ class BatchSourceDrawdown
         }
 
         $this->ensureFormulaLinesHaveSources($lockedOrder);
+    }
+
+    /**
+     * Lo que quedó según una fila de `batch_consumptions` (la de enviar, completar o la vista previa): los kilos pesados
+     * si la respuesta a «¿quedó producto?» es sí y vienen escritos; si no, null (no quedó nada).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public function leftoverFrom(array $row): ?string
+    {
+        return filter_var($row['has_leftover'] ?? false, FILTER_VALIDATE_BOOLEAN) && isset($row['leftover_kg']) && $row['leftover_kg'] !== ''
+            ? $this->calculator->round((string) $row['leftover_kg'], 4)
+            : null;
+    }
+
+    /**
+     * Lo que quedó escrito en cada fuente, por id, para la vista previa (`lineCost`).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return array<int, array{leftover_kg: string|null}>
+     */
+    public function typedUsage(array $rows): array
+    {
+        $usage = [];
+
+        foreach ($rows as $row) {
+            $usage[(int) $row['id']] = ['leftover_kg' => $this->leftoverFrom($row)];
+        }
+
+        return $usage;
+    }
+
+    /**
+     * Lo que quedó en el envase abierto de una fuente de lote: lo guardado si ya se aplicó; si no, lo que está escrito
+     * en la pantalla (`$typed`, vista previa) o lo guardado. Mientras se escribe puede pasar del peso de una unidad
+     * (completar lo rechaza): se toma hasta ese peso para que la vista previa no muestre un costo negativo.
+     *
+     * @param  array{leftover_kg: string|null}|null  $typed
+     */
+    public function leftoverKg(ProductionOrderBatchConsumption $source, ?array $typed = null): ?string
+    {
+        $leftoverKg = ! $source->isApplied() && $typed !== null
+            ? $typed['leftover_kg']
+            : ($source->leftover_kg !== null ? (string) $source->leftover_kg : null);
+
+        if ($leftoverKg === null || $source->isApplied()) {
+            return $leftoverKg;
+        }
+
+        $kgPerUnit = $source->batch->kgPerUnit();
+
+        return $kgPerUnit !== null ? $this->calculator->min($leftoverKg, $kgPerUnit, 4) : $leftoverKg;
     }
 
     /**
@@ -135,14 +192,21 @@ class BatchSourceDrawdown
 
     /**
      * El costo de una fuente: el real si ya se aplicó; si no, el estimado con lo que tiene ahora (el costo de traslado del
-     * lote, o el estimado si no lo tiene, y lo que quedó si ya se registró). Nulo si no se puede estimar. Lo usan la vista
-     * previa de costos y el resumen de la orden.
+     * lote, o el estimado si no lo tiene, y lo que quedó). Nulo si no se puede estimar. Lo usan la vista previa de costos y
+     * el resumen de la orden.
+     *
+     * Lo que quedó es lo guardado al enviar a revisión, salvo que llegue `$typed`: lo que el operario está escribiendo en
+     * la vista previa (`leftover_kg` nulo = no quedó nada), para que el costo de la pantalla sea el que firmará al completar.
+     *
+     * @param  array{leftover_kg: string|null}|null  $typed
      */
-    public function lineCost(ProductionOrderBatchConsumption $source): ?string
+    public function lineCost(ProductionOrderBatchConsumption $source, ?array $typed = null): ?string
     {
         if ($source->isApplied()) {
             return $source->consumed_cost !== null ? (string) $source->consumed_cost : null;
         }
+
+        $leftoverKg = $this->leftoverKg($source, $typed);
 
         $batch = $source->batch;
         $transferUnitCost = $batch->transfer_unit_cost !== null
@@ -155,7 +219,7 @@ class BatchSourceDrawdown
 
         $total = $this->calculator->mul((string) $source->units, $transferUnitCost, 4);
 
-        if ($source->leftover_kg === null) {
+        if ($leftoverKg === null) {
             return $total;
         }
 
@@ -171,7 +235,7 @@ class BatchSourceDrawdown
 
         return $this->calculator->sub(
             $total,
-            $this->leftoverValue((string) $source->leftover_kg, $this->originCostPerGallon($originOrder, $originRemnant), (string) $density),
+            $this->leftoverValue($leftoverKg, $this->originCostPerGallon($originOrder, $originRemnant), (string) $density),
             4,
         );
     }

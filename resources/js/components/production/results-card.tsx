@@ -2,6 +2,7 @@ import { Beaker } from 'lucide-react';
 
 import { DecimalInput } from '@/components/decimal-input';
 import { IngredientsTable } from '@/components/production/ingredients-table';
+import type { ProductTableRow } from '@/components/production/ingredients-table';
 import { LineAdjustmentsPanel } from '@/components/production/line-adjustments-panel';
 import { OverconsumptionReasons } from '@/components/production/overconsumption-reasons';
 import { PackagingSection } from '@/components/production/packaging-section';
@@ -49,12 +50,20 @@ type ResultsCardProps = {
     previewLoading: boolean;
     /** Por qué los costos mostrados no corresponden a lo escrito (null si están al día). */
     previewStale?: PreviewStaleReason;
-    solidsReferenceLabel: string | null;
+    /** El rango de cada indicador en la ficha del producto («95 – 105»), o null si no tiene: va de placeholder. */
+    qualityRanges: {
+        viscosity: string | null;
+        grinding: string | null;
+        solids: string | null;
+    };
     showCosts?: boolean;
     canPrintLabels?: boolean;
     /** Lo que el servidor marca como pasado de lo planeado, y los motivos guardados. */
     overconsumption?: ProductionOrderOverconsumption[];
     consumptionReasons?: ProductionOrderConsumptionReason[];
+    /** Los productos que la orden lleva como ingrediente: renglones de la tabla de consumo. */
+    productRows?: ProductTableRow[];
+    onProductActualChange?: (index: number, value: string) => void;
 };
 
 export function ResultsCard({
@@ -73,11 +82,13 @@ export function ResultsCard({
     isReadOnly,
     previewLoading,
     previewStale = null,
-    solidsReferenceLabel,
+    qualityRanges,
     showCosts = true,
     canPrintLabels = false,
     overconsumption = [],
     consumptionReasons = [],
+    productRows = [],
+    onProductActualChange,
 }: ResultsCardProps) {
     const materialCodes = new Map<number, string>();
 
@@ -138,7 +149,9 @@ export function ResultsCard({
                                 <DecimalInput
                                     id="viscosity"
                                     {...NUMBER_TYPES.quality}
-                                    placeholder="Ej: 105,5"
+                                    placeholder={
+                                        qualityRanges.viscosity ?? 'Ej: 105,5'
+                                    }
                                     value={data.viscosity_ku}
                                     onValueChange={(value) =>
                                         setData('viscosity_ku', value)
@@ -156,7 +169,9 @@ export function ResultsCard({
                                 <DecimalInput
                                     id="grinding"
                                     {...HEGMAN_LIMITS}
-                                    placeholder="Ej: 7,2"
+                                    placeholder={
+                                        qualityRanges.grinding ?? 'Ej: 7,2'
+                                    }
                                     value={data.grinding_hg}
                                     onValueChange={(value) =>
                                         setData('grinding_hg', value)
@@ -176,21 +191,15 @@ export function ResultsCard({
                                 <DecimalInput
                                     id="quality-solids"
                                     {...NUMBER_TYPES.quality}
-                                    placeholder="Ej: 52,4"
+                                    placeholder={
+                                        qualityRanges.solids ?? 'Ej: 52,4'
+                                    }
                                     value={data.quality_solids}
                                     onValueChange={(value) =>
                                         setData('quality_solids', value)
                                     }
                                     disabled={isReadOnly}
                                 />
-                                {solidsReferenceLabel && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Referencia en ficha del producto:{' '}
-                                        <span className="font-medium text-foreground">
-                                            {solidsReferenceLabel}
-                                        </span>
-                                    </p>
-                                )}
                                 {errors.quality_solids && (
                                     <p className="text-xs text-destructive">
                                         {errors.quality_solids}
@@ -212,6 +221,9 @@ export function ResultsCard({
                         isReadOnly={isReadOnly}
                         showCosts={showCosts}
                         overconsumption={overconsumption}
+                        productRows={productRows}
+                        onProductActualChange={onProductActualChange}
+                        errors={errors as Record<string, string | undefined>}
                     />
                     <OverconsumptionReasons
                         overconsumption={overconsumption}

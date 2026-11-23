@@ -9,10 +9,11 @@ import {
     startProduction as productionOrderStartProduction,
     submitForReview as productionOrderSubmitForReview,
 } from '@/actions/App/Http/Controllers/ProductionOrderController';
-import { ConsumeRemnantsCard } from '@/components/production/consume-remnants-card';
 import { ControlCard } from '@/components/production/control-card';
+import type { ProductTableRow } from '@/components/production/ingredients-table';
 import { OrderHeader } from '@/components/production/order-header';
 import { OrderInfoCard } from '@/components/production/order-info-card';
+import { ProductsToUseCard } from '@/components/production/products-to-use-card';
 import { QrCard } from '@/components/production/qr-card';
 import { ResultsCard } from '@/components/production/results-card';
 import {
@@ -29,6 +30,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+    mapBatchSourceToUsageRow,
+    mapProductLineToUsageRow,
+    useBatchUsageSync,
+    useProductLineUsageSync,
+} from '@/hooks/use-batch-usage-sync';
+import {
     mapPackagingPlanToFormRow,
     usePackagingSync,
 } from '@/hooks/use-packaging-sync';
@@ -36,6 +43,7 @@ import { useProductionCostPreview } from '@/hooks/use-production-cost-preview';
 import {
     formatForInput,
     formatPercent,
+    formatQualityRange,
     formatQuantity,
 } from '@/lib/formatters';
 import { breadcrumbHref } from '@/lib/navigation';
@@ -47,6 +55,7 @@ import {
 } from '@/routes/production-orders';
 import type {
     PreviewCostData,
+    ProductionOrderBatchUsageRow,
     ProductionOrderDetail,
     ProductionOrderFormData,
     ProductionOrderShowProps,
@@ -69,6 +78,21 @@ export default function ProductionOrderShow({
         () => order.line_adjustments ?? [],
         [order.line_adjustments],
     );
+    const batchSources = useMemo(
+        () => order.batch_consumptions ?? [],
+        [order.batch_consumptions],
+    );
+    const productLines = useMemo(
+        () => order.product_lines ?? [],
+        [order.product_lines],
+    );
+    // Las fuentes de «Productos a usar» con sus kilos y unidades: al cambiar, la vista previa se vuelve a pedir.
+    const sourcesKey = [
+        ...(order.remnant_consumptions ?? []).map(
+            (source) => `saldo-${source.id}:${source.quantity_kg}`,
+        ),
+        ...batchSources.map((source) => `lote-${source.id}:${source.units}`),
+    ].join(',');
 
     const isCompleted = order.status === 'completed';
     const isCancelled = order.status === 'cancelled';
@@ -133,6 +157,14 @@ export default function ProductionOrderShow({
                     reason.reason,
                 ]),
             ),
+            // Por lote de PT usado: lo que la planta registró al enviar a revisión (quien aprueba lo ve y lo corrige).
+            batch_consumptions: batchSources.map((source) =>
+                mapBatchSourceToUsageRow(source),
+            ),
+            // Por producto usado: lo gastado que la planta registró al enviar a revisión.
+            product_lines: productLines.map((line) =>
+                mapProductLineToUsageRow(line),
+            ),
         });
 
     const {
@@ -159,6 +191,37 @@ export default function ProductionOrderShow({
         setData,
     });
 
+    useBatchUsageSync({
+        sources: batchSources,
+        currentRows: data.batch_consumptions,
+        setData,
+    });
+
+    useProductLineUsageSync({
+        lines: productLines,
+        currentRows: data.product_lines,
+        setData,
+    });
+
+    const updateProductActual = (index: number, value: string) =>
+        setData(
+            'product_lines',
+            data.product_lines.map((row, rowIndex) =>
+                rowIndex === index ? { ...row, actual_kg: value } : row,
+            ),
+        );
+
+    const updateBatchUsage = (
+        index: number,
+        patch: Partial<Omit<ProductionOrderBatchUsageRow, 'id'>>,
+    ) =>
+        setData(
+            'batch_consumptions',
+            data.batch_consumptions.map((row, rowIndex) =>
+                rowIndex === index ? { ...row, ...patch } : row,
+            ),
+        );
+
     const { previewCosts, previewLoading, previewStale } =
         useProductionCostPreview({
             orderId: order.id,
@@ -167,6 +230,8 @@ export default function ProductionOrderShow({
             lineAdjustments,
             remnantQuantityKg: data.remnant_quantity_kg,
             density: data.density_kg_per_gallon,
+            batchUsage: data.batch_consumptions,
+            sourcesKey,
             isCompleted,
             // Cancelada: sin costos (lo digitado ya no los cambia).
             enabled: can.previewCosts && !isCancelled,
@@ -175,27 +240,21 @@ export default function ProductionOrderShow({
     // Absoluta desde el servidor: la página pública vive en el dominio del QR, no en el del ERP.
     const landingFullUrl = order.qr_landing_url ?? '';
 
-    const solidsReferenceLabel = useMemo(() => {
-        const lower = order.product?.quality_solids_lower;
-        const upper = order.product?.quality_solids_upper;
-
-        if (lower == null && upper == null) {
-            return null;
-        }
-
-        if (lower != null && upper != null) {
-            return `${lower}% – ${upper}%`;
-        }
-
-        if (lower != null) {
-            return `≥ ${lower}%`;
-        }
-
-        return `≤ ${upper}%`;
-    }, [
-        order.product?.quality_solids_lower,
-        order.product?.quality_solids_upper,
-    ]);
+    // Los rangos del producto, como placeholder de cada indicador de laboratorio.
+    const qualityRanges = {
+        viscosity: formatQualityRange(
+            order.product?.quality_viscosity_lower,
+            order.product?.quality_viscosity_upper,
+        ),
+        grinding: formatQualityRange(
+            order.product?.quality_fineness_lower,
+            order.product?.quality_fineness_upper,
+        ),
+        solids: formatQualityRange(
+            order.product?.quality_solids_lower,
+            order.product?.quality_solids_upper,
+        ),
+    };
 
     const previewIngredientsById = useMemo(() => {
         if (!previewCosts) {
@@ -216,6 +275,51 @@ export default function ProductionOrderShow({
         isCompleted || isCancelled
             ? (order.cost_summary ?? null)
             : (previewCosts?.summary ?? order.cost_summary ?? null);
+
+    // El costo de cada lote con lo que quedó tal como se escribe; completada o cancelada, el de la página.
+    const previewProductCosts = useMemo(
+        () =>
+            isCompleted || isCancelled || !previewCosts
+                ? null
+                : new Map(
+                      (previewCosts.products ?? []).map((product) => [
+                          product.id,
+                          product.cost,
+                      ]),
+                  ),
+        [isCompleted, isCancelled, previewCosts],
+    );
+
+    // El costo de cada producto (renglón de la tabla) con lo que quedó tal como se escribe; si no, el de la página.
+    const previewProductLineCosts = useMemo(
+        () =>
+            isCompleted || isCancelled || !previewCosts
+                ? null
+                : new Map(
+                      (previewCosts.product_lines ?? []).map((line) => [
+                          line.id,
+                          line,
+                      ]),
+                  ),
+        [isCompleted, isCancelled, previewCosts],
+    );
+
+    // Cada producto como un renglón más de la tabla de consumo, en su paso; de dónde sale está en «Productos a usar».
+    const productRows: ProductTableRow[] = productLines.map((line) => {
+        const index = data.product_lines.findIndex((row) => row.id === line.id);
+        const previewLine = previewProductLineCosts?.get(line.id);
+
+        return {
+            line,
+            index,
+            actualKg:
+                isFormReadOnly || index < 0
+                    ? formatForInput(line.actual_kg)
+                    : data.product_lines[index].actual_kg,
+            unitCost: previewLine ? previewLine.unit_cost : line.unit_cost,
+            totalCost: previewLine ? previewLine.cost : line.cost,
+        };
+    });
 
     const packagingCosts = useMemo(
         () =>
@@ -298,6 +402,18 @@ export default function ProductionOrderShow({
             remnant_consumption_ids: (order.remnant_consumptions ?? []).map(
                 (consumption) => consumption.id,
             ),
+            product_lines: formData.product_lines.map((row) => ({
+                id: row.id,
+                actual_kg: toDecimalPayload(row.actual_kg),
+            })),
+            // Lo que quedó solo viaja con «sí»; con «no», nada (el servidor lo toma como que no quedó producto).
+            batch_consumptions: formData.batch_consumptions.map((row) => ({
+                id: row.id,
+                has_leftover: row.has_leftover,
+                leftover_kg: row.has_leftover
+                    ? toDecimalPayload(row.leftover_kg)
+                    : null,
+            })),
         }));
         post(action.url, {
             preserveScroll: true,
@@ -399,11 +515,13 @@ export default function ProductionOrderShow({
                             isReadOnly={isFormReadOnly}
                             previewLoading={previewLoading}
                             previewStale={previewStale}
-                            solidsReferenceLabel={solidsReferenceLabel}
+                            qualityRanges={qualityRanges}
                             showCosts={can.previewCosts}
                             canPrintLabels={can.printLabels}
                             overconsumption={order.overconsumption ?? []}
                             consumptionReasons={order.consumption_reasons ?? []}
+                            productRows={productRows}
+                            onProductActualChange={updateProductActual}
                         />
                     </div>
 
@@ -417,16 +535,21 @@ export default function ProductionOrderShow({
                             />
                         )}
 
-                        <ConsumeRemnantsCard
-                            orderId={order.id}
+                        <ProductsToUseCard
                             order={order}
                             showCosts={can.previewCosts}
                             canPlan={can.planRemnant}
-                            // Al completar: un saldo planeado que ya no alcanza. La llave no es un campo del formulario.
-                            completionError={
-                                (errors as Record<string, string | undefined>)
-                                    .remnant_consumption_ids
+                            // Lo que quedó se escribe al entregar la orden (enviar o completar).
+                            canRecordUsage={!isFormReadOnly && showSubmit}
+                            usageRows={data.batch_consumptions}
+                            lineUsageRows={data.product_lines}
+                            onUsageChange={updateBatchUsage}
+                            // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya no
+                            // alcanza. Varias llaves no son campos del formulario.
+                            errors={
+                                errors as Record<string, string | undefined>
                             }
+                            previewProductCosts={previewProductCosts}
                         />
 
                         <ControlCard

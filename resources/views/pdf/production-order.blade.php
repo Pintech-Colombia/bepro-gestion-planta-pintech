@@ -13,15 +13,15 @@
         $pdfTotals = $pdfMaterials['totals'] ?? ['kg' => '0', 'grams' => '0'];
 
         $lineAdjustmentsCount = count($order['line_adjustments'] ?? []);
-        $remnantsCount = count($order['remnant_consumptions'] ?? []);
-        // El mismo resumen de la tarjeta del detalle (ProductionOrderCostSummary): solo con «Ver costos».
-        $costSummary = $order['cost_summary'] ?? null;
-        $hasFinancialSummary = ($order['status'] ?? '') === 'completed' && $costSummary !== null;
-
+        $isCancelled = ($order['status'] ?? '') === 'cancelled';
+        // Las observaciones de cada producto (fuentes, rayas, lo que quedó) ocupan renglones de más dentro de su fila.
+        $productExtraLines = collect($pdfRows)
+            ->where('kind', 'product')
+            ->sum(fn (array $row): int => max(count($row['observations'] ?? []) - 1, 0));
         $effectiveLoad = count($pdfRows)
             + ($lineAdjustmentsCount > 0 ? $lineAdjustmentsCount + 2 : 0)
-            + ($remnantsCount > 0 ? $remnantsCount + 2 : 0)
-            + ($hasFinancialSummary ? 5 : 0);
+            + $productExtraLines
+            + ($isCancelled ? 1 : 0);
 
         // Escala adaptable para que la OP quepa siempre en 1 sola hoja carta sin recortar materias primas.
         $compactPass = (bool) ($compactPass ?? false);
@@ -51,36 +51,10 @@
             $finalNotesLines = 1;
         }
 
-        $productData = $order['product'] ?? [];
-        $formatExpectedRange = static function (mixed $lower, mixed $upper, string $unit): ?string {
-            if ($lower !== null && $upper !== null) {
-                return 'Esperado: '.NumberFormat::measurement($lower, 1).' – '.NumberFormat::measurement($upper, 1)." {$unit}";
-            }
-            if ($lower !== null) {
-                return 'Esperado: >= '.NumberFormat::measurement($lower, 1)." {$unit}";
-            }
-            if ($upper !== null) {
-                return 'Esperado: <= '.NumberFormat::measurement($upper, 1)." {$unit}";
-            }
-
-            return null;
-        };
-
-        $finenessRange = $formatExpectedRange(
-            $productData['quality_fineness_lower'] ?? null,
-            $productData['quality_fineness_upper'] ?? null,
-            'HG'
-        );
-        $viscosityRange = $formatExpectedRange(
-            $productData['quality_viscosity_lower'] ?? null,
-            $productData['quality_viscosity_upper'] ?? null,
-            'KU'
-        );
-        $solidsRange = $formatExpectedRange(
-            $productData['quality_solids_lower'] ?? null,
-            $productData['quality_solids_upper'] ?? null,
-            '%'
-        );
+        // «Esperado: 95,0 – 105,0 KU»: lo arma BuildProductionOrderExportDataAction, igual para el Excel.
+        $finenessRange = $order['expected_ranges']['fineness'] ?? null;
+        $viscosityRange = $order['expected_ranges']['viscosity'] ?? null;
+        $solidsRange = $order['expected_ranges']['solids'] ?? null;
 
         $formulaNotes = $order['formula']['notes'] ?? null;
     @endphp
@@ -178,6 +152,16 @@
             border-color: #202532;
         }
 
+        .cancelled-banner {
+            border: 1.5pt solid #b42318;
+            color: #b42318;
+            font-weight: bold;
+            font-size: 10pt;
+            text-align: center;
+            letter-spacing: 0.5pt;
+            padding: 3pt 5pt;
+        }
+
         .label {
             font-weight: bold;
             background-color: #e7e9ee;
@@ -215,6 +199,10 @@
 
         .text-bold {
             font-weight: bold;
+        }
+
+        .pt-name {
+            font-size: 7.5pt;
         }
 
         .small-text {
@@ -300,9 +288,19 @@
         </tr>
         <tr>
             <th class="meta-label">FECHA</th>
-            <td class="meta-value">{{ $generatedAt }}</td>
+            {{-- La fecha de emisión del formato FPR-02 versión 2.0; la de generación va en el pie. --}}
+            <td class="meta-value">02/12/2020</td>
         </tr>
     </table>
+
+    {{-- Una orden cancelada no se produce: si alguien la imprime, que se note antes de leer nada más. --}}
+    @if($isCancelled)
+        <table class="section-table">
+            <tr>
+                <td class="cancelled-banner">ORDEN CANCELADA · NO USAR PARA PRODUCIR</td>
+            </tr>
+        </table>
+    @endif
 
     {{-- ② DATOS GENERALES DEL PRODUCTO A FABRICAR --}}
     <table class="section-table">
@@ -326,11 +324,12 @@
             </td>
             <td class="label">FECHA</td>
             @php
-                $plannedDate = $order['planned_date'] ? \Carbon\Carbon::parse($order['planned_date']) : null;
+                // La fecha de fabricación (creación de la OP, en fecha de planta). La planeada no se imprime.
+                $manufacturedOn = filled($order['manufactured_on'] ?? null) ? \Carbon\Carbon::parse($order['manufactured_on']) : null;
             @endphp
-            <td class="value text-center" style="width: 10%;">{{ $plannedDate?->format('d') ?? '__' }}</td>
-            <td class="value text-center" style="width: 10%;">{{ $plannedDate?->format('m') ?? '__' }}</td>
-            <td class="value text-center" style="width: 12%;">{{ $plannedDate?->format('Y') ?? '__' }}</td>
+            <td class="value text-center" style="width: 10%;">{{ $manufacturedOn?->format('d') ?? '__' }}</td>
+            <td class="value text-center" style="width: 10%;">{{ $manufacturedOn?->format('m') ?? '__' }}</td>
+            <td class="value text-center" style="width: 12%;">{{ $manufacturedOn?->format('Y') ?? '__' }}</td>
         </tr>
         <tr>
             <td colspan="2" class="label">CANTIDAD PROYECTADA</td>
@@ -342,7 +341,7 @@
                 @if(count($order['packaging_plans']) > 0)
                     @foreach($order['packaging_plans'] as $plan)
                         {{ NumberFormat::units($plan['planned_units']) }}
-                        {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
+                        {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}@if(!$loop->last), @endif
                     @endforeach
                 @else
                     N/A
@@ -360,7 +359,7 @@
                     {{-- Solo las presentaciones con unidades registradas, para que la coma no quede al final. --}}
                     @foreach(collect($order['packaging_plans'])->whereNotNull('actual_units') as $plan)
                         {{ NumberFormat::units($plan['actual_units']) }}
-                        {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
+                        {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}@if(!$loop->last), @endif
                     @endforeach
                 @endif
             </td>
@@ -450,10 +449,22 @@
                     $grams = $row['display_grams'] ?? '0';
                 @endphp
                 <tr class="mp-row">
-                    <td class="text-center"><strong>{{ $row['raw_material_code'] }}</strong></td>
+                    <td class="text-center">
+                        @if(($row['kind'] ?? 'material') === 'product')
+                            {{-- El nombre del producto es largo: un punto menor que el código de una MP, pero del mismo color. --}}
+                            <strong class="pt-name">{{ $row['raw_material_code'] }}</strong> <span class="small-text">(PT)</span>
+                        @else
+                            <strong>{{ $row['raw_material_code'] }}</strong>
+                        @endif
+                    </td>
                     <td class="text-center">{{ $kg > 0 ? NumberFormat::quantity($kg) : '' }}</td>
                     <td class="text-center">{{ $grams > 0 ? NumberFormat::units($grams) : '' }}</td>
-                    <td></td>
+                    <td class="small-text">
+                        {{-- De dónde sale el producto, la raya de lo que quedó y lo registrado (BuildProductionOrderPdfMaterialsAction). --}}
+                        @foreach($row['observations'] ?? [] as $observation)
+                            {{ $observation }}@if(!$loop->last)<br>@endif
+                        @endforeach
+                    </td>
                     <td class="text-center">
                         {{ isset($row['actual_quantity']) ? NumberFormat::quantity($row['actual_quantity']) : '' }}
                     </td>
@@ -462,7 +473,7 @@
             <tr class="text-bold">
                 <td class="text-center label">TOTAL</td>
                 <td class="text-center">{{ NumberFormat::quantity($pdfTotals['kg'] ?? 0) }}</td>
-                <td class="text-center">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '0' }}</td>
+                <td class="text-center">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '' }}</td>
                 <td></td>
                 <td class="text-center">
                     {{ (float) ($pdfTotals['actual_quantity'] ?? 0) > 0 ? NumberFormat::quantity($pdfTotals['actual_quantity']) : '' }}
@@ -484,10 +495,22 @@
                 @endphp
                 <tr class="mp-row">
                     <td class="text-center">{{ $row['step_order'] }}</td>
-                    <td class="text-center"><strong>{{ $row['raw_material_code'] }}</strong></td>
+                    <td class="text-center">
+                        @if(($row['kind'] ?? 'material') === 'product')
+                            {{-- El nombre del producto es largo: un punto menor que el código de una MP, pero del mismo color. --}}
+                            <strong class="pt-name">{{ $row['raw_material_code'] }}</strong> <span class="small-text">(PT)</span>
+                        @else
+                            <strong>{{ $row['raw_material_code'] }}</strong>
+                        @endif
+                    </td>
                     <td class="text-center">{{ $kg > 0 ? NumberFormat::quantity($kg) : '' }}</td>
                     <td class="text-center">{{ $grams > 0 ? NumberFormat::units($grams) : '' }}</td>
-                    <td></td>
+                    <td class="small-text">
+                        {{-- De dónde sale el producto, la raya de lo que quedó y lo registrado (BuildProductionOrderPdfMaterialsAction). --}}
+                        @foreach($row['observations'] ?? [] as $observation)
+                            {{ $observation }}@if(!$loop->last)<br>@endif
+                        @endforeach
+                    </td>
                     <td class="text-center">
                         {{ isset($row['actual_quantity']) ? NumberFormat::quantity($row['actual_quantity']) : '' }}
                     </td>
@@ -496,7 +519,7 @@
             <tr class="text-bold">
                 <td class="text-center label" colspan="2">TOTAL</td>
                 <td class="text-center">{{ NumberFormat::quantity($pdfTotals['kg'] ?? 0) }}</td>
-                <td class="text-center">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '0' }}</td>
+                <td class="text-center">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '' }}</td>
                 <td></td>
                 <td class="text-center">
                     {{ (float) ($pdfTotals['actual_quantity'] ?? 0) > 0 ? NumberFormat::quantity($pdfTotals['actual_quantity']) : '' }}
@@ -528,28 +551,7 @@
         </table>
     @endif
 
-    {{-- ⑤.2 SALDOS DE PT A USAR --}}
-    @if(!empty($order['remnant_consumptions']) && count($order['remnant_consumptions']) > 0)
-        <table class="section-table">
-            <tr>
-                <td colspan="4" class="section-header">SALDOS DE PT A USAR</td>
-            </tr>
-            <tr class="compact-row">
-                <th class="label text-center" style="width: 22%;">SALDO</th>
-                <th class="label text-center" style="width: 16%;">KILOS</th>
-                <th class="label text-center" style="width: 38%;">PRODUCTO</th>
-                <th class="label text-center" style="width: 24%;">OBSERVACIONES</th>
-            </tr>
-            @foreach($order['remnant_consumptions'] as $remnantLine)
-                <tr class="compact-row">
-                    <td class="text-center">SALDO · {{ $remnantLine['source_order_number'] }} <span class="small-text">(Lote {{ $remnantLine['source_lot_number'] }})</span></td>
-                    <td class="text-center">{{ NumberFormat::quantity($remnantLine['quantity_kg']) }}</td>
-                    <td>{{ $remnantLine['source_product_name'] }}</td>
-                    <td>{{ $remnantLine['notes'] ?? '' }}</td>
-                </tr>
-            @endforeach
-        </table>
-    @endif
+    {{-- Los saldos de PT a usar ya no van aparte: son fuentes de su producto, en la tabla de arriba. --}}
 
     {{-- ⑥ NOMBRE RESPONSABLE (fila compacta) --}}
     <table class="section-table">
@@ -633,47 +635,6 @@
             </tr>
         @endfor
     </table>
-
-    {{-- RESUMEN FINANCIERO (solo si la orden está completada y el usuario puede ver costos) --}}
-    @if($hasFinancialSummary)
-        <table class="section-table">
-            <tr>
-                <td colspan="4" class="section-header">RESUMEN FINANCIERO</td>
-            </tr>
-            <tr class="compact-row">
-                <td class="label" style="width: 25%;">COSTO TOTAL GRANEL</td>
-                <td class="value" style="width: 25%;">{{ NumberFormat::cost($costSummary['bulk']['total']) }}</td>
-                <td class="label" style="width: 25%;">COSTO DE LO ENVASADO</td>
-                <td class="value" style="width: 25%;">{{ NumberFormat::cost($costSummary['packaged']['total']) }}</td>
-            </tr>
-            <tr class="compact-row">
-                <td class="label">COSTO POR GALÓN (SIN CIF)</td>
-                <td class="value">{{ $costSummary['cost_per_gallon'] !== null ? NumberFormat::cost($costSummary['cost_per_gallon']) : 'N/A' }}</td>
-                <td class="label">COSTO CON CIF (ENVASADO)</td>
-                <td class="value">{{ NumberFormat::cost($costSummary['packaged']['total_with_cif']) }}</td>
-            </tr>
-            @if($order['yield_percentage'] !== null)
-                <tr class="compact-row">
-                    <td class="label">RENDIMIENTO REAL</td>
-                    <td class="value">
-                        {{ $order['yield_real_quantity'] !== null ? NumberFormat::quantity($order['yield_real_quantity']) . ' gal' : 'N/A' }}
-                    </td>
-                    <td class="label">RENDIMIENTO TEÓRICO</td>
-                    <td class="value">
-                        {{ $order['yield_theoretical_quantity'] !== null ? NumberFormat::quantity($order['yield_theoretical_quantity']) . ' gal' : 'N/A' }}
-                    </td>
-                </tr>
-                <tr class="compact-row">
-                    <td class="label">VARIANZA</td>
-                    <td class="value">
-                        {{ $order['yield_variance_quantity'] !== null ? NumberFormat::quantity($order['yield_variance_quantity']) . ' gal' : 'N/A' }}
-                    </td>
-                    <td class="label">% RENDIMIENTO</td>
-                    <td class="value">{{ NumberFormat::percent($order['yield_percentage']) }}</td>
-                </tr>
-            @endif
-        </table>
-    @endif
 
 </body>
 

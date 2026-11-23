@@ -1,299 +1,264 @@
-<table>
-    <!-- ENCABEZADO SUPERIOR (LOGO Y METADATA) -->
-    <thead>
-        <tr>
-            <th colspan="3" rowspan="3"><!-- Espacio reservado para el logo vía WithDrawings --></th>
-            <th colspan="8" rowspan="3"
-                style="text-align: center; font-weight: bold; font-size: 20px; vertical-align: middle; border: 1px solid #000000;">
-                ORDEN DE PRODUCCIÓN
-            </th>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #f0f0f0;"> CÓDIGO
-            </th>
-            <th colspan="2" style="font-size: 10px; border: 1px solid #000000; background-color: #ffffff;">FPR-02</th>
-        </tr>
-        <tr>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #f0f0f0;"> VERSIÓN
-            </th>
-            <th colspan="2" style="font-size: 10px; border: 1px solid #000000; background-color: #ffffff;">2.0</th>
-        </tr>
-        <tr>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #f0f0f0;"> FECHA</th>
-            <th colspan="2" style="font-size: 10px; border: 1px solid #000000; background-color: #ffffff;">DIC 2020
-            </th>
-        </tr>
-        <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
-    </thead>
+@php
+    use App\Support\NumberFormat;
 
-    <tbody>
-        <!-- SECCIÓN 1: DATOS GENERALES -->
+    /*
+     * La misma hoja de planta del PDF (resources/views/pdf/production-order.blade.php), sección por sección, para que la
+     * jefa la corrija y la imprima: carta vertical en una hoja (ProductionOrderExport). Cuadrícula de 12 columnas.
+     */
+    $pdfMaterials = $order['pdf_materials'] ?? ['mode' => 'steps', 'rows' => []];
+    $pdfMode = $pdfMaterials['mode'] ?? 'steps';
+    $pdfRows = $pdfMaterials['rows'] ?? [];
+    $pdfTotals = $pdfMaterials['totals'] ?? ['kg' => '0', 'grams' => '0'];
+    $packagingPlans = $order['packaging_plans'] ?? [];
+    $isCancelled = ($order['status'] ?? '') === 'cancelled';
+    $manufacturedOn = filled($order['manufactured_on'] ?? null) ? \Carbon\Carbon::parse($order['manufactured_on']) : null;
+    $formulaNotes = $order['formula']['notes'] ?? null;
+    $plantTime = fn (?string $value): string => filled($value)
+        ? app(\App\Services\TimezoneService::class)->formatPlantDateTime($value, 'H:i')
+        : '';
+
+    $border = 'border: 1px solid #202532;';
+    $section = $border.' background-color: #202532; color: #ffffff; font-weight: bold; text-align: center; vertical-align: middle;';
+    $label = $border.' background-color: #e7e9ee; color: #202532; font-weight: bold; font-size: 9px; vertical-align: middle; word-wrap: break-word;';
+    $value = $border.' color: #202532; vertical-align: middle;';
+    $wrap = ' word-wrap: break-word; vertical-align: top;';
+    $small = ' font-size: 9px; color: #606e80;';
+
+    // Excel no ajusta el alto de una celda combinada: el renglón se agranda aquí según cuántas líneas ocupa su texto
+    // (caracteres por línea de cada ancho, medidos con Arial 10 en la cuadrícula de ProductionOrderExport).
+    $lines = fn (?string $text, int $perLine): int => max(1, (int) ceil(mb_strlen((string) $text) / $perLine));
+    $rowHeight = fn (int $lines): int => max(16, $lines * 13 + 4);
+@endphp
+<table>
+    {{-- ① CABECERA --}}
+    <tr>
+        <td colspan="3" rowspan="3" style="{{ $border }}">{{-- El logo va encima (WithDrawings). --}}</td>
+        <td colspan="5" rowspan="3" style="{{ $border }} font-weight: bold; font-size: 18px; text-align: center; vertical-align: middle;">ORDEN DE PRODUCCIÓN</td>
+        <td colspan="2" style="{{ $label }}">CÓDIGO</td>
+        <td colspan="2" style="{{ $value }} font-weight: bold;">FPR-02</td>
+    </tr>
+    <tr>
+        <td colspan="2" style="{{ $label }}">VERSIÓN</td>
+        <td colspan="2" style="{{ $value }}">2.0</td>
+    </tr>
+    <tr>
+        <td colspan="2" style="{{ $label }}">FECHA</td>
+        {{-- La fecha de emisión del formato FPR-02 versión 2.0. --}}
+        <td colspan="2" style="{{ $value }}">02/12/2020</td>
+    </tr>
+
+    {{-- Una orden cancelada no se produce: si alguien la imprime, que se note antes de leer nada más. --}}
+    @if($isCancelled)
         <tr>
-            <th colspan="15"
-                style="background-color: #4a7c59; color: #ffffff; font-weight: bold; font-size: 12px; text-align: center; vertical-align: middle; border: 1px solid #000000;">
-                DATOS GENERALES DEL PRODUCTO A FABRICAR
-            </th>
+            <td colspan="12" style="border: 2px solid #b42318; color: #b42318; font-weight: bold; font-size: 12px; text-align: center;">ORDEN CANCELADA · NO USAR PARA PRODUCIR</td>
         </tr>
-        <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">ORDEN
-                DE PRODUCCIÓN N°</th>
-            <td colspan="4" style="border: 1px solid #000000;">{{ $order['order_number'] }}</td>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff;">Lote:</th>
-            <td colspan="6" style="border: 1px solid #000000;">{{ $order['lot_caption'] }}</td>
-        </tr>
-        <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">
-                NOMBRE DEL PRODUCTO</th>
-            <td colspan="8" style="border: 1px solid #000000;">{{ $order['product_display_name'] ?? 'N/A' }}</td>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff;">FECHA</th>
-            <td colspan="2" style="border: 1px solid #000000; text-align: center;">{{ !empty($order['planned_date']) ? \Carbon\Carbon::parse($order['planned_date'])->format('d/m/Y') : '—' }}</td>
-        </tr>
-        <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">
-                CANTIDAD PROYECTADA</th>
-            <td colspan="4" style="border: 1px solid #000000; text-align: center;">
-                {{ number_format($order['quantity'], 2) }} gal
-            </td>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff;">ENVASES A
-                USAR</th>
-            <td colspan="6" style="border: 1px solid #000000;">
-                @foreach($order['packaging_plans'] as $plan)
-                    {{ $plan['planned_units'] }} x
-                    {{ $plan['product_variant']['presentation_label'] ?? 'N/A' }}{{ $plan['packaging_materials'] !== null ? ' ('.$plan['packaging_materials'].')' : '' }}@if(!$loop->last), @endif
+    @endif
+
+    {{-- ② DATOS GENERALES DEL PRODUCTO A FABRICAR --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">DATOS GENERALES DEL PRODUCTO A FABRICAR</td>
+    </tr>
+    <tr>
+        <td colspan="3" style="{{ $label }}">ORDEN DE PRODUCCIÓN N°</td>
+        <td colspan="3" style="{{ $value }} font-weight: bold;">{{ $order['order_number'] }}</td>
+        <td colspan="2" style="{{ $label }}">LOTE</td>
+        <td colspan="4" style="{{ $value }}">{{ $order['lot_caption'] ?? '' }}</td>
+    </tr>
+    <tr height="{{ $rowHeight($lines($order['product_display_name'] ?? '', 22)) }}">
+        <td colspan="3" style="{{ $label }}">NOMBRE DEL PRODUCTO</td>
+        <td colspan="3" style="{{ $value }} font-weight: bold;{{ $wrap }}">{{ $order['product_display_name'] ?? 'N/A' }}</td>
+        <td colspan="2" style="{{ $label }}">FECHA</td>
+        {{-- La fecha de fabricación (creación de la OP, en fecha de planta). La planeada no se imprime. --}}
+        <td style="{{ $value }} text-align: center;">{{ $manufacturedOn?->format('d') ?? '__' }}</td>
+        <td style="{{ $value }} text-align: center;">{{ $manufacturedOn?->format('m') ?? '__' }}</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ $manufacturedOn?->format('Y') ?? '____' }}</td>
+    </tr>
+    <tr>
+        <td colspan="3" style="{{ $label }}">CANTIDAD PROYECTADA</td>
+        <td colspan="2" style="{{ $value }} font-weight: bold; text-align: center;">{{ NumberFormat::quantity($order['quantity']) }} gal</td>
+        <td colspan="2" style="{{ $label }}">ENVASES A USAR</td>
+        <td colspan="5" style="{{ $value }}{{ $wrap }}">
+            @forelse($packagingPlans as $plan)
+                {{ NumberFormat::units($plan['planned_units']) }} {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}@if(!$loop->last), @endif
+            @empty
+                N/A
+            @endforelse
+        </td>
+    </tr>
+    <tr>
+        <td colspan="3" style="{{ $label }}">CANTIDAD RESULTADO</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ ($order['actual_quantity'] ?? null) !== null ? NumberFormat::quantity($order['actual_quantity']).' gal' : '________ gal' }}</td>
+        <td colspan="2" style="{{ $label }}">ENVASES USADOS</td>
+        <td colspan="5" style="{{ $value }}{{ $wrap }}">
+            {{-- Solo las presentaciones con unidades registradas, para que la coma no quede al final. --}}
+            @foreach(collect($packagingPlans)->whereNotNull('actual_units') as $plan)
+                {{ NumberFormat::units($plan['actual_units']) }} {{ $plan['product_variant']['presentation_label'] ?? 'uds' }}@if(!$loop->last), @endif
+            @endforeach
+        </td>
+    </tr>
+
+    {{-- ③ PESAJE Y TRANSFORMACIÓN MATERIA PRIMA --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">PESAJE Y TRANSFORMACIÓN MATERIA PRIMA</td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="2" style="{{ $label }}">INICIO AGITACIÓN</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ $plantTime($order['agitation_start_time'] ?? null) }}</td>
+        <td colspan="2" style="{{ $label }}">FIN AGITACIÓN</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ $plantTime($order['agitation_end_time'] ?? null) }}</td>
+        <td colspan="2" style="{{ $label }}">PESO POR GALÓN (kg/gal)</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ ($order['density_kg_per_gallon'] ?? null) !== null ? NumberFormat::quantity($order['density_kg_per_gallon']).' kg/gal' : '' }}</td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="2" style="{{ $label }}">INICIO ENVASADO</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ $plantTime($order['packaging_start_time'] ?? null) }}</td>
+        <td colspan="2" style="{{ $label }}">FIN ENVASADO</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ $plantTime($order['packaging_end_time'] ?? null) }}</td>
+        <td colspan="2" style="{{ $label }}">OBSERVACIONES PESAJE</td>
+        <td colspan="2" style="{{ $value }}"></td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="2" style="{{ $label }}">INICIO EMPACADO</td>
+        <td colspan="2" style="{{ $value }}"></td>
+        <td colspan="2" style="{{ $label }}">FIN EMPACADO</td>
+        <td colspan="2" style="{{ $value }}"></td>
+        <td colspan="2" style="{{ $label }}">DERRAMES EN ENVASADO</td>
+        <td colspan="2" style="{{ $value }} word-wrap: break-word;">
+            @if(($order['spillage_quantity'] ?? 0) > 0)
+                SÍ — {{ NumberFormat::quantity($order['spillage_quantity']) }} kg
+            @elseif(in_array($order['status'] ?? '', ['pending_review', 'completed'], true))
+                {{-- El derrame no admite vacío (0 por defecto): desde la revisión, 0 es la respuesta del operario. --}}
+                NO
+            @else
+                SÍ ☐ NO ☐ Cant.: ____ kg
+            @endif
+        </td>
+    </tr>
+
+    {{-- ④ INSTRUCCIONES PARA PRODUCCIÓN (notas de la fórmula) --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">INSTRUCCIONES PARA PRODUCCIÓN</td>
+    </tr>
+    <tr height="{{ $rowHeight(max(2, $lines($formulaNotes, 85))) }}">
+        <td colspan="3" style="{{ $label }}">INDICACIONES DE LA FÓRMULA:</td>
+        <td colspan="9" style="{{ $value }}{{ $wrap }}">{{ filled($formulaNotes) ? $formulaNotes : '—' }}</td>
+    </tr>
+
+    {{-- ⑤ MATERIA PRIMA Y CANTIDADES: por paso mientras se produce; agrupada por MP con la orden completada. --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">MATERIA PRIMA Y CANTIDADES</td>
+    </tr>
+    <tr>
+        @if($pdfMode !== 'consolidated')
+            <td style="{{ $label }} text-align: center;">#</td>
+            <td colspan="2" style="{{ $label }} text-align: center;">COD</td>
+        @else
+            <td colspan="3" style="{{ $label }} text-align: center;">COD</td>
+        @endif
+        <td style="{{ $label }} text-align: center;">CANT. KG</td>
+        <td style="{{ $label }} text-align: center;">CANT. G</td>
+        <td colspan="5" style="{{ $label }} text-align: center;">OBSERVACIONES</td>
+        <td colspan="2" style="{{ $label }} text-align: center;">AGREGADO TOTAL</td>
+    </tr>
+    @foreach($pdfRows as $row)
+        @php
+            $isProduct = ($row['kind'] ?? 'material') === 'product';
+            $kg = $row['display_kg'] ?? '0';
+            $grams = $row['display_grams'] ?? '0';
+            $codeLines = $lines($row['raw_material_code'].($isProduct ? ' (PT)' : ''), $pdfMode === 'consolidated' ? 22 : 14);
+            $observationLines = collect($row['observations'] ?? [])->sum(fn (string $observation): int => $lines($observation, 50));
+        @endphp
+        {{-- Dos líneas como mínimo: en OBSERVACIONES la planta anota a mano lo que va echando. --}}
+        <tr height="{{ $rowHeight(max(2, $codeLines, $observationLines)) }}">
+            @if($pdfMode !== 'consolidated')
+                <td style="{{ $value }} text-align: center;">{{ $row['step_order'] ?? '' }}</td>
+                <td colspan="2" style="{{ $value }} font-weight: bold; text-align: center;{{ $wrap }}">{{ $row['raw_material_code'] }}{{ $isProduct ? ' (PT)' : '' }}</td>
+            @else
+                <td colspan="3" style="{{ $value }} font-weight: bold; text-align: center;{{ $wrap }}">{{ $row['raw_material_code'] }}{{ $isProduct ? ' (PT)' : '' }}</td>
+            @endif
+            <td style="{{ $value }} text-align: center;">{{ $kg > 0 ? NumberFormat::quantity($kg) : '' }}</td>
+            <td style="{{ $value }} text-align: center;">{{ $grams > 0 ? NumberFormat::units($grams) : '' }}</td>
+            {{-- De dónde sale el producto, la raya de lo que quedó y lo registrado (BuildProductionOrderPdfMaterialsAction). --}}
+            <td colspan="5" style="{{ $value }}{{ $wrap }}{{ $small }}">
+                @foreach($row['observations'] ?? [] as $observation)
+                    {{ $observation }}@if(!$loop->last)<br>@endif
                 @endforeach
             </td>
+            <td colspan="2" style="{{ $value }} text-align: center;">{{ isset($row['actual_quantity']) ? NumberFormat::quantity($row['actual_quantity']) : '' }}</td>
         </tr>
-        <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">
-                CANTIDAD RESULTADO</th>
-            <td colspan="4" style="border: 1px solid #000000; text-align: center;">
-                {{ !empty($order['yield_real_quantity']) ? number_format($order['yield_real_quantity'], 2) . ' gal' : '---' }}
-            </td>
-            <th colspan="2" style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff;">RESPONSABLE
-            </th>
-            <td colspan="6" style="border: 1px solid #000000;">{{ $order['responsible_name'] ?? '---' }}</td>
-        </tr>
+    @endforeach
+    <tr>
+        <td colspan="3" style="{{ $label }} text-align: center;">TOTAL</td>
+        <td style="{{ $value }} font-weight: bold; text-align: center;">{{ NumberFormat::quantity($pdfTotals['kg'] ?? 0) }}</td>
+        <td style="{{ $value }} font-weight: bold; text-align: center;">{{ (float) ($pdfTotals['grams'] ?? 0) > 0 ? NumberFormat::units($pdfTotals['grams']) : '' }}</td>
+        <td colspan="5" style="{{ $value }}"></td>
+        <td colspan="2" style="{{ $value }} font-weight: bold; text-align: center;">{{ (float) ($pdfTotals['actual_quantity'] ?? 0) > 0 ? NumberFormat::quantity($pdfTotals['actual_quantity']) : '' }}</td>
+    </tr>
 
+    {{-- ⑤.1 AJUSTES DE LÍNEA (MPs fuera de fórmula) --}}
+    @if(count($order['line_adjustments'] ?? []) > 0)
         <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
-
-        <!-- SECCIÓN 2: PESAJE Y TRANSFORMACIÓN -->
-        <tr>
-            <th colspan="15"
-                style="background-color: #4a7c59; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
-                PESAJE Y TRANSFORMACION MATERIA PRIMA
-            </th>
+            <td colspan="12" style="{{ $section }}">AJUSTES DE LÍNEA (MPs ADICIONALES)</td>
         </tr>
         <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #daeef3; text-align: left;">
-                INICIO AGITACIÓN</th>
-            <td colspan="4" style="border: 1px solid #000000;">{{ filled($order['agitation_start_time'] ?? null) ? app(\App\Services\TimezoneService::class)->formatPlantDateTime($order['agitation_start_time'], 'H:i') : '---' }}</td>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #daeef3; text-align: left;">FIN
-                AGITACIÓN</th>
-            <td colspan="5" style="border: 1px solid #000000;">{{ filled($order['agitation_end_time'] ?? null) ? app(\App\Services\TimezoneService::class)->formatPlantDateTime($order['agitation_end_time'], 'H:i') : '---' }}</td>
+            <td colspan="3" style="{{ $label }} text-align: center;">MATERIA PRIMA</td>
+            <td colspan="2" style="{{ $label }} text-align: center;">CANTIDAD</td>
+            <td colspan="4" style="{{ $label }} text-align: center;">MOTIVO</td>
+            <td colspan="3" style="{{ $label }} text-align: center;">OBSERVACIONES</td>
         </tr>
-        <tr>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #daeef3; text-align: left;">
-                INICIO ENVASADO</th>
-            <td colspan="4" style="border: 1px solid #000000;">{{ filled($order['packaging_start_time'] ?? null) ? app(\App\Services\TimezoneService::class)->formatPlantDateTime($order['packaging_start_time'], 'H:i') : '---' }}</td>
-            <th colspan="3"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #daeef3; text-align: left;">FIN
-                ENVASADO</th>
-            <td colspan="5" style="border: 1px solid #000000;">{{ filled($order['packaging_end_time'] ?? null) ? app(\App\Services\TimezoneService::class)->formatPlantDateTime($order['packaging_end_time'], 'H:i') : '---' }}</td>
-        </tr>
-
-        <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
-
-        <!-- SECCIÓN 3: MATERIA PRIMA Y CANTIDADES -->
-        @php
-            $pdfMaterials = $order['pdf_materials'] ?? ['mode' => 'steps', 'rows' => []];
-            $pdfMode = $pdfMaterials['mode'] ?? 'steps';
-            $pdfRows = $pdfMaterials['rows'] ?? [];
-            $pdfTotals = $pdfMaterials['totals'] ?? ['planned_quantity' => '0'];
-        @endphp
-        <tr>
-            <th colspan="15"
-                style="background-color: #4a7c59; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
-                MATERIA PRIMA Y CANTIDADES
-            </th>
-        </tr>
-        <tr style="font-weight: bold; background-color: #f0f0f0; text-align: center;">
-            <th colspan="3" style="border: 1px solid #000000;">COD</th>
-            <th colspan="3" style="border: 1px solid #000000;">CANT. KG</th>
-            <th colspan="6" style="border: 1px solid #000000;">DESCRIPCIÓN</th>
-            <th colspan="3" style="border: 1px solid #000000;">{{ $pdfMode === 'consolidated' ? 'AGREGADO' : 'ESTADO' }}</th>
-        </tr>
-        @if($pdfMode === 'consolidated')
-            @foreach($pdfRows as $row)
-                <tr>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ $row['raw_material_code'] }}
-                    </td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ number_format($row['planned_quantity'], 2) }}
-                    </td>
-                    <td colspan="6" style="border: 1px solid #000000;">{{ $row['raw_material_name'] }}</td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ isset($row['actual_quantity']) ? number_format($row['actual_quantity'], 2).' kg' : '' }}
-                    </td>
-                </tr>
-            @endforeach
-            <tr style="font-weight: bold;">
-                <td colspan="3" style="border: 1px solid #000000; text-align: right; background-color: #f2f2f2;">TOTAL</td>
-                <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                    {{ number_format((float) ($pdfTotals['planned_quantity'] ?? 0), 2) }}
-                    kg
-                </td>
-                <td colspan="9" style="border: 1px solid #000000; background-color: #f2f2f2;"></td>
-            </tr>
-        @else
-            @foreach($pdfRows as $row)
-                <tr>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ $row['step_order'] }}. {{ $row['raw_material_code'] }}
-                    </td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ number_format($row['planned_quantity'], 2) }}
-                    </td>
-                    <td colspan="6" style="border: 1px solid #000000;">{{ $row['raw_material_name'] }}</td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">AGREGADO</td>
-                </tr>
-            @endforeach
-            <tr style="font-weight: bold;">
-                <td colspan="3" style="border: 1px solid #000000; text-align: right; background-color: #f2f2f2;">TOTAL</td>
-                <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                    {{ number_format((float) ($pdfTotals['planned_quantity'] ?? 0), 2) }}
-                    kg
-                </td>
-                <td colspan="9" style="border: 1px solid #000000; background-color: #f2f2f2;"></td>
-            </tr>
-        @endif
-
-        <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
-
-        <!-- SECCIÓN 3.1: AJUSTES DE LÍNEA -->
-        @if(!empty($order['line_adjustments']) && count($order['line_adjustments']) > 0)
+        @foreach($order['line_adjustments'] as $adjustment)
             <tr>
-                <th colspan="15"
-                    style="background-color: #c67b1c; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
-                    AJUSTES DE LÍNEA (MPs ADICIONALES)
-                </th>
+                <td colspan="3" style="{{ $value }} text-align: center;">{{ $adjustment['raw_material']['code'] ?? 'N/A' }}</td>
+                <td colspan="2" style="{{ $value }} text-align: center;">{{ NumberFormat::quantity($adjustment['quantity']) }}</td>
+                <td colspan="4" style="{{ $value }}{{ $wrap }}">{{ $adjustment['reason'] }}</td>
+                <td colspan="3" style="{{ $value }}{{ $wrap }}">{{ $adjustment['notes'] ?? '' }}</td>
             </tr>
-            <tr style="font-weight: bold; background-color: #fce4d6; text-align: center;">
-                <th colspan="3" style="border: 1px solid #000000;">COD</th>
-                <th colspan="3" style="border: 1px solid #000000;">CANT. KG</th>
-                <th colspan="6" style="border: 1px solid #000000;">MOTIVO / DESCRIPCIÓN</th>
-                <th colspan="3" style="border: 1px solid #000000;">ESTADO</th>
-            </tr>
-            @foreach($order['line_adjustments'] as $adj)
-                <tr>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ $adj['raw_material']['code'] ?? 'N/A' }}
-                    </td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ number_format($adj['quantity'], 4) }}
-                    </td>
-                    <td colspan="6" style="border: 1px solid #000000;">{{ $adj['reason'] }} {{ $adj['notes'] ? '- '.$adj['notes'] : '' }}</td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">AGREGADO</td>
-                </tr>
-            @endforeach
-            <tr>
-                <td colspan="15" style="height: 10px;"></td>
-            </tr>
-        @endif
+        @endforeach
+    @endif
 
-        <!-- SECCIÓN 3.2: SALDOS DE PT A USAR (líneas planeadas: se descuentan al completar la orden) -->
-        @if(!empty($order['remnant_consumptions']) && count($order['remnant_consumptions']) > 0)
-            <tr>
-                <th colspan="15"
-                    style="background-color: #555555; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
-                    SALDOS DE PT A USAR
-                </th>
-            </tr>
-            <tr style="font-weight: bold; background-color: #f0f0f0; text-align: center;">
-                <th colspan="3" style="border: 1px solid #000000;">SALDO</th>
-                <th colspan="3" style="border: 1px solid #000000;">CANT. KG</th>
-                <th colspan="6" style="border: 1px solid #000000;">PRODUCTO</th>
-                <th colspan="3" style="border: 1px solid #000000;">OBSERVACIONES</th>
-            </tr>
-            @foreach($order['remnant_consumptions'] as $remnantLine)
-                <tr>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        SALDO · {{ $remnantLine['source_order_number'] }} (Lote {{ $remnantLine['source_lot_number'] }})
-                    </td>
-                    <td colspan="3" style="border: 1px solid #000000; text-align: center;">
-                        {{ number_format($remnantLine['quantity_kg'], 4) }}
-                    </td>
-                    <td colspan="6" style="border: 1px solid #000000;">{{ $remnantLine['source_product_name'] }}</td>
-                    <td colspan="3" style="border: 1px solid #000000;">{{ $remnantLine['notes'] ?? '' }}</td>
-                </tr>
-            @endforeach
-            <tr>
-                <td colspan="15" style="height: 10px;"></td>
-            </tr>
-        @endif
+    {{-- ⑥ NOMBRE RESPONSABLE --}}
+    <tr>
+        <td colspan="3" style="{{ $label }}">NOMBRE RESPONSABLE</td>
+        <td colspan="9" style="{{ $value }}">{{ $order['responsible_name'] ?? '' }}</td>
+    </tr>
 
-        <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
+    {{-- ⑦ RESULTADOS DE CALIDAD (con el rango esperado del producto) --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">RESULTADOS DE CALIDAD</td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="3" style="{{ $label }}{{ $wrap }}">MOLIENDA (HG)@if(filled($order['expected_ranges']['fineness'] ?? null))<br>{{ $order['expected_ranges']['fineness'] }}@endif</td>
+        <td style="{{ $value }} text-align: center;">{{ ($order['grinding_hg'] ?? null) !== null ? NumberFormat::measurement($order['grinding_hg'], 1) : '' }}</td>
+        <td colspan="3" style="{{ $label }}">TIEMPO TOTAL MOLIENDA</td>
+        <td style="{{ $value }}"></td>
+        <td colspan="2" style="{{ $label }}{{ $wrap }}">SÓLIDOS (%)@if(filled($order['expected_ranges']['solids'] ?? null))<br>{{ $order['expected_ranges']['solids'] }}@endif</td>
+        <td colspan="2" style="{{ $value }} text-align: center;">{{ ($order['quality_solids'] ?? null) !== null ? NumberFormat::measurement($order['quality_solids'], 1) : '' }}</td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="3" style="{{ $label }}{{ $wrap }}">VISCOSIDAD A 25 °C (KU)@if(filled($order['expected_ranges']['viscosity'] ?? null))<br>{{ $order['expected_ranges']['viscosity'] }}@endif</td>
+        <td style="{{ $value }} text-align: center;">{{ ($order['viscosity_ku'] ?? null) !== null ? NumberFormat::measurement($order['viscosity_ku'], 1) : '' }}</td>
+        <td colspan="3" style="{{ $label }}">AJUSTES PARA LA VISCOSIDAD</td>
+        <td colspan="5" style="{{ $value }}">SÍ ☐ NO ☐ Ajustes realizados:</td>
+    </tr>
+    <tr height="{{ $rowHeight(2) }}">
+        <td colspan="3" style="{{ $label }}">CORRIDO DE PODER CUBRIENTE</td>
+        <td style="{{ $value }}"></td>
+        <td colspan="3" style="{{ $label }}">AJUSTES PARA EL PODER CUBRIENTE</td>
+        <td colspan="5" style="{{ $value }}">SÍ ☐ NO ☐ Ajustes realizados:</td>
+    </tr>
 
-        <!-- SECCIÓN 4: RESULTADOS DE CALIDAD -->
+    {{-- ⑧ OBSERVACIONES FINALES (notas de la orden + renglones para escribir) --}}
+    <tr>
+        <td colspan="12" style="{{ $section }}">OBSERVACIONES FINALES</td>
+    </tr>
+    @if(filled($order['notes'] ?? null))
         <tr>
-            <th colspan="15"
-                style="background-color: #4a7c59; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #000000;">
-                RESULTADOS DE CALIDAD
-            </th>
+            <td colspan="12" style="{{ $value }}{{ $wrap }}">Notas de la orden: {{ $order['notes'] }}</td>
         </tr>
-        <tr>
-            <th colspan="4"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">
-                VISCOSIDAD A 25 C (KU)</th>
-            <td colspan="3" style="border: 1px solid #000000; text-align: center;">{{ $order['viscosity_ku'] ?? '---' }}
-            </td>
-            <th colspan="4"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">
-                MOLIENDA (HG)</th>
-            <td colspan="4" style="border: 1px solid #000000; text-align: center;">{{ $order['grinding_hg'] ?? '---' }}
-            </td>
+    @endif
+    @for($i = 0; $i < 3; $i++)
+        <tr height="20">
+            <td colspan="12" style="{{ $value }}"></td>
         </tr>
-        {{-- El mismo resumen de la tarjeta del detalle (ProductionOrderCostSummary): solo con «Ver costos», nunca cancelada. --}}
-        @if(! empty($order['cost_summary']))
-            <tr>
-                <th colspan="4"
-                    style="font-weight: bold; border: 1px solid #000000; background-color: #ffffff; text-align: left;">COSTO
-                    TOTAL GRANEL{{ $order['cost_summary']['basis'] === 'estimated' ? ' (ESTIMADO)' : '' }}</th>
-                <td colspan="11" style="border: 1px solid #000000; font-weight: bold;">$
-                    {{ number_format($order['cost_summary']['bulk']['total'], 2) }}
-                </td>
-            </tr>
-        @endif
-
-        <tr>
-            <td colspan="15" style="height: 10px;"></td>
-        </tr>
-
-        <!-- NOTAS -->
-        <tr>
-            <th colspan="15"
-                style="font-weight: bold; border: 1px solid #000000; background-color: #f2f2f2; text-align: left;">NOTAS
-                Y OBSERVACIONES:</th>
-        </tr>
-        <tr>
-            <td colspan="15" style="border: 1px solid #000000; height: 50px; vertical-align: top;">
-                {{ $order['notes'] ?? 'Sin observaciones adicionales.' }}
-            </td>
-        </tr>
-    </tbody>
+    @endfor
 </table>

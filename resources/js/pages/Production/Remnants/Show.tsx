@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatKind, formatNumber } from '@/lib/formatters';
+import { parseDecimal } from '@/lib/numeric-input';
 import {
     index as remnantsIndex,
     show as remnantShow,
@@ -35,6 +36,10 @@ type RemnantDetail = {
     original_quantity_gallons: string;
     available_quantity_kg: string;
     available_quantity_gallons: string;
+    /** Kilos que recibió de cuñetes abiertos en otras OP; null si ninguno. */
+    opened_units_kg: string | null;
+    /** Tiene más de lo que dejó su OP al completarse. */
+    exceeds_original: boolean;
     /** Kilos planeados en órdenes abiertas que todavía no se descontaron; null si no hay. */
     committed_quantity_kg: string | null;
     planned_orders: RemnantPlannedOrder[];
@@ -79,6 +84,10 @@ export default function RemnantShow({ remnant, movements, can }: Props) {
     // «Planeado en órdenes abiertas» dice cuáles). El servidor lo vuelve a revisar con el saldo bloqueado.
     const canWriteOff = !isExhausted && remnant.planned_orders.length === 0;
     const sourceLabel = `${remnant.source_order_number} · Lote ${remnant.source_lot_number}`;
+    // Lo original en 0 con cuñetes recibidos: la OP de origen no dejó sobrante y el saldo nació al volver un cuñete.
+    const bornFromOpenedUnit =
+        remnant.opened_units_kg !== null &&
+        (parseDecimal(remnant.original_quantity_kg) ?? 0) === 0;
 
     const columns: DataListingColumn<RemnantMovement>[] = [
         {
@@ -283,6 +292,23 @@ export default function RemnantShow({ remnant, movements, can }: Props) {
                                             kind="quantity"
                                         />{' '}
                                         gal
+                                        {/* Lo disponible pasa lo original por los cuñetes abiertos: no es un error. */}
+                                        {remnant.opened_units_kg !== null &&
+                                            remnant.exceeds_original && (
+                                                <span className="block text-xs text-muted-foreground">
+                                                    {bornFromOpenedUnit
+                                                        ? 'Su OP no dejó sobrante: el saldo nació de un cuñete abierto en otra orden.'
+                                                        : 'Tiene más porque recibió cuñetes abiertos de otras órdenes.'}{' '}
+                                                    Recibió{' '}
+                                                    <FormattedNumber
+                                                        value={
+                                                            remnant.opened_units_kg
+                                                        }
+                                                        kind="quantity"
+                                                    />{' '}
+                                                    kg (ver historial).
+                                                </span>
+                                            )}
                                     </>
                                 }
                             />
@@ -350,7 +376,8 @@ export default function RemnantShow({ remnant, movements, can }: Props) {
                         <h2 className="text-lg font-semibold">Historial</h2>
                         <p className="mt-0.5 text-sm text-muted-foreground">
                             Cada cambio de kilos: cuándo nació, en qué órdenes
-                            se usó y sus bajas y correcciones. No se edita: un
+                            se usó, lo que volvió de cuñetes abiertos en otras
+                            órdenes y sus bajas y correcciones. No se edita: un
                             error se corrige con otro movimiento y una nota.
                         </p>
                     </div>

@@ -20,6 +20,7 @@ use App\Models\ProductionOrder;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
 use App\Models\ProductionOrderPackagingPlan;
+use App\Models\ProductionOrderProductLine;
 use App\Models\ProductionRemnant;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
@@ -186,6 +187,15 @@ function summaryTypedData(object $test): array
     return [
         'ingredients' => [['id' => $test->detail->id, 'actual_quantity' => 30]],
         'packaging' => [['id' => $test->plan->id, 'actual_units' => 10]],
+        // Lo gastado de cada producto que lleva la orden: lo que traen sus saldos (el saldo crea su línea).
+        'product_lines' => ProductionOrderProductLine::query()
+            ->where('production_order_id', $test->order->id)
+            ->get()
+            ->map(fn (ProductionOrderProductLine $line): array => [
+                'id' => $line->id,
+                'actual_kg' => (string) $line->remnantConsumptions()->sum('quantity_kg'),
+            ])
+            ->all(),
         'remnant_quantity_kg' => 10,
         'density_kg_per_gallon' => 5,
     ];
@@ -385,7 +395,7 @@ it('a cancelled order has no costs, on screen or in the preview', function () {
 
     $this->postJson(route('production-orders.preview-costs', $this->order), summaryTypedData($this))
         ->assertOk()
-        ->assertExactJson(['ingredients' => [], 'summary' => null]);
+        ->assertExactJson(['ingredients' => [], 'products' => [], 'product_lines' => [], 'summary' => null]);
 });
 
 it('without «Ver costos» there is no summary on screen and the preview refuses', function (SystemRole $role) {
@@ -399,7 +409,7 @@ it('without «Ver costos» there is no summary on screen and the preview refuses
 
     $this->postJson(route('production-orders.preview-costs', $this->order), summaryTypedData($this))->assertForbidden();
 
-    expect(app(BuildProductionOrderExportDataAction::class)->execute($this->order, includeCosts: false))
+    expect(app(BuildProductionOrderExportDataAction::class)->execute($this->order))
         ->not->toHaveKey('cost_summary');
 })->with([SystemRole::Production, SystemRole::Operator]);
 
@@ -444,7 +454,8 @@ it('compares each presentation with the price list of today and its real margin'
         ->and(collect($withoutMargin['presentations'])->pluck('real_margin_percentage')->filter()->all())->toBe([]);
 });
 
-it('the pdf and the excel show the same bulk total as the card', function () {
+// El PDF y el Excel son la hoja de planta: el resumen se ve en el detalle de la OP, nunca impreso (2026-11-23).
+it('the pdf and the excel never print the cost summary, even for whoever can see it', function () {
     summaryOrderWithAdjustmentAndRemnant($this);
     completeSummaryOrder($this)->assertSessionHasNoErrors();
 
@@ -452,10 +463,10 @@ it('the pdf and the excel show the same bulk total as the card', function () {
     $pdfHtml = view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render();
     $excelHtml = view('excel.production-order', ['order' => $payload])->render();
 
-    expect($payload['cost_summary'])->toEqual(shownCostSummary($this))
-        ->and($pdfHtml)->toContain('COSTO TOTAL GRANEL')->toContain('$192')
-        ->and($pdfHtml)->toContain('COSTO CON CIF (ENVASADO)')->toContain('$224')
-        ->and($excelHtml)->toContain('192.00');
+    expect(shownCostSummary($this)['bulk']['total'])->not->toBeNull()
+        ->and($payload)->not->toHaveKey('cost_summary')
+        ->and($pdfHtml)->not->toContain('COSTO TOTAL GRANEL')->not->toContain('$192')
+        ->and($excelHtml)->not->toContain('COSTO')->not->toContain('192.00');
 });
 
 it('the completed entry is the unit cost of each presentation, with and without CIF', function () {

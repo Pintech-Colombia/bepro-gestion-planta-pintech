@@ -541,7 +541,9 @@ anteriores a la tabla se rellenaron con su nacimiento y sus consumos aplicados (
 OP con sus kilos planeados (cantidad por galón × equivalencia a kilos de su unidad × galones de la OP); las agregadas
 nacen al usar en la OP un saldo o un lote de un producto que la fórmula no lleva, sin plan, y se van con su última
 fuente. Sus fuentes son saldos (`remnant_consumptions`) y lotes (`production_order_batch_consumptions`), siempre del
-mismo producto. Una línea de la fórmula sin ninguna fuente no deja enviar a revisión ni completar.
+mismo producto, que elige una persona (la OP nace sin fuentes). Una línea de la fórmula sin ninguna fuente no deja enviar
+a revisión ni completar. Lo gastado de cada línea se escribe en la tabla de consumo, como una materia prima, y se guarda al
+enviar a revisión o completar (`actual_kg`, obligatorio para cada línea de la orden).
 
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
@@ -550,6 +552,7 @@ mismo producto. Una línea de la fórmula sin ninguna fuente no deja enviar a re
 | `product_id` | BIGINT |  | FK → `products` (RESTRICT) |
 | `step_order` | INT | sí | El paso de la fórmula; nulo en una agregada |
 | `planned_kg` | DECIMAL(12,4) | sí | Kilos planeados; nulo en una agregada |
+| `actual_kg` | DECIMAL(12,4) | sí | Kilos gastados, escritos al enviar a revisión o completar. Nulo hasta entonces. No mueve el costo: el costo sale de lo que se saca de las fuentes |
 | `origin` | VARCHAR(20) |  | `ProductionOrderProductLineOrigin`: formula, added |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
@@ -557,10 +560,10 @@ mismo producto. Una línea de la fórmula sin ninguna fuente no deja enviar a re
 ### 2.5.7c `production_order_batch_consumptions`
 
 Lotes de PT que usa una OP como fuente de una línea de producto, en unidades enteras (las que se sacan de bodega,
-propuestas por la preselección y editables hasta completar). Sin aplicar, sus unidades quedan **comprometidas** en la
+elegidas por una persona y editables hasta completar). Sin aplicar, sus unidades quedan **comprometidas** en la
 bodega: lo libre de un lote es su stock menos las fuentes sin aplicar de órdenes abiertas (`AvailableBatchesService`), y
 ninguna salida de PT (venta, muestra, deterioro, ajuste, traslado) toma lo comprometido. Al enviar a revisión o completar
-se guardan los kilos usados y lo que quedó, pesado, en el envase abierto. Al completar salen las unidades
+se guarda lo que quedó, pesado, en el envase abierto (lo gastado va por línea, en `production_order_product_lines.actual_kg`). Al completar salen las unidades
 («Transformación», con la OP que consume), lo que quedó vuelve al saldo de la OP que fabricó el lote y se fijan los kilos
 por unidad y el costo (`BatchSourceDrawdown`).
 
@@ -572,7 +575,7 @@ por unidad y el costo (`BatchSourceDrawdown`).
 | `finished_product_batch_id` | BIGINT |  | FK → `finished_product_batches` (RESTRICT). Índice (`finished_product_batch_id`, `warehouse_id`) |
 | `warehouse_id` | BIGINT |  | FK → `warehouses` (RESTRICT). La bodega de la OP |
 | `units` | INT |  | Unidades enteras que salen al completar |
-| `used_kg` | DECIMAL(12,4) | sí | Kilos usados del lote, registrados al entregar |
+| `used_kg` | DECIMAL(12,4) | sí | **Sin uso** desde que lo gastado va por línea (`production_order_product_lines.actual_kg`); se retira en una migración posterior |
 | `leftover_kg` | DECIMAL(12,4) | sí | Lo que quedó en el envase abierto, pesado (no pasa de una unidad). Nulo: no quedó nada |
 | `kg_per_unit` | DECIMAL(12,4) | sí | Galones de la presentación × peso por galón de la OP del lote, fijado al completar |
 | `consumed_cost` | DECIMAL(16,4) | sí | Al completar: unidades × costo de traslado − valor de lo que volvió al saldo |

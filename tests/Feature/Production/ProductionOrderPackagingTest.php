@@ -273,28 +273,17 @@ it('cuenta la etiqueta del plan de una OP abierta como uso, para el control de i
     ])->assertSessionHasErrors(['category_id' => 'No se puede pasar a una categoría de tipo químico: esta materia prima está en uso en 1 orden de producción abierta.']);
 });
 
-it('el PDF y el Excel de la OP muestran el envase y la etiqueta de cada presentación', function () {
+// La hoja de planta lleva solo la presentación («20 Galón»): el envase y la etiqueta salen de ella (decisión del
+// usuario, 2026-11-23).
+it('el PDF y el Excel de la OP muestran la presentación sin el envase ni la etiqueta', function () {
     packagingPlanFor($this->order, $this->variant);
-    $order = app(BuildProductionOrderExportDataAction::class)->execute($this->order->fresh(), includeCosts: false);
+    $order = app(BuildProductionOrderExportDataAction::class)->execute($this->order->fresh());
 
     $pdf = view('pdf.production-order', ['order' => $order, 'logoBase64' => null, 'generatedAt' => 'hoy'])->render();
     $excel = view('excel.production-order', ['order' => $order])->render();
 
-    expect($pdf)->toContain('Galón (GALON-MET · ETQ-GALON)')
-        ->and($excel)->toContain('Galón (GALON-MET · ETQ-GALON)');
-});
-
-it('el PDF y el Excel no imprimen nada de empaque en una presentación sin envase ni etiqueta', function () {
-    $this->variant->update(['package_raw_material_id' => null, 'label_raw_material_id' => null]);
-    packagingPlanFor($this->order, $this->variant);
-    $order = app(BuildProductionOrderExportDataAction::class)->execute($this->order->fresh(), includeCosts: false);
-
-    $pdf = view('pdf.production-order', ['order' => $order, 'logoBase64' => null, 'generatedAt' => 'hoy'])->render();
-    $excel = view('excel.production-order', ['order' => $order])->render();
-
-    expect($order['packaging_plans'][0]['packaging_materials'])->toBeNull()
-        ->and($pdf)->not->toContain('([])')->not->toContain('Galón (')
-        ->and($excel)->not->toContain('([])')->not->toContain('Galón (');
+    expect($pdf)->toContain('Galón')->not->toContain('GALON-MET')->not->toContain('ETQ-GALON')
+        ->and($excel)->toContain('Galón')->not->toContain('GALON-MET')->not->toContain('ETQ-GALON');
 });
 
 it('una OP completada sigue mostrando el envase que consumió aunque cambie el de la presentación', function () {
@@ -503,10 +492,10 @@ it('una OP completada no muestra el envase que se le asignó a la presentación 
 
     $this->variant->update(['package_raw_material_id' => $this->container->id]);
 
-    $order = app(BuildProductionOrderExportDataAction::class)->execute($this->order->fresh(), includeCosts: false);
+    $order = app(BuildProductionOrderExportDataAction::class)->execute($this->order->fresh());
 
     expect($order['packaging_plans'][0]['package_code'])->toBeNull()
-        ->and($order['packaging_plans'][0]['packaging_materials'])->toBe('ETQ-GALON');
+        ->and($order['packaging_plans'][0]['label_code'])->toBe('ETQ-GALON');
 });
 
 it('rechaza con un mensaje los valores imposibles en las mediciones de la OP', function (string $route, string $field, string $value) {

@@ -33,7 +33,7 @@ class AvailableRemnantsService
      * arbitrario. Sin tope: el selector busca. Una sola fuente para la lista que llega con el detalle de la orden y la
      * que la refresca (`RemnantConsumptionController::availableRemnants`).
      *
-     * @return list<array{id: int, source_order_number: string, source_lot_number: int, product_name: string, available_quantity_kg: string}>
+     * @return list<array{id: int, product_id: int, source_order_number: string, source_lot_number: int, product_name: string, available_quantity_kg: string}>
      */
     public function forOrder(ProductionOrder $order): array
     {
@@ -50,6 +50,8 @@ class AvailableRemnantsService
         return $remnants
             ->map(fn (ProductionRemnant $remnant): array => [
                 'id' => $remnant->id,
+                // El buscador de una línea de «Productos a usar» solo ofrece fuentes de su producto.
+                'product_id' => (int) $remnant->product_id,
                 'source_order_number' => $remnant->sourceOrder->order_number,
                 'source_lot_number' => $remnant->sourceOrder->lot_number,
                 'product_name' => ProductionOrder::nameWithColor($remnant->product->name, $remnant->sourceOrder->color),

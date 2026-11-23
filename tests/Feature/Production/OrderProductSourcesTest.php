@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Production\BuildProductionOrderExportDataAction;
 use App\Enums\FinishedInventoryMovementReason;
 use App\Enums\FormulaLineCostingBasis;
 use App\Enums\InventoryMovementType;
@@ -28,10 +29,12 @@ use App\Models\ProductionRemnant;
 use App\Models\ProductionRemnantMovement;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
+use App\Models\RawMaterialCategory;
 use App\Models\RemnantConsumption;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\AvailableBatchesService;
 use App\Services\FinishedInventory\FinishedInventoryMovementService;
 use App\Services\Production\BatchSourceDrawdown;
 use App\Services\Production\ProductionOrderCompletionLines;
@@ -42,6 +45,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 
 /*
@@ -219,11 +223,12 @@ function opsOriginRemnant(object $test, string $kilos, ?Warehouse $warehouse = n
 }
 
 /**
- * La OP de RAL 7016 (154,1 gal → 462,3 kg de blanco), en curso, con su línea de MP, una presentación y sus líneas de
- * producto con fuentes preseleccionadas por la pieza de creación. La OP se arma a mano: crear una OP con una fórmula que
- * lleva productos sigue bloqueado hasta que la pantalla las muestre.
+ * La OP de RAL 7016 (154,1 gal → 462,3 kg de blanco), en curso, con su línea de MP, una presentación y su línea de
+ * producto (la pieza de creación, la misma que llama crear la OP: sin fuentes). Como lo haría una persona en la orden, la
+ * línea sale del lote 1682: las unidades que cubren lo planeado, sin pasar de las libres (`$lotUnits` las fija; 0, sin
+ * lote). Se arma a mano para elegir el estado y la bodega sin pasar por la pantalla de crear.
  */
-function opsRalOrder(object $test, string $quantity = '154.1', ProductionOrderStatus $status = ProductionOrderStatus::InProgress, ?Warehouse $warehouse = null): ProductionOrder
+function opsRalOrder(object $test, string $quantity = '154.1', ProductionOrderStatus $status = ProductionOrderStatus::InProgress, ?Warehouse $warehouse = null, ?int $lotUnits = null): ProductionOrder
 {
     $order = ProductionOrder::create([
         'order_number' => 'OP-RAL-'.substr(uniqid(), -6),
@@ -251,18 +256,33 @@ function opsRalOrder(object $test, string $quantity = '154.1', ProductionOrderSt
         'planned_units' => 10,
     ]);
 
-    app(ProductLinePlanner::class)->planFromFormula($order, $test->ralFormula->fresh(), $test->user->id);
+    $line = app(ProductLinePlanner::class)->planFromFormula($order, $test->ralFormula->fresh())->first();
+    $warehouseId = ($warehouse ?? $test->warehouse)->id;
+    $free = (int) app(AvailableBatchesService::class)->freeUnits($test->lot->id, $warehouseId);
+    $units = $lotUnits ?? min((int) ceil((float) $line->planned_kg / 23.4), $free);
+
+    if ($units > 0) {
+        ProductionOrderBatchConsumption::create([
+            'production_order_id' => $order->id,
+            'production_order_product_line_id' => $line->id,
+            'finished_product_batch_id' => $test->lot->id,
+            'warehouse_id' => $warehouseId,
+            'units' => $units,
+            'created_by' => $test->user->id,
+        ]);
+    }
 
     return $order->fresh();
 }
 
 /**
  * Completa (o envía a revisión) la OP con lo que mostraría la pantalla: el ingrediente tal cual lo planeado, 10 galones
- * envasados, los saldos y los lotes de la orden. `$batchRows` lleva por lote los kilos usados y lo que quedó.
+ * envasados, los saldos, lo gastado de cada producto (`$actualKg`) y los lotes de la orden. `$batchRows` lleva por lote
+ * lo que quedó.
  *
  * @param  list<array<string, mixed>>|null  $batchRows  null: no envía la lista de lotes
  */
-function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, string $route = 'production-orders.complete'): TestResponse
+function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, string $route = 'production-orders.complete', ?string $actualKg = '462.3'): TestResponse
 {
     $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
     $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
@@ -274,12 +294,24 @@ function opsComplete(object $test, ProductionOrder $order, ?array $batchRows, st
         'remnant_consumption_ids' => RemnantConsumption::query()->where('target_order_id', $order->id)->pluck('id')->all(),
         'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
         'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'product_lines' => $actualKg === null ? null : opsLineRows($order, $actualKg),
         'batch_consumptions' => $batchRows,
     ], fn ($value) => $value !== null));
 }
 
-/** La fila de la pantalla de cada lote de la OP: kilos usados y, si se da, lo que quedó pesado. */
-function opsRows(ProductionOrder $order, string $usedKg = '462.3', ?string $leftoverKg = null): array
+/** Lo gastado de cada producto de la OP, como lo escribe la tabla de consumo. */
+function opsLineRows(ProductionOrder $order, string $actualKg = '462.3'): array
+{
+    return ProductionOrderProductLine::query()
+        ->where('production_order_id', $order->id)
+        ->orderBy('id')
+        ->get()
+        ->map(fn (ProductionOrderProductLine $line): array => ['id' => $line->id, 'actual_kg' => $actualKg])
+        ->all();
+}
+
+/** La fila de la pantalla de cada lote de la OP: si se da, lo que quedó pesado en un envase abierto. */
+function opsRows(ProductionOrder $order, ?string $leftoverKg = null): array
 {
     return ProductionOrderBatchConsumption::query()
         ->where('production_order_id', $order->id)
@@ -287,7 +319,6 @@ function opsRows(ProductionOrder $order, string $usedKg = '462.3', ?string $left
         ->get()
         ->map(fn (ProductionOrderBatchConsumption $source): array => array_filter([
             'id' => $source->id,
-            'used_kg' => $usedKg,
             'has_leftover' => $leftoverKg !== null,
             'leftover_kg' => $leftoverKg,
         ], fn ($value) => $value !== null))
@@ -348,54 +379,24 @@ it('runs the backfill from the migration', function () {
     expect($migration)->toContain('RemnantConsumptionLineBackfill::class)->run()');
 });
 
-// --- Crear la OP: líneas y preselección ---
+// --- Crear la OP: líneas sin fuentes ---
 
-it('copies each product line of the formula with its kilos and preselects remnants first, then lots by FIFO in whole units', function () {
-    // Saldo de 30 kg con 10 planeados por otra OP abierta: libres 20.
-    $remnant = opsOriginRemnant($this, '30');
-    $busy = opsRalOrder($this, '1', ProductionOrderStatus::Pending);
-    RemnantConsumption::query()->where('target_order_id', $busy->id)->update(['quantity_kg' => '10']);
-    ProductionOrderBatchConsumption::query()->where('production_order_id', $busy->id)->delete();
-    // Un lote más viejo, de 10 cuñetes: va primero.
-    $older = opsOtherOrigin($this, 1500, '2026-10-01', 10);
+it('copies each product line of the formula with its kilos and no sources: nothing is committed when the order is created', function () {
+    // Hay saldo y lotes libres del blanco en la bodega: crear la OP no elige ninguno.
+    opsOriginRemnant($this, '30');
+    opsOtherOrigin($this, 1500, '2026-10-01', 10);
 
-    $order = opsRalOrder($this);
-
+    $order = opsRalOrder($this, lotUnits: 0);
     $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
-    $remnantSource = RemnantConsumption::query()->where('target_order_id', $order->id)->sole();
-    $lots = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->orderBy('id')->get();
 
-    // 3 kg/gal × 154,1 gal = 462,3 kg: 20 del saldo; quedan 442,3 → 10 cuñetes del lote viejo (234 kg) y techo(208,3 ÷
-    // 23,4) = 9 del nuevo.
     expect($line->origin)->toBe(ProductionOrderProductLineOrigin::Formula)
         ->and($line->planned_kg)->toBe('462.3000')
         ->and($line->step_order)->toBe(2)
-        ->and($remnantSource->remnant_id)->toBe($remnant->id)
-        ->and($remnantSource->quantity_kg)->toBe('20.0000')
-        ->and((int) $remnantSource->production_order_product_line_id)->toBe($line->id)
-        ->and($lots->pluck('finished_product_batch_id')->all())->toBe([$older->id, $this->lot->id])
-        ->and($lots->pluck('units')->all())->toBe([10, 9])
-        ->and($lots->every(fn ($source) => (int) $source->warehouse_id === $this->warehouse->id))->toBeTrue()
-        // No sale nada del inventario al crear.
-        ->and(FinishedProductBatchStock::query()->where('finished_product_batch_id', $this->lot->id)->value('quantity'))->toBe(25);
-});
-
-it('creates the order anyway when the sources do not cover the line, and only uses the order warehouse', function () {
-    // Saldo y lote en otra bodega: no cuentan.
-    opsOriginRemnant($this, '100', $this->otherWarehouse);
-    opsOtherOrigin($this, 1501, '2026-09-01', 30, $this->otherWarehouse);
-
-    // 3 kg × 300 gal = 900 kg; el único lote de la bodega tiene 25 cuñetes (585 kg).
-    $order = opsRalOrder($this, '300');
-
-    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
-    $lots = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->get();
-
-    expect($line->planned_kg)->toBe('900.0000')
+        ->and($line->actual_kg)->toBeNull()
         ->and(RemnantConsumption::query()->where('target_order_id', $order->id)->exists())->toBeFalse()
-        ->and($lots)->toHaveCount(1)
-        ->and($lots->first()->finished_product_batch_id)->toBe($this->lot->id)
-        ->and($lots->first()->units)->toBe(25);
+        ->and(ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->exists())->toBeFalse()
+        // Nada comprometido: el lote sigue con sus 25 cuñetes libres para vender.
+        ->and(app(AvailableBatchesService::class)->freeUnits($this->lot->id, $this->warehouse->id))->toBe('25');
 });
 
 it('plans the kilos of a product line written in grams', function () {
@@ -406,7 +407,9 @@ it('plans the kilos of a product line written in grams', function () {
     expect(app(ProductLinePlanner::class)->plannedKg($detail->fresh(['unitOfMeasure', 'product']), '154.1'))->toBe('462.3000');
 });
 
-it('keeps rejecting an order whose formula carries products', function () {
+it('creates an order whose formula carries products, with its product lines and no sources', function () {
+    opsOriginRemnant($this, '10');
+
     $this->post(route('production-orders.store'), [
         'product_id' => $this->ral->id,
         'formula_id' => $this->ralFormula->id,
@@ -414,9 +417,17 @@ it('keeps rejecting an order whose formula carries products', function () {
         'quantity' => 10,
         'planned_date' => plantToday(),
         'packaging' => [['product_variant_id' => $this->ralGallon->id, 'planned_units' => 10]],
-    ])->assertSessionHasErrors(['formula_id']);
+    ])->assertSessionHasNoErrors();
 
-    expect(ProductionOrderProductLine::query()->exists())->toBeFalse();
+    $order = ProductionOrder::query()->where('product_id', $this->ral->id)->sole();
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+
+    // 3 kg/gal × 10 gal = 30 kg, sin fuentes: de dónde sale lo elige una persona en la orden. La MP va a sus líneas.
+    expect($line->origin)->toBe(ProductionOrderProductLineOrigin::Formula)
+        ->and($line->planned_kg)->toBe('30.0000')
+        ->and(RemnantConsumption::query()->where('target_order_id', $order->id)->exists())->toBeFalse()
+        ->and(ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->exists())->toBeFalse()
+        ->and(ProductionOrderDetail::query()->where('production_order_id', $order->id)->pluck('raw_material_id')->all())->toBe([$this->material->id]);
 });
 
 // --- Agregar, cambiar y quitar fuentes ---
@@ -542,7 +553,8 @@ it('completes taking out the units of the source, without remnant when nothing w
 
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::Completed)
         ->and($source->units)->toBe(20)
-        ->and($source->used_kg)->toBe('462.3000')
+        // Lo gastado va por línea, como una MP.
+        ->and(ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('actual_kg'))->toBe('462.3000')
         ->and($source->leftover_kg)->toBeNull()
         ->and($source->kg_per_unit)->toBe('23.4000')
         ->and($source->consumed_cost)->toBe('4538165.7700')
@@ -563,7 +575,7 @@ it('returns what was left in the opened bucket to the origin remnant at bulk pri
     RemnantConsumption::query()->where('target_order_id', $order->id)->delete();
     ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->update(['units' => 20]);
 
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'))->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
 
     $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
     $originRemnant->refresh();
@@ -597,7 +609,7 @@ it('creates the origin remnant when its order has none, in the warehouse of the 
     $order = opsRalOrder($this);
     $originSummaryBefore = app(ProductionOrderCostSummary::class)->forOrder($this->origin->fresh());
 
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'))->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
 
     $remnant = ProductionRemnant::query()->where('source_order_id', $this->origin->id)->sole();
     $movement = $remnant->movements()->sole();
@@ -637,7 +649,7 @@ it('brings a consumed or written-off origin remnant back to life', function (boo
     }
 
     $order = opsRalOrder($this);
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'))->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
 
     expect($originRemnant->fresh()->available_quantity_kg)->toBe('5.7000')
         ->and($originRemnant->fresh()->status)->toBe($expected);
@@ -650,7 +662,7 @@ it('does not complete when the origin remnant is in another warehouse', function
     $originRemnant = opsOriginRemnant($this, '10', $this->otherWarehouse);
     $order = opsRalOrder($this);
 
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'))
+    opsComplete($this, $order, opsRows($order, '5.7'))
         ->assertSessionHasErrors(['batch_consumptions' => __('Lo que quedó del lote :lot vuelve al saldo de :origin, y ese saldo está en otra bodega (:warehouse): no se pueden juntar, así que la orden no se puede completar.', [
             'lot' => 1682, 'origin' => 'OP-2026-0001', 'warehouse' => 'Almacén Norte',
         ])]);
@@ -663,16 +675,25 @@ it('does not complete when the origin remnant is in another warehouse', function
 it('rejects a leftover heavier than one unit, or a leftover without its weight', function () {
     $order = opsRalOrder($this);
 
-    opsComplete($this, $order, opsRows($order, '462.3', '23.5'))
+    opsComplete($this, $order, opsRows($order, '23.5'))
         ->assertSessionHasErrors(['batch_consumptions.0.leftover_kg']);
 
     $rows = opsRows($order);
     $rows[0]['has_leftover'] = true;
     opsComplete($this, $order, $rows)->assertSessionHasErrors(['batch_consumptions.0.leftover_kg']);
 
-    // Los kilos usados son obligatorios.
-    unset($rows[0]['used_kg'], $rows[0]['has_leftover']);
-    opsComplete($this, $order, $rows)->assertSessionHasErrors(['batch_consumptions.0.used_kg']);
+    // Lo gastado de cada producto es obligatorio, como lo real de una MP.
+    $response = $this->post(route('production-orders.complete', $order), [
+        'density_kg_per_gallon' => 5,
+        'quality_responsible_user_id' => $this->user->id,
+        'line_adjustment_ids' => [],
+        'remnant_consumption_ids' => [],
+        'ingredients' => [['id' => ProductionOrderDetail::query()->where('production_order_id', $order->id)->value('id'), 'actual_quantity' => 10]],
+        'packaging' => [['id' => ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->value('id'), 'actual_units' => 10]],
+        'product_lines' => [['id' => ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('id')]],
+        'batch_consumptions' => opsRows($order),
+    ]);
+    $response->assertSessionHasErrors(['product_lines.0.actual_kg']);
 
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress);
 });
@@ -687,14 +708,14 @@ it('does not submit or complete while a formula line has no source', function (s
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress);
 })->with(['completar' => 'production-orders.complete', 'enviar a revisión' => 'production-orders.submit-for-review']);
 
-it('saves the used kilos and the leftover when submitting for review, and the reviewer completes with them', function () {
+it('saves what was spent and the leftover when submitting for review, and the reviewer completes with them', function () {
     $order = opsRalOrder($this);
 
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
 
     $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::PendingReview)
-        ->and($source->used_kg)->toBe('462.3000')
+        ->and(ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('actual_kg'))->toBe('462.3000')
         ->and($source->leftover_kg)->toBe('5.7000')
         ->and($source->applied_at)->toBeNull()
         ->and(FinishedProductBatchStock::query()->where('finished_product_batch_id', $this->lot->id)->value('quantity'))->toBe(25);
@@ -716,6 +737,153 @@ it('warns that the order changed when a lot was added after the screen loaded', 
         ->assertSessionHasErrors(['batch_consumptions' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
 
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress);
+});
+
+it('warns that the order changed when the screen did not send what was spent of a product line', function (string $route) {
+    $order = opsRalOrder($this);
+
+    // La pantalla cargó antes de que la orden tuviera la línea: no manda su renglón.
+    opsComplete($this, $order, opsRows($order), $route, actualKg: null)
+        ->assertSessionHasErrors(['product_lines' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
+
+    expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress)
+        ->and(ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('actual_kg'))->toBeNull();
+})->with(['completar' => 'production-orders.complete', 'enviar a revisión' => 'production-orders.submit-for-review']);
+
+it('previews the cost of each product row of the consumption table, the same as its lots', function () {
+    $order = opsRalOrder($this);
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+
+    $preview = $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => '5.7']],
+    ])->assertOk()->json();
+
+    // El renglón del producto cuesta lo que sus fuentes: los 20 cuñetes menos lo que vuelve al saldo. El costo por kilo
+    // es sobre lo que salió de ellos (468 − 5,7 = 462,3 kg), así la fila cuadra consigo misma.
+    expect($preview['product_lines'])->toHaveCount(1)
+        ->and($preview['product_lines'][0]['id'])->toBe($line->id)
+        ->and($preview['product_lines'][0]['cost'])->toBe('4491297.0844')
+        ->and($preview['product_lines'][0]['cost'])->toBe($preview['summary']['bulk']['products_used'])
+        ->and($preview['product_lines'][0]['unit_cost'])->toBe(bcdiv('4491297.0844', '462.3', 4));
+
+    // Guardado al enviar a revisión: el detalle da el mismo costo por kilo.
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_lines.0.cost', '4491297.0844')
+            ->where('order.product_lines.0.unit_cost', bcdiv('4491297.0844', '462.3', 4)));
+});
+
+it('ignores in the preview a lot that someone else removed while the screen was open', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+    $staleId = $source->id;
+    // Otra pestaña u otra persona quitó el lote; esta pantalla todavía lo manda.
+    $source->delete();
+
+    $preview = $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $staleId, 'has_leftover' => true, 'leftover_kg' => '5.7']],
+    ])->assertOk()->json();
+
+    // Sin el lote, la línea no tiene de dónde salir: no cuesta nada (completar sí avisa que la orden cambió).
+    expect($preview['products'])->toBe([])
+        ->and($preview['summary']['bulk']['products_used'])->toBe('0.0000');
+});
+
+it('answers on the line id when the screen sends a product line the order no longer has', function () {
+    $order = opsRalOrder($this);
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+
+    // La pantalla manda su línea y otra que ya se borró (le quitaron su última fuente): la tarjeta pinta esta llave.
+    $this->post(route('production-orders.complete', $order), [
+        'product_lines' => [['id' => $line->id, 'actual_kg' => '462.3'], ['id' => $line->id + 1000, 'actual_kg' => '1']],
+    ])->assertSessionHasErrors(['product_lines.1.id' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
+});
+
+it('caps a leftover typed heavier than one unit in the preview, so the cost never goes negative', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+    $preview = fn (string $leftoverKg): array => $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => $leftoverKg]],
+    ])->assertOk()->json();
+
+    // 200 kg escritos en un cuñete de 23,4: cuenta como el cuñete entero (completar lo rechaza con su mensaje).
+    $typedTooMuch = $preview('200');
+
+    expect($typedTooMuch['product_lines'][0]['cost'])->toBe($preview('23.4')['product_lines'][0]['cost'])
+        ->and(bccomp($typedTooMuch['product_lines'][0]['cost'], '0', 4))->toBe(1)
+        ->and(bccomp($typedTooMuch['summary']['bulk']['products_used'], '0', 4))->toBe(1);
+});
+
+it('does not tell what is missing nor a cost per kilo when a lot has no weight per gallon', function () {
+    $order = opsRalOrder($this);
+    // La OP de origen sin peso por galón (un lote viejo): no se sabe cuántos kilos trae cada cuñete.
+    $this->origin->update(['density_kg_per_gallon' => null]);
+
+    $this->get(route('production-orders.show', $order))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.product_lines.0.has_unknown_kg', true)
+            ->where('order.product_lines.0.missing_kg', null)
+            // El costo sí se sabe (unidades × costo de traslado); el costo por kilo no.
+            ->where('order.product_lines.0.cost', '4538165.7700')
+            ->where('order.product_lines.0.unit_cost', null));
+});
+
+it('prints the product inside its step with its lot, and the open bucket line only while producing', function () {
+    $order = opsRalOrder($this);
+    $lot = sprintf('Lote %s (%s) · 20 × %s', $this->origin->lot_number, $this->origin->order_number, $this->lot->productVariant->presentation_label);
+    $sheets = function () use ($order): array {
+        $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+
+        return [
+            $payload,
+            view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render(),
+            view('excel.production-order', ['order' => $payload])->render(),
+        ];
+    };
+
+    [$payload, $pdf, $excel] = $sheets();
+    $productRow = collect($payload['pdf_materials']['rows'])->firstWhere('kind', 'product');
+
+    expect($productRow['step_order'])->toBe(2)
+        ->and($productRow['raw_material_code'])->toBe('ESMALTE BLANCO')
+        ->and($productRow['observations'])->toBe([$lot, 'Quedó en cuñete abierto: ________ kg']);
+    foreach ([$pdf, $excel] as $html) {
+        expect($html)->toContain($lot)->toContain('Quedó en cuñete abierto: ________ kg');
+    }
+
+    // En revisión lo que quedó ya está registrado: se imprime el dato, no la raya.
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+    [, $pdf, $excel] = $sheets();
+    $leftover = "Quedaron 5,7 kg en un cuñete abierto del lote {$this->origin->lot_number}";
+
+    foreach ([$pdf, $excel] as $html) {
+        expect($html)->toContain($lot)->toContain($leftover)->not->toContain('Quedó en cuñete abierto: ________ kg');
+    }
+});
+
+it('leaves a line to write where the product comes from when nobody chose a source', function () {
+    $order = opsRalOrder($this);
+    ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->delete();
+
+    $row = collect(app(BuildProductionOrderExportDataAction::class)->execute($order->fresh())['pdf_materials']['rows'])
+        ->firstWhere('kind', 'product');
+
+    // Sin lote elegido tampoco va la raya del cuñete: si sobra algo, la planta lo anota en la misma celda.
+    expect($row['observations'])->toBe(['De dónde sale: ______________________']);
 });
 
 it('estimates and stores the transfer cost of a lot that has none when consuming it', function () {
@@ -764,7 +932,7 @@ it('adds the lots to the bulk cost in the summary and the preview, and keeps the
         'products_used' => '4538165.7700',
     ]);
 
-    opsComplete($this, $order, opsRows($order, '462.3', '5.7'))->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
 
     $summary = app(ProductionOrderCostSummary::class)->forOrder($order->fresh());
 
@@ -828,6 +996,16 @@ it('audits the product lines and the lot sources in the order log', function () 
 it('keeps the lock order: order, then remnants, then lots', function () {
     $originRemnant = opsOriginRemnant($this, '10');
     $order = opsRalOrder($this);
+    // La línea sale también del saldo: así se bloquean saldos y lotes al completar.
+    RemnantConsumption::create([
+        'remnant_id' => $originRemnant->id,
+        'target_order_id' => $order->id,
+        'production_order_product_line_id' => ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('id'),
+        'quantity_kg' => '10',
+        'quantity_gallons' => '1.7094',
+        'consumed_by' => $this->user->id,
+        'consumed_at' => now(),
+    ]);
     $queries = [];
     DB::listen(function ($query) use (&$queries): void {
         if (str_contains(strtolower($query->sql), 'for update')) {
@@ -835,7 +1013,7 @@ it('keeps the lock order: order, then remnants, then lots', function () {
         }
     });
 
-    opsComplete($this, $order, opsRows($order, '442.3', '5.7'))->assertSessionHasNoErrors();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
 
     $tables = collect($queries)
         ->map(fn (string $sql): ?string => collect(['production_orders', 'production_remnants', 'finished_product_batches"', 'finished_product_batch_stocks'])
@@ -854,4 +1032,293 @@ it('keeps the lock order: order, then remnants, then lots', function () {
     expect($firstIndex('production_orders'))->toBeLessThan($firstIndex('production_remnants'))
         ->and($firstIndex('production_remnants'))->toBeLessThan($firstIndex('finished_product_batches"'))
         ->and($originRemnant->fresh()->available_quantity_kg)->not->toBe('10.0000');
+});
+
+// --- Pantalla ---
+
+it('sends the product lines with their sources and what is free, with costs only for costs.view', function (SystemRole $role, bool $withCosts) {
+    $order = opsRalOrder($this);
+    // Un saldo libre: se ofrece en el buscador.
+    $remnant = opsOriginRemnant($this, '50');
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+
+    $this->actingAs(userWithRole($role, ['email_verified_at' => now()]))
+        ->get(route('production-orders.show', $order))
+        ->assertOk()
+        ->assertInertia(function (AssertableInertia $page) use ($line, $source, $remnant, $withCosts) {
+            $page->where('can.planRemnant', true)
+                // 462,3 kg planeados; 20 cuñetes de 23,4 kg cubren 468.
+                ->where('order.product_lines.0.id', $line->id)
+                ->where('order.product_lines.0.product_name', 'ESMALTE BLANCO')
+                ->where('order.product_lines.0.origin', 'formula')
+                ->where('order.product_lines.0.step_order', 2)
+                ->where('order.product_lines.0.planned_kg', '462.3000')
+                ->where('order.product_lines.0.covered_kg', '468.0000')
+                ->where('order.product_lines.0.missing_kg', '0.0000')
+                ->where('order.product_lines.0.has_unknown_kg', false)
+                ->where('order.product_lines.0.actual_kg', null)
+                ->where('order.batch_consumptions.0.id', $source->id)
+                ->where('order.batch_consumptions.0.production_order_product_line_id', $line->id)
+                ->where('order.batch_consumptions.0.lot_number', 1682)
+                ->where('order.batch_consumptions.0.source_order_number', 'OP-2026-0001')
+                ->where('order.batch_consumptions.0.presentation_label', 'Cuñete 4G')
+                ->where('order.batch_consumptions.0.units', 20)
+                ->where('order.batch_consumptions.0.kg_per_unit', '23.4000')
+                ->where('order.batch_consumptions.0.kg', '468.0000')
+                ->where('order.batch_consumptions.0.state', 'planned')
+                ->where('order.batch_consumptions.0.can', ['update' => true, 'remove' => true])
+                // Lo libre de la bodega para el buscador: quedan 5 cuñetes del lote y el saldo entero.
+                ->where('order.available_batches.0.id', $this->lot->id)
+                ->where('order.available_batches.0.product_id', $this->white->id)
+                ->where('order.available_batches.0.free_units', '5')
+                ->where('order.available_batches.0.kg_per_unit', '23.4000')
+                ->where('order.available_remnants.0.id', $remnant->id)
+                ->where('order.available_remnants.0.product_id', $this->white->id);
+
+            if ($withCosts) {
+                $page->where('order.batch_consumptions.0.transfer_unit_cost', '226908.2885')
+                    ->where('order.batch_consumptions.0.consumed_cost', '4538165.7700')
+                    // El renglón del producto en la tabla: el costo de sus fuentes y ese costo por kilo (÷ 468).
+                    ->where('order.product_lines.0.cost', '4538165.7700')
+                    ->where('order.product_lines.0.unit_cost', '9696.9354')
+                    ->where('order.available_batches.0.transfer_unit_cost', '226908.2885')
+                    ->where('order.cost_summary.bulk.products_used', '4538165.7700');
+            } else {
+                $page->missing('order.batch_consumptions.0.transfer_unit_cost')
+                    ->missing('order.batch_consumptions.0.consumed_cost')
+                    ->missing('order.product_lines.0.cost')
+                    ->missing('order.available_batches.0.transfer_unit_cost')
+                    ->missing('order.cost_summary');
+            }
+        });
+})->with([
+    'con costs.view' => [SystemRole::Admin, true],
+    'sin costs.view' => [SystemRole::Production, false],
+]);
+
+it('shows a completed order read-only, with what was used and nothing to add', function () {
+    $order = opsRalOrder($this);
+    RemnantConsumption::query()->where('target_order_id', $order->id)->delete();
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
+
+    $this->get(route('production-orders.show', $order))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('can.planRemnant', false)
+            ->where('order.batch_consumptions.0.state', 'applied')
+            ->where('order.product_lines.0.actual_kg', '462.3000')
+            ->where('order.batch_consumptions.0.leftover_kg', '5.7000')
+            ->where('order.batch_consumptions.0.consumed_cost', '4491297.0844')
+            ->where('order.batch_consumptions.0.can', ['update' => false, 'remove' => false])
+            ->where('order.available_batches', [])
+            // El desglose suma sus partes: MP 50 + lotes.
+            ->where('order.cost_summary.bulk.products_used', '4491297.0844')
+            ->where('order.cost_summary.bulk.total', '4491347.0844'));
+});
+
+it('previews the cost with the leftover being typed, not the saved one', function () {
+    $order = opsRalOrder($this);
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+    $preview = fn (?array $rows) => $this->postJson(route('production-orders.preview-costs', $order), array_filter([
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => $rows,
+    ], fn ($value) => $value !== null))->assertOk()->json();
+
+    // «Sí, 5,7 kg» escrito y sin guardar: el costo es el de completar (20 cuñetes − lo que vuelve al saldo).
+    $typed = $preview([['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => '5.7']]);
+    expect($typed['summary']['bulk']['products_used'])->toBe('4491297.0844')
+        ->and($typed['products'])->toBe([['id' => $source->id, 'cost' => '4491297.0844']])
+        ->and($source->fresh()->leftover_kg)->toBeNull();
+
+    // Guardado «sí, 5,7» al enviar; quien aprueba responde «no» sin guardar: vuelven a pagarse los 20 cuñetes enteros.
+    $source->update(['used_kg' => '462.3', 'leftover_kg' => '5.7']);
+    expect($preview([['id' => $source->id, 'has_leftover' => false, 'leftover_kg' => '5.7']])['summary']['bulk']['products_used'])->toBe('4538165.7700')
+        // Sin la lista, lo guardado.
+        ->and($preview(null)['summary']['bulk']['products_used'])->toBe('4491297.0844');
+
+    // Con lo que quedó y la OP de origen sin peso por galón no se estima: no suma y la fila lo dice.
+    $source->update(['leftover_kg' => null]);
+    $this->origin->update(['density_kg_per_gallon' => null]);
+    $unknown = $preview([['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => '5.7']]);
+    expect($unknown['products'])->toBe([['id' => $source->id, 'cost' => null]])
+        ->and($unknown['summary']['bulk']['products_used'])->toBe('0.0000');
+});
+
+it('tells in Remnants that the available kilos pass what the order left because of opened buckets', function () {
+    $order = opsRalOrder($this);
+    // El saldo de la OP de origen nace después de crear la OP: no se preseleccionó.
+    $originRemnant = opsOriginRemnant($this, '10');
+    // Otro saldo que nunca recibió nada: no lleva la aclaración.
+    $untouched = opsOtherOrigin($this, 1700, '2026-10-01', 1);
+    $plainRemnant = ProductionRemnant::create([
+        'source_order_id' => $untouched->production_order_id,
+        'product_id' => $this->white->id,
+        'warehouse_id' => $this->warehouse->id,
+        'original_quantity_gallons' => '0.5128',
+        'original_quantity_kg' => '3',
+        'available_quantity_gallons' => '0.5128',
+        'available_quantity_kg' => '3',
+        'density_kg_per_gallon' => '5.85',
+        'cost_per_gallon' => '48102.0721',
+        'status' => RemnantStatus::Available,
+        'created_by' => $this->user->id,
+    ]);
+
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
+
+    $this->get(route('production.remnants.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('remnants.data', fn ($rows) => collect($rows)->firstWhere('id', $originRemnant->id)['opened_units_kg'] === '5.7000'
+                && collect($rows)->firstWhere('id', $plainRemnant->id)['opened_units_kg'] === null));
+
+    $this->get(route('production.remnants.show', $originRemnant))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('remnant.original_quantity_kg', '10.0000')
+            ->where('remnant.available_quantity_kg', '15.7000')
+            ->where('remnant.opened_units_kg', '5.7000')
+            ->where('remnant.exceeds_original', true)
+            // «Cuñete abierto en OP-…», +5,7 kg.
+            ->where('movements.0.type', 'opened_unit')
+            ->where('movements.0.direction', 'in')
+            ->where('movements.0.quantity_kg', '5.7000')
+            ->where('movements.0.production_order.order_number', $order->order_number));
+});
+
+it('shows a remnant born from an opened bucket with nothing original, without looking like an error', function () {
+    $order = opsRalOrder($this);
+    opsComplete($this, $order, opsRows($order, '5.7'))->assertSessionHasNoErrors();
+    $remnant = ProductionRemnant::query()->where('source_order_id', $this->origin->id)->sole();
+
+    $this->get(route('production.remnants.show', $remnant))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('remnant.original_quantity_kg', '0.0000')
+            ->where('remnant.available_quantity_kg', '5.7000')
+            ->where('remnant.opened_units_kg', '5.7000')
+            ->where('remnant.exceeds_original', true)
+            ->where('movements.0.type', 'opened_unit'));
+});
+
+it('runs the second plant case: matte black into 2-in-1 matte, 10 whole buckets chosen by hand and reused containers', function () {
+    $category = ProductCategory::create(['name' => 'Esmaltes alquídicos']);
+    $product = fn (string $name): Product => Product::create([
+        'name' => $name,
+        'category_id' => $category->id,
+        'unit_of_measure_id' => $this->gallon->id,
+        'current_cost' => 30000,
+        'cif_percentage' => 15,
+        'current_price' => 60000,
+        'price_threshold' => 5,
+    ]);
+    $black = $product('ESMALTE ALQUIDICO NEGRO MATE');
+    $twoInOne = $product('ESMALTE 2 EN 1 MATE');
+    $blackBucket = ProductVariant::create([
+        'product_id' => $black->id, 'code' => 'NM-5G', 'unit_of_measure_id' => $this->gallon->id,
+        'presentation_value' => 5, 'presentation_label' => 'Cuñete 5G', 'is_active' => true,
+    ]);
+    $container = RawMaterial::factory()->create(['code' => 'CUNETE-BP', 'category_id' => RawMaterialCategory::factory()->container()->create()->id]);
+    InventoryBatch::create(['raw_material_id' => $container->id, 'warehouse_id' => $this->warehouse->id, 'initial_quantity' => 50, 'remaining_quantity' => 50, 'unit_price' => 8000, 'entry_date' => now()]);
+    $label = RawMaterial::factory()->withoutInventoryTracking()->create([
+        'code' => 'ETQ-CUNETE', 'category_id' => RawMaterialCategory::factory()->label()->create()->id, 'current_price' => 300,
+    ]);
+    $twoInOneBucket = ProductVariant::create([
+        'product_id' => $twoInOne->id, 'code' => '2E1-5G', 'unit_of_measure_id' => $this->gallon->id,
+        'presentation_value' => 5, 'presentation_label' => 'Cuñete 5G', 'is_active' => true,
+        'package_raw_material_id' => $container->id, 'label_raw_material_id' => $label->id,
+    ]);
+    $material = function (string $code): RawMaterial {
+        $rawMaterial = RawMaterial::create(['code' => $code, 'unit_of_measure_id' => $this->kilo->id, 'current_price' => 5]);
+        InventoryBatch::create(['raw_material_id' => $rawMaterial->id, 'warehouse_id' => $this->warehouse->id, 'initial_quantity' => 100, 'remaining_quantity' => 100, 'unit_price' => 5, 'entry_date' => now()]);
+
+        return $rawMaterial;
+    };
+    $abs = $material('ABS-7410');
+    $c6 = $material('C-6');
+
+    // Origen: OP 267, lote 1634, cuñetes de 5 gal × 4,1 kg/gal = 20,5 kg; 34 cuñetes y un saldo de 2 kg.
+    $blackFormula = Formula::create(['product_id' => $black->id, 'version' => 1, 'is_active' => true, 'created_by' => $this->user->id]);
+    $origin = ProductionOrder::create([
+        'order_number' => 'OP-2026-0267', 'lot_number' => 1634, 'product_id' => $black->id, 'formula_id' => $blackFormula->id,
+        'warehouse_id' => $this->warehouse->id, 'quantity' => 172, 'status' => ProductionOrderStatus::Completed->value,
+        'planned_date' => now(), 'created_by' => $this->user->id, 'density_kg_per_gallon' => '4.1', 'cif_percentage' => '15',
+    ]);
+    $blackLot = opsBatch($this, $origin, units: 34, transferUnitCost: '150000', variant: $blackBucket);
+    $blackRemnant = ProductionRemnant::create([
+        'source_order_id' => $origin->id, 'product_id' => $black->id, 'warehouse_id' => $this->warehouse->id,
+        'original_quantity_gallons' => '0.4878', 'original_quantity_kg' => '2', 'available_quantity_gallons' => '0.4878',
+        'available_quantity_kg' => '2', 'density_kg_per_gallon' => '4.1', 'cost_per_gallon' => '34500',
+        'status' => RemnantStatus::Available, 'created_by' => $this->user->id,
+    ]);
+
+    // La fórmula de la jefa, por galón: negro 4,1 kg (se costea a granel: el envase se reutiliza), ABS-7410 14 g, C-6 100 g.
+    $formula = Formula::create(['product_id' => $twoInOne->id, 'version' => 1, 'is_active' => true, 'created_by' => $this->user->id]);
+    FormulaDetail::create(['formula_id' => $formula->id, 'product_id' => $black->id, 'costing_basis' => FormulaLineCostingBasis::Bulk, 'quantity' => 4.1, 'unit_of_measure_id' => $this->kilo->id, 'step_order' => 1]);
+    FormulaDetail::create(['formula_id' => $formula->id, 'raw_material_id' => $abs->id, 'quantity' => 0.014, 'unit_of_measure_id' => $this->kilo->id, 'step_order' => 2]);
+    FormulaDetail::create(['formula_id' => $formula->id, 'raw_material_id' => $c6->id, 'quantity' => 0.1, 'unit_of_measure_id' => $this->kilo->id, 'step_order' => 3]);
+
+    // OP de 50 gal desde la pantalla de crear: línea de 205 kg.
+    $this->post(route('production-orders.store'), [
+        'product_id' => $twoInOne->id,
+        'formula_id' => $formula->id,
+        'warehouse_id' => $this->warehouse->id,
+        'quantity' => 50,
+        'planned_date' => plantToday(),
+        'packaging' => [['product_variant_id' => $twoInOneBucket->id, 'planned_units' => 10]],
+    ])->assertSessionHasNoErrors();
+
+    $order = ProductionOrder::query()->where('product_id', $twoInOne->id)->sole();
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+
+    // La OP nace sin fuentes: el saldo de 2 kg no se toca solo. La planta transforma cuñetes enteros: se eligen 10 del lote.
+    expect($line->planned_kg)->toBe('205.0000')
+        ->and(RemnantConsumption::query()->where('target_order_id', $order->id)->exists())->toBeFalse();
+    $this->post(route('production-orders.batch-consumptions.store', $order), [
+        'finished_product_batch_id' => $blackLot->id,
+        'units' => 10,
+        'production_order_product_line_id' => $line->id,
+    ])->assertSessionHasNoErrors();
+    $lotSource = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    expect($lotSource->units)->toBe(10);
+
+    $this->post(route('production-orders.start', $order))->assertSessionHasNoErrors();
+
+    $details = ProductionOrderDetail::query()->where('production_order_id', $order->id)->orderBy('step_order')->get();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->sole();
+
+    $this->post(route('production-orders.complete', $order), [
+        'density_kg_per_gallon' => '4.1',
+        'quality_responsible_user_id' => $this->user->id,
+        'line_adjustment_ids' => [],
+        'remnant_consumption_ids' => [],
+        // ABS-7410: 0,014 × 50 = 0,7 kg; C-6: 0,1 × 50 = 5 kg.
+        'ingredients' => [['id' => $details[0]->id, 'actual_quantity' => '0.7'], ['id' => $details[1]->id, 'actual_quantity' => '5']],
+        // 10 cuñetes de 2 en 1: envases nuevos 0 (se reusan los del negro) y 10 etiquetas.
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10, 'new_containers_used' => 0, 'labels_used' => 10, 'label_raw_material_id' => $label->id]],
+        // Lo gastado del negro, como una MP; «¿Quedó producto?» No.
+        'product_lines' => [['id' => $line->id, 'actual_kg' => '205']],
+        'batch_consumptions' => [['id' => $lotSource->id, 'has_leftover' => false]],
+    ])->assertSessionHasNoErrors();
+
+    $exit = FinishedInventoryMovement::query()
+        ->where('finished_product_batch_id', $blackLot->id)
+        ->where('type', InventoryMovementType::Exit->value)
+        ->sole();
+
+    // Salen 10 cuñetes del lote 1634 como «Transformación» de esta OP; el saldo de 2 kg sigue entero; no se usó ningún envase.
+    expect($order->fresh()->status)->toBe(ProductionOrderStatus::Completed)
+        ->and($exit->reason)->toBe(FinishedInventoryMovementReason::Transformation)
+        ->and((int) $exit->production_order_id)->toBe($order->id)
+        ->and($exit->quantity)->toBe(10)
+        ->and(FinishedProductBatchStock::query()->where('finished_product_batch_id', $blackLot->id)->value('quantity'))->toBe(24)
+        ->and($blackRemnant->fresh()->available_quantity_kg)->toBe('2.0000')
+        ->and($lotSource->fresh()->consumed_cost)->toBe('1500000.0000')
+        ->and($lotSource->fresh()->leftover_kg)->toBeNull()
+        ->and((string) InventoryBatch::query()->where('raw_material_id', $container->id)->value('remaining_quantity'))->toBe('50.0000')
+        ->and($plan->fresh()->labels_used)->toBe(10);
 });

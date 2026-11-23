@@ -111,9 +111,10 @@ trait ProductionConsumptionRules
     }
 
     /**
-     * Los lotes de PT que la orden usa en «Productos a usar», con lo que se registra al entregar: los kilos usados de cada
-     * lote y, si quedó producto en un envase abierto, cuánto pesó (por defecto no quedó). Las unidades que salen son las
-     * de la fuente, no se piden aquí. Que lo que quedó no pase de una unidad lo revisa la acción, con el lote.
+     * «Productos a usar» al entregar: lo real gastado de cada línea de producto, en kilos (como lo real de cada materia
+     * prima), y, por cada lote, si quedó producto en un envase abierto y cuánto pesó (por defecto no quedó). Las unidades
+     * que salen son las de la fuente, no se piden aquí. Que lo que quedó no pase de una unidad lo revisa la acción, con el
+     * lote.
      *
      * @return array<string, mixed>
      */
@@ -122,6 +123,15 @@ trait ProductionConsumptionRules
         $scopedOrderId = $this->resolveProductionOrderId() ?? 0;
 
         return [
+            'product_lines' => ['sometimes', 'array'],
+            'product_lines.*.id' => [
+                'bail',
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('production_order_product_lines', 'id')->where('production_order_id', $scopedOrderId),
+            ],
+            'product_lines.*.actual_kg' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0'],
             'batch_consumptions' => ['sometimes', 'array'],
             'batch_consumptions.*.id' => [
                 'bail',
@@ -130,7 +140,6 @@ trait ProductionConsumptionRules
                 'distinct',
                 Rule::exists('production_order_batch_consumptions', 'id')->where('production_order_id', $scopedOrderId),
             ],
-            'batch_consumptions.*.used_kg' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0.0001'],
             'batch_consumptions.*.has_leftover' => ['sometimes', 'boolean'],
             'batch_consumptions.*.leftover_kg' => [
                 'bail',
@@ -334,6 +343,7 @@ trait ProductionConsumptionRules
             'packaging.*.id.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'line_adjustment_ids.*.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'remnant_consumption_ids.*.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
+            'product_lines.*.id.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'batch_consumptions.*.id.exists' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE),
             'batch_consumptions.*.id.distinct' => 'No puedes repetir el mismo lote en la lista.',
             'batch_consumptions.*.leftover_kg.required_if_accepted' => 'Pesa lo que quedó en el envase abierto y escribe los kilos.',
@@ -359,9 +369,11 @@ trait ProductionConsumptionRules
             'line_adjustment_ids.*' => 'ajuste de línea',
             'remnant_consumption_ids' => 'saldos consumidos',
             'remnant_consumption_ids.*' => 'saldo consumido',
+            'product_lines' => 'productos usados',
+            'product_lines.*.id' => 'producto usado',
+            'product_lines.*.actual_kg' => 'kilos gastados del producto',
             'batch_consumptions' => 'lotes usados',
             'batch_consumptions.*.id' => 'lote usado',
-            'batch_consumptions.*.used_kg' => 'kilos usados del lote',
             'batch_consumptions.*.has_leftover' => 'quedó producto en un envase abierto',
             'batch_consumptions.*.leftover_kg' => 'kilos que quedaron',
             'overconsumption_reasons' => 'motivos del sobreconsumo',

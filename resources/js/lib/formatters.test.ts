@@ -7,6 +7,7 @@ import {
     formatKind,
     formatNumber,
     formatPercent,
+    formatQualityRange,
     formatQuantity,
     isEmptyNumber,
     NUMBER_KINDS,
@@ -187,5 +188,19 @@ describe('isEmptyNumber: mismo análisis de vacío que formatNumber', () => {
     it('no pone signo a un negativo que redondea a cero, como NumberFormat de PHP', () => {
         expect(formatKind('-0.00004', 'quantity')).toBe('0');
         expect(formatKind('-1250000', 'clientPrice')).toBe('-$1.250.000');
+    });
+});
+
+// El rango de calidad va de placeholder en la OP y en el detalle del producto: solo los números, con un decimal.
+describe('formatQualityRange', () => {
+    it.each([
+        [95, 105, '95 – 105'],
+        ['6.0', '7.5', '6 – 7,5'],
+        ['62.25', null, '≥ 62,3'],
+        [null, '7.5', '≤ 7,5'],
+        ['', undefined, null],
+        [null, null, null],
+    ])('%s y %s → %s', (lower, upper, expected) => {
+        expect(formatQualityRange(lower, upper)).toBe(expected);
     });
 });

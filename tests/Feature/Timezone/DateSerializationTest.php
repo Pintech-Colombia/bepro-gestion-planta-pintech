@@ -16,6 +16,7 @@ use App\Services\TimezoneService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
@@ -190,12 +191,13 @@ test('BuildQuotationPdfDataAction preserva la fecha de cotizacion en d/m/Y sin d
     expect($data['quotation_date'])->toBe('04/09/2026');
 });
 
-test('plantilla de exportacion Excel de orden de produccion muestra numero de lote y fecha planificada', function () {
+test('plantilla de exportacion Excel de orden de produccion muestra numero de lote y fecha de fabricacion', function () {
     $orderData = [
         'order_number' => 'OP-2026-001',
         'lot_number' => 'LOTE-9988',
         'lot_caption' => 'LOTE-9988 del 15 de septiembre 2026',
         'planned_date' => '2026-09-18',
+        'manufactured_on' => '2026-09-15',
         'product' => ['name' => 'Pintura Industrial Test'],
         'quantity' => 500.0,
         'packaging_plans' => [],
@@ -212,8 +214,10 @@ test('plantilla de exportacion Excel de orden de produccion muestra numero de lo
 
     // Lote debe contener el lot_number
     expect($rendered)->toContain('LOTE-9988');
-    // FECHA debe contener la fecha planificada formateada en d/m/Y
-    expect($rendered)->toContain('18/09/2026');
+    // FECHA es la de fabricación, en día / mes / año como en el formato; la planeada no se imprime
+    $dateCells = Str::of($rendered)->after('NOMBRE DEL PRODUCTO')->before('CANTIDAD PROYECTADA')->toString();
+    expect($dateCells)->toMatch('/>15<\/td>\s*<td[^>]*>09<\/td>\s*<td[^>]*>2026</')
+        ->not->toContain('>18<');
     // No debe mostrar la fecha del servidor en vez del lote
     expect($rendered)->not->toContain('<td colspan="6" style="border: 1px solid #000000;">2026-09-18</td>');
 });
@@ -240,7 +244,7 @@ test('plantilla de exportacion Excel de orden de produccion muestra el lote con 
         'order' => $orderData,
     ])->render();
 
-    expect($rendered)->toContain('<td colspan="6" style="border: 1px solid #000000;">1623 del 15 de septiembre 2026</td>');
+    expect($rendered)->toContain('>1623 del 15 de septiembre 2026</td>')->not->toContain('>OP-2026-0042 del');
 });
 
 test('plantilla de exportacion Excel formatea horas de proceso en la zona horaria de planta configurada', function () {
@@ -270,5 +274,4 @@ test('plantilla de exportacion Excel formatea horas de proceso en la zona horari
     expect($rendered)->toContain('12:00');
     expect($rendered)->toContain('13:30');
     expect($rendered)->toContain('14:00');
-    expect($rendered)->toContain('---');
 });

@@ -22,6 +22,10 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Excel as ExcelFormat;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 uses(RefreshDatabase::class);
@@ -141,6 +145,30 @@ test('exportExcel returns an Excel download for an authenticated user', function
     }
 });
 
+// La hoja de planta en Excel se imprime como el PDF: carta vertical, una sola hoja, y el formato como texto («2.0»).
+test('the production order excel prints on one letter portrait page', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order);
+    $path = tempnam(sys_get_temp_dir(), 'op-excel');
+    file_put_contents($path, Excel::raw(new ProductionOrderExport($payload), ExcelFormat::XLSX));
+
+    $sheet = IOFactory::load($path)->getActiveSheet();
+    unlink($path);
+    $pageSetup = $sheet->getPageSetup();
+
+    expect($sheet->getTitle())->toBe($order->order_number)
+        ->and($pageSetup->getPaperSize())->toBe(PageSetup::PAPERSIZE_LETTER)
+        ->and($pageSetup->getOrientation())->toBe(PageSetup::ORIENTATION_PORTRAIT)
+        ->and($pageSetup->getFitToWidth())->toBe(1)
+        ->and($pageSetup->getFitToHeight())->toBe(1)
+        ->and($pageSetup->getPrintArea())->toStartWith('A1:L')
+        ->and($sheet->getHighestColumn())->toBe('L')
+        ->and($sheet->getCell('K2')->getValue())->toBe('2.0')
+        ->and($sheet->getCell('K3')->getValue())->toBe('02/12/2020');
+});
+
 test('production order excel export skips missing logo drawing', function () {
     $export = new ProductionOrderExport(
         orderData: ['order_number' => 'OP-NO-LOGO'],
@@ -193,18 +221,20 @@ test('pdf materials payload provides decimal totals for export views', function 
     expect($materialsPayload['rows'][1]['display_grams'])->toBe('37.5000');
 });
 
-test('production order payload keeps calculated costs as decimal strings', function () {
-    [$order, $user] = createExportTestDependencies();
+// El PDF y el Excel son la hoja de planta: sin costos para ningún rol, ni siquiera para quien puede verlos (2026-11-23).
+test('the export payload never carries costs, even for a user who can see them', function () {
+    [$order] = createExportTestDependencies();
+    $admin = userWithRole(SystemRole::Admin, ['email_verified_at' => now()]);
 
-    $this->actingAs($user);
+    $this->actingAs($admin);
+    expect($admin->can('previewCosts', $order))->toBeTrue();
+
     $payload = app(BuildProductionOrderExportDataAction::class)->execute($order);
 
-    // Pendiente: el resumen es un estimado con lo planeado (100 × $10 de referencia).
-    expect($payload['cost_summary']['basis'])->toBe('estimated');
-    expect($payload['cost_summary']['bulk']['total'])->toBe('1000.0000');
-    expect($payload['details'][0]['unit_cost'])->toBe('10.0000');
-    expect($payload['details'][0]['total_cost'])->toBe('1000.0000');
-    expect($payload)->toHaveKey('pdf_materials');
+    expect($payload)->not->toHaveKey('cost_summary')
+        ->and($payload['details'][0])->not->toHaveKey('unit_cost')
+        ->and($payload['details'][0])->not->toHaveKey('total_cost')
+        ->and($payload)->toHaveKey('pdf_materials');
 });
 
 test('show payload does not include export materials', function () {
@@ -237,8 +267,16 @@ test('the order pdf and excel date the lot with its manufacturing date, not the 
     ])->render();
     $excelHtml = view('excel.production-order', ['order' => $payload])->render();
 
+    // La FECHA de la hoja es la de fabricación; la de la cabecera, la de emisión del formato FPR-02.
     expect($pdfHtml)->toContain($caption)
-        ->and($excelHtml)->toContain($caption);
+        ->and($excelHtml)->toContain($caption)
+        ->and($payload['manufactured_on'])->toBe('2026-10-04')
+        ->and($pdfHtml)->toMatch('/>\s*04\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>\s*<td[^>]*>\s*2026\s*</')
+        ->and($pdfHtml)->not->toMatch('/>\s*20\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>/')
+        ->and($excelHtml)->toMatch('/>\s*04\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>\s*<td[^>]*>\s*2026\s*</')
+        ->and($excelHtml)->not->toMatch('/>\s*20\s*<\/td>\s*<td[^>]*>\s*10\s*<\/td>/')
+        ->and($pdfHtml)->toContain('02/12/2020')
+        ->and($excelHtml)->toContain('02/12/2020');
 });
 
 // 3.4: el PDF y el Excel de la OP muestran el nombre con el color.
@@ -257,7 +295,7 @@ test('the order pdf and excel show the product name with the color', function ()
         ->and($excelHtml)->toContain('PINTURA EXPORT TEST RAL 3020');
 });
 
-test('the order pdf renders formatted numbers for costs, quantities and yield percentage', function () {
+test('a completed order pdf prints formatted quantities and no financial summary', function () {
     [$order, $user] = createExportTestDependencies();
     $order->update([
         'status' => ProductionOrderStatus::Completed,
@@ -271,8 +309,6 @@ test('the order pdf renders formatted numbers for costs, quantities and yield pe
 
     $this->actingAs($user);
     $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
-    $payload['cost_summary']['bulk']['total'] = '12345.50';
-    $payload['cost_summary']['packaged']['total'] = '15678.90';
 
     $pdfHtml = view('pdf.production-order', [
         'order' => $payload,
@@ -281,10 +317,24 @@ test('the order pdf renders formatted numbers for costs, quantities and yield pe
     ])->render();
 
     expect($pdfHtml)
-        ->toContain('1.250,5')
-        ->toContain('$12.345,5')
-        ->toContain('$15.678,9')
-        ->toContain('99,8%');
+        ->toContain('1.250,5 gal')
+        ->toContain('1.248 gal')
+        ->not->toContain('RESUMEN FINANCIERO')
+        ->not->toContain('99,8%');
+});
+
+test('a cancelled order pdf says so above everything else', function () {
+    [$order, $user] = createExportTestDependencies();
+    $order->update(['status' => ProductionOrderStatus::Cancelled]);
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+
+    $cancelledPdf = view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render();
+    $openPdf = view('pdf.production-order', ['order' => [...$payload, 'status' => 'pending'], 'logoBase64' => null, 'generatedAt' => '-'])->render();
+
+    expect(Str::of($cancelledPdf)->before('DATOS GENERALES')->toString())->toContain('ORDEN CANCELADA')
+        ->and($openPdf)->not->toContain('ORDEN CANCELADA');
 });
 
 test('el pdf y el excel imprimen el rendimiento y la cantidad proyectada en galones', function () {
@@ -305,12 +355,11 @@ test('el pdf y el excel imprimen el rendimiento y la cantidad proyectada en galo
     $excelHtml = view('excel.production-order', ['order' => $payload])->render();
 
     expect($pdfHtml)
-        ->toContain('1.248 gal')
-        ->toContain('1.250,5 gal')
-        ->toContain('-2,5 gal')
-        ->and($excelHtml)->toContain('1,248.00 gal')
-        ->and($excelHtml)->toContain('333.00 gal')
-        ->and($excelHtml)->not->toContain('333.00 kg');
+        ->toContain('333 gal')
+        ->not->toContain('RENDIMIENTO REAL')
+        ->and($excelHtml)->toContain('333 gal')
+        ->and($excelHtml)->not->toContain('333 kg')
+        ->and($excelHtml)->not->toContain('RENDIMIENTO REAL');
 });
 
 test('the order pdf shows formula instructions, density per gallon, solids and expected quality ranges', function () {

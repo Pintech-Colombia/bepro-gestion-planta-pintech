@@ -63,15 +63,6 @@ class CreateProductionOrderAction
             // lo bloquean (acciones de fórmulas), así que la orden ve lo ya guardado y no una versión vieja.
             $formula = $this->stillActiveFormula((int) $data['formula_id'], (int) $data['product_id']);
 
-            // Una fórmula que lleva productos (PT consumible) todavía no se puede producir: el servidor ya arma sus líneas y
-            // fuentes (abajo), pero la pantalla de la orden aún no las muestra ni deja registrar su consumo. Este bloqueo
-            // se quita junto con esa pantalla.
-            if ($formula->details->contains(fn (FormulaDetail $detail): bool => $detail->isProductLine())) {
-                throw ValidationException::withMessages([
-                    'formula_id' => __('Esta fórmula lleva productos como ingrediente: se podrá producir cuando la orden sepa usarlos.'),
-                ]);
-            }
-
             $order = ProductionOrder::create([
                 'product_id' => $data['product_id'],
                 'formula_id' => $data['formula_id'],
@@ -151,9 +142,9 @@ class CreateProductionOrderAction
                 ProductionOrderPackagingPlan::createForVariant((int) $order->id, (int) $packData['product_variant_id'], $packData['planned_units']);
             }
 
-            // Los productos que la fórmula lleva como ingrediente, con sus kilos y sus fuentes preseleccionadas (saldos y
-            // después lotes de la bodega de la orden). Crear no exige que alcancen: completar sí exige fuentes.
-            $this->productLines->planFromFormula($order, $formula, $userId);
+            // Los productos que la fórmula lleva como ingrediente, con sus kilos y sin fuentes: de dónde sale cada kilo lo
+            // elige una persona en la orden. Enviar a revisión y completar exigen que cada línea tenga fuentes.
+            $this->productLines->planFromFormula($order, $formula);
 
             // Al final: lo que impide crear la orden se avisa antes de preguntar si se acepta lo que falta. Crearla no exige
             // stock, porque puede usar saldo y gastar menos que la fórmula: lo que no deja completarla es el consumo real.

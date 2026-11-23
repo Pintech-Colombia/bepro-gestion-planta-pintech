@@ -11,6 +11,7 @@ use App\Models\FormulaDetail;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductionOrder;
+use App\Models\ProductionOrderProductLine;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
@@ -318,7 +319,7 @@ it('si una línea no se puede costear, el producto conserva su costo', function 
 
 // --- Bloqueos ---
 
-it('no deja crear una OP con una fórmula que lleva productos (hasta el PR E)', function () {
+it('crea una OP con una fórmula que lleva productos: el producto va a «Productos a usar», no a las líneas de MP', function () {
     $formula = ralWithWhite();
     $warehouse = Warehouse::factory()->factory()->create();
 
@@ -329,9 +330,18 @@ it('no deja crear una OP con una fórmula que lleva productos (hasta el PR E)', 
         'quantity' => 10,
         'planned_date' => now()->addDay()->toDateString(),
         'packaging' => [],
-    ])->assertSessionHasErrors('formula_id');
+        // La pasta no tiene stock: crear no lo exige si se acepta el faltante.
+        'confirm_stock_shortage' => true,
+    ])->assertSessionHasNoErrors();
 
-    expect(ProductionOrder::query()->where('formula_id', $formula->id)->exists())->toBeFalse();
+    $order = ProductionOrder::query()->where('formula_id', $formula->id)->sole();
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+
+    // 3 kg de blanco por galón × 10 galones. Sin saldos ni lotes de blanco, la línea queda sin fuentes (completar las pide).
+    expect((int) $line->product_id)->toBe($this->white->id)
+        ->and($line->planned_kg)->toBe('30.0000')
+        ->and($line->batchConsumptions()->exists())->toBeFalse()
+        ->and($order->details()->pluck('raw_material_id')->all())->toBe([$this->paste->id]);
 });
 
 it('no deja desactivar una presentación que una fórmula activa usa para costear', function () {

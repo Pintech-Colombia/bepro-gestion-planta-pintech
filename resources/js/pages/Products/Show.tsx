@@ -62,7 +62,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useConfirm } from '@/hooks/use-confirm';
-import { formatNumber } from '@/lib/formatters';
+import { formatNumber, formatQualityRange } from '@/lib/formatters';
 import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { PRESENTATION_VALUE_LIMITS } from '@/lib/number-types';
 import { toDecimalPayload } from '@/lib/numeric-input';
@@ -202,28 +202,6 @@ export default function ProductsShow({
         (v) => v.id === editingVariantId,
     );
     const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
-
-    const formatQualityRange = (
-        lower: number | string | null | undefined,
-        upper: number | string | null | undefined,
-    ): string | null => {
-        const hasLower = lower !== null && lower !== undefined && lower !== '';
-        const hasUpper = upper !== null && upper !== undefined && upper !== '';
-
-        if (!hasLower && !hasUpper) {
-            return null;
-        }
-
-        if (hasLower && hasUpper) {
-            return `${lower} – ${upper}`;
-        }
-
-        if (hasLower) {
-            return `≥ ${lower}`;
-        }
-
-        return `≤ ${upper}`;
-    };
 
     const certificateRanges = [
         {
