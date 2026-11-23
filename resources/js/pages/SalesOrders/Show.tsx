@@ -1,9 +1,8 @@
-import { Head, Link } from '@inertiajs/react';
-import { FileText, ShoppingCart } from 'lucide-react';
+import { Head } from '@inertiajs/react';
+import { ShoppingCart } from 'lucide-react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
-import { EmptyCell } from '@/components/empty-cell';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
@@ -13,8 +12,8 @@ import AdminOrderSidebar from '@/components/sales-orders/AdminOrderSidebar';
 import { ApproveOrderDialog } from '@/components/sales-orders/approve-order-dialog';
 import { HoldOrderDialog } from '@/components/sales-orders/hold-order-dialog';
 import { StatusBadge } from '@/components/status-badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { breadcrumbHref } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
 import { show as quotationsShow } from '@/routes/quotations';
 import {
@@ -78,6 +77,8 @@ type StatusTransition = {
 type Props = {
     order: SalesOrderDetail;
     statusTransitions: StatusTransition[];
+    priorityOptions: { value: string; label: string }[];
+    returnTo?: string | null;
     can: {
         update: boolean;
         updateStatus: boolean;
@@ -94,6 +95,7 @@ type Props = {
 export default function SalesOrdersShow({
     order,
     statusTransitions,
+    priorityOptions,
     can,
 }: Props) {
     return (
@@ -137,76 +139,85 @@ export default function SalesOrdersShow({
                     <div className="min-w-0 space-y-6 lg:col-span-2">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Información del cliente</CardTitle>
+                                <CardTitle>Información del pedido</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <p>
-                                    <span className="text-muted-foreground">
-                                        Razón social:
-                                    </span>{' '}
-                                    <span className="font-medium">
-                                        {order.client.business_name}
-                                    </span>
-                                </p>
-                                {order.client.nit && (
-                                    <p>
-                                        <span className="text-muted-foreground">
-                                            NIT:
-                                        </span>{' '}
-                                        {order.client.nit}
-                                    </p>
-                                )}
-                                <p>
-                                    <span className="text-muted-foreground">
-                                        Contacto:
-                                    </span>{' '}
-                                    {order.client.contact_name ?? <EmptyCell />}
-                                </p>
-                                <p>
-                                    <span className="text-muted-foreground">
-                                        Teléfono:
-                                    </span>{' '}
-                                    {order.client.phone ?? <EmptyCell />}
-                                </p>
-                                {order.estimated_delivery_date && (
-                                    <p>
-                                        <span className="text-muted-foreground">
-                                            Fecha estimada de entrega:
-                                        </span>{' '}
-                                        <span className="font-medium">
+                            <CardContent>
+                                <DetailList>
+                                    <DetailItem
+                                        label="Razón social"
+                                        value={order.client.business_name}
+                                    />
+                                    <DetailItem
+                                        label="NIT"
+                                        value={order.client.nit}
+                                    />
+                                    <DetailItem
+                                        label="Contacto"
+                                        value={order.client.contact_name}
+                                    />
+                                    <DetailItem
+                                        label="Teléfono"
+                                        value={order.client.phone}
+                                    />
+                                    <DetailItem
+                                        label="Fecha requerida"
+                                        value={
+                                            <FormattedDate
+                                                value={order.required_date}
+                                                format="short"
+                                            />
+                                        }
+                                    />
+                                    <DetailItem
+                                        label="Fecha estimada de entrega"
+                                        value={
                                             <FormattedDate
                                                 value={
                                                     order.estimated_delivery_date
                                                 }
-                                                format="date"
+                                                format="short"
+                                                emptyValue="Sin estimar"
                                             />
-                                        </span>
-                                    </p>
-                                )}
-                                {order.quotation && can.viewQuotation && (
-                                    <p>
-                                        <span className="text-muted-foreground">
-                                            Origen:
-                                        </span>{' '}
-                                        <Button
-                                            variant="link"
-                                            size="sm"
-                                            asChild
-                                            className="h-auto p-0"
-                                        >
-                                            <Link
-                                                href={
-                                                    quotationsShow(
-                                                        order.quotation.id,
-                                                    ).url
-                                                }
-                                            >
-                                                <FileText className="mr-1 h-3 w-3" />
-                                                {quotationName(order.quotation)}
-                                            </Link>
-                                        </Button>
-                                    </p>
-                                )}
+                                        }
+                                    />
+                                    <DetailItem
+                                        label="Dirección de entrega"
+                                        value={order.shipping_address}
+                                        span="full"
+                                        valueClassName="whitespace-pre-wrap"
+                                    />
+                                    <DetailItem
+                                        label="Creado por"
+                                        value={order.creator?.name}
+                                    />
+                                    <DetailItem
+                                        label="Fecha de creación"
+                                        value={
+                                            <FormattedDate
+                                                value={order.created_at}
+                                                format="datetime"
+                                            />
+                                        }
+                                    />
+                                    {order.quotation && can.viewQuotation && (
+                                        <DetailItem
+                                            label="Origen"
+                                            value={
+                                                <RecordLink
+                                                    href={
+                                                        quotationsShow(
+                                                            order.quotation.id,
+                                                        ).url
+                                                    }
+                                                >
+                                                    {quotationName(
+                                                        order.quotation,
+                                                    )}
+                                                </RecordLink>
+                                            }
+                                        />
+                                    )}
+                                </DetailList>
                             </CardContent>
                         </Card>
 
@@ -392,6 +403,7 @@ export default function SalesOrdersShow({
                         <AdminOrderSidebar
                             order={order}
                             statusTransitions={statusTransitions}
+                            priorityOptions={priorityOptions}
                             can={can}
                         />
                     )}
@@ -401,10 +413,13 @@ export default function SalesOrdersShow({
     );
 }
 
-// Las migas son la única forma de volver al listado (DESIGN.md §10).
+// Las migas son la única forma de volver al listado (DESIGN.md §10); el listado conserva sus filtros con `returnTo`.
 SalesOrdersShow.layout = (props: Props) => ({
     breadcrumbs: [
-        { title: 'Pedidos', href: salesOrdersIndex() },
+        {
+            title: 'Pedidos',
+            href: breadcrumbHref(props.returnTo, salesOrdersIndex().url),
+        },
         {
             title: `Pedido #${props.order.id}`,
             href: salesOrdersShow(props.order.id),

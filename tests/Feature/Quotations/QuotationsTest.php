@@ -9,6 +9,7 @@ use App\Enums\Permission;
 use App\Enums\QuotationItemType;
 use App\Enums\QuotationStatus;
 use App\Enums\QuotationValidity;
+use App\Enums\SalesOrderPriority;
 use App\Enums\SystemRole;
 use App\Models\Client;
 use App\Models\Product;
@@ -28,6 +29,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 
@@ -643,9 +645,95 @@ it('prevents changing status of converted quotation', function () {
 
     $this->actingAs($this->comercialUser)
         ->patch(route('quotations.update-status', $quotation), [
-            'status' => QuotationStatus::Rejected->value,
+            'status' => QuotationStatus::Sent->value,
         ])
         ->assertForbidden();
+
+    expect(fn () => app(QuotationService::class)->updateStatus($quotation, QuotationStatus::Sent))
+        ->toThrow(ValidationException::class);
+
+    expect($quotation->fresh()->status)->toBe(QuotationStatus::Accepted);
+});
+
+it('allows valid quotation status transitions', function (QuotationStatus $from, QuotationStatus $to) {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'status' => $from,
+    ]);
+
+    $this->actingAs($this->comercialUser)
+        ->patch(route('quotations.update-status', $quotation), [
+            'status' => $to->value,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('quotations.show', $quotation));
+
+    expect($quotation->fresh()->status)->toBe($to);
+})->with([
+    'borrador -> enviado' => [QuotationStatus::Draft, QuotationStatus::Sent],
+    'enviado -> aceptado' => [QuotationStatus::Sent, QuotationStatus::Accepted],
+    'enviado -> rechazado' => [QuotationStatus::Sent, QuotationStatus::Rejected],
+    'enviado -> borrador' => [QuotationStatus::Sent, QuotationStatus::Draft],
+    'rechazado -> borrador' => [QuotationStatus::Rejected, QuotationStatus::Draft],
+    'aceptado -> enviado' => [QuotationStatus::Accepted, QuotationStatus::Sent],
+]);
+
+it('rejects invalid quotation status transitions with a 422 status error', function (QuotationStatus $from, QuotationStatus $to) {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'status' => $from,
+    ]);
+
+    $this->actingAs($this->comercialUser)
+        ->patchJson(route('quotations.update-status', $quotation), [
+            'status' => $to->value,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['status']);
+
+    expect(fn () => app(QuotationService::class)->updateStatus($quotation, $to))
+        ->toThrow(ValidationException::class);
+
+    expect($quotation->fresh()->status)->toBe($from);
+})->with([
+    'borrador -> borrador' => [QuotationStatus::Draft, QuotationStatus::Draft],
+    'borrador -> aceptado' => [QuotationStatus::Draft, QuotationStatus::Accepted],
+    'borrador -> rechazado' => [QuotationStatus::Draft, QuotationStatus::Rejected],
+    'enviado -> enviado' => [QuotationStatus::Sent, QuotationStatus::Sent],
+    'rechazado -> enviado' => [QuotationStatus::Rejected, QuotationStatus::Sent],
+    'rechazado -> aceptado' => [QuotationStatus::Rejected, QuotationStatus::Accepted],
+    'rechazado -> rechazado' => [QuotationStatus::Rejected, QuotationStatus::Rejected],
+    'aceptado -> borrador' => [QuotationStatus::Accepted, QuotationStatus::Draft],
+    'aceptado -> rechazado' => [QuotationStatus::Accepted, QuotationStatus::Rejected],
+    'aceptado -> aceptado' => [QuotationStatus::Accepted, QuotationStatus::Accepted],
+]);
+
+it('sends valid next status transitions, priority options and returnTo on quotation show and edit', function () {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'status' => QuotationStatus::Draft,
+    ]);
+
+    $this->actingAs($this->comercialUser)
+        ->get(route('quotations.show', ['quotation' => $quotation, 'return_to' => '/quotations?status=draft']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Quotations/Show')
+            ->where('statusOptions', EnumOptions::for(QuotationStatus::Draft->nextTransitions()))
+            ->where('priorityOptions', EnumOptions::for(SalesOrderPriority::cases()))
+            ->where('returnTo', '/quotations?status=draft')
+        );
+
+    $this->actingAs($this->comercialUser)
+        ->get(route('quotations.edit', ['quotation' => $quotation, 'return_to' => '/quotations?status=draft']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Quotations/Edit')
+            ->where('returnTo', '/quotations?status=draft')
+        );
 });
 
 it('allows comercial to convert accepted quotation to order', function () {

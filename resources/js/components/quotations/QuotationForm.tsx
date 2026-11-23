@@ -32,10 +32,10 @@ import { NUMBER_TYPES, UNITS_MAX_DIGITS } from '@/lib/number-types';
 import { toDecimalPayload } from '@/lib/numeric-input';
 import {
     applyPricingLines,
-    newRowKey,
     pricingFieldsFor,
 } from '@/lib/quotation-pricing-rows';
 import type { QuotationPricingRow } from '@/lib/quotation-pricing-rows';
+import { newRowKey } from '@/lib/row-key';
 
 export type ClientOption = {
     id: number;

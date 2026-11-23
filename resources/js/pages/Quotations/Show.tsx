@@ -2,8 +2,9 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
 import { useState } from 'react';
 
+import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
-import { EmptyCell } from '@/components/empty-cell';
+import { FormError } from '@/components/form-field';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
@@ -40,6 +41,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
 import {
     convertToOrder as quotationsConvertToOrder,
@@ -118,6 +120,8 @@ type Props = {
     };
     salesOrderId: number | null;
     statusOptions: StatusOption[];
+    priorityOptions: { value: string; label: string }[];
+    returnTo?: string | null;
 };
 
 export default function QuotationsShow({
@@ -125,8 +129,10 @@ export default function QuotationsShow({
     can,
     salesOrderId,
     statusOptions,
+    priorityOptions,
+    returnTo,
 }: Props) {
-    const { data, setData, patch, processing } = useForm({
+    const { data, setData, patch, processing, errors } = useForm({
         status: quotation.status,
     });
 
@@ -195,7 +201,17 @@ export default function QuotationsShow({
                             {can.update && (
                                 <Button asChild>
                                     <Link
-                                        href={quotationsEdit(quotation.id).url}
+                                        href={
+                                            returnTo
+                                                ? withReturnTo(
+                                                      quotationsEdit(
+                                                          quotation.id,
+                                                      ).url,
+                                                      returnTo,
+                                                  )
+                                                : quotationsEdit(quotation.id)
+                                                      .url
+                                        }
                                     >
                                         Editar
                                     </Link>
@@ -254,15 +270,22 @@ export default function QuotationsShow({
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="low">
-                                                            Baja
-                                                        </SelectItem>
-                                                        <SelectItem value="medium">
-                                                            Media
-                                                        </SelectItem>
-                                                        <SelectItem value="high">
-                                                            Alta
-                                                        </SelectItem>
+                                                        {priorityOptions.map(
+                                                            (option) => (
+                                                                <SelectItem
+                                                                    key={
+                                                                        option.value
+                                                                    }
+                                                                    value={
+                                                                        option.value
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        option.label
+                                                                    }
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
                                                     </SelectContent>
                                                 </Select>
                                                 {convertForm.errors
@@ -394,78 +417,85 @@ export default function QuotationsShow({
                     }
                 />
 
-                {can.updateStatus && (
+                {can.updateStatus && statusOptions.length > 0 && (
                     <Card>
-                        <CardContent className="flex flex-wrap items-end gap-3">
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">
-                                    Cambiar estado
-                                </label>
-                                <select
-                                    value={data.status}
-                                    onChange={(e) =>
-                                        setData('status', e.target.value)
-                                    }
-                                    className="h-10 rounded-md border border-input bg-background px-3 text-base md:text-sm"
-                                >
-                                    {statusOptions.map((option) => (
-                                        <option
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        disabled={
-                                            processing ||
-                                            data.status === quotation.status
+                        <CardContent className="space-y-2">
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium">
+                                        Cambiar estado
+                                    </label>
+                                    <select
+                                        value={data.status}
+                                        onChange={(e) =>
+                                            setData('status', e.target.value)
                                         }
+                                        className="h-10 rounded-md border border-input bg-background px-3 text-base md:text-sm"
                                     >
-                                        Actualizar estado
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>
-                                            ¿Cambiar estado de la cotización?
-                                        </AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            El estado pasará de{' '}
-                                            <span className="font-semibold">
-                                                {quotation.status_label}
-                                            </span>{' '}
-                                            a{' '}
-                                            <span className="font-semibold">
-                                                {
-                                                    statusOptions.find(
-                                                        (o) =>
-                                                            o.value ===
-                                                            data.status,
-                                                    )?.label
-                                                }
-                                            </span>
-                                            .
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>
-                                            Cancelar
-                                        </AlertDialogCancel>
-                                        <AlertDialogAction
-                                            onClick={handleStatusUpdate}
+                                        <option value={quotation.status}>
+                                            {quotation.status_label}
+                                        </option>
+                                        {statusOptions.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            disabled={
+                                                processing ||
+                                                data.status === quotation.status
+                                            }
                                         >
-                                            Confirmar cambio
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
+                                            Actualizar estado
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>
+                                                ¿Cambiar estado de la
+                                                cotización?
+                                            </AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                El estado pasará de{' '}
+                                                <span className="font-semibold">
+                                                    {quotation.status_label}
+                                                </span>{' '}
+                                                a{' '}
+                                                <span className="font-semibold">
+                                                    {
+                                                        statusOptions.find(
+                                                            (o) =>
+                                                                o.value ===
+                                                                data.status,
+                                                        )?.label
+                                                    }
+                                                </span>
+                                                .
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>
+                                                Cancelar
+                                            </AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={handleStatusUpdate}
+                                            >
+                                                Confirmar cambio
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                            <FormError id="status" message={errors.status} />
                         </CardContent>
                     </Card>
                 )}
@@ -476,42 +506,24 @@ export default function QuotationsShow({
                             <CardTitle>Cliente</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <dl className="space-y-2 text-sm">
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Razón social
-                                    </dt>
-                                    <dd>{quotation.client.business_name}</dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        NIT
-                                    </dt>
-                                    <dd>
-                                        {quotation.client.nit ?? <EmptyCell />}
-                                    </dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Contacto
-                                    </dt>
-                                    <dd>
-                                        {quotation.client.contact_name ?? (
-                                            <EmptyCell />
-                                        )}
-                                    </dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Teléfono
-                                    </dt>
-                                    <dd>
-                                        {quotation.client.phone ?? (
-                                            <EmptyCell />
-                                        )}
-                                    </dd>
-                                </div>
-                            </dl>
+                            <DetailList columns={1}>
+                                <DetailItem
+                                    label="Razón social"
+                                    value={quotation.client.business_name}
+                                />
+                                <DetailItem
+                                    label="NIT"
+                                    value={quotation.client.nit}
+                                />
+                                <DetailItem
+                                    label="Contacto"
+                                    value={quotation.client.contact_name}
+                                />
+                                <DetailItem
+                                    label="Teléfono"
+                                    value={quotation.client.phone}
+                                />
+                            </DetailList>
                         </CardContent>
                     </Card>
 
@@ -520,47 +532,71 @@ export default function QuotationsShow({
                             <CardTitle>Condiciones</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <dl className="space-y-2 text-sm">
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Tecnología
-                                    </dt>
-                                    <dd>{quotation.technology ?? 'N.D.'}</dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Línea
-                                    </dt>
-                                    <dd>{quotation.line ?? 'N.D.'}</dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Forma de pago
-                                    </dt>
-                                    <dd>
-                                        {quotation.payment_method_label ??
-                                            quotation.payment_method ??
-                                            'N.D.'}
-                                    </dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Entrega
-                                    </dt>
-                                    <dd>{quotation.delivery_time ?? 'N.D.'}</dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-muted-foreground">
-                                        Validez
-                                    </dt>
-                                    <dd>
-                                        {quotation.validity_days_label ??
-                                            (quotation.validity_days
-                                                ? `${quotation.validity_days} días`
-                                                : 'N.D.')}
-                                    </dd>
-                                </div>
-                            </dl>
+                            <DetailList>
+                                <DetailItem
+                                    label="Fecha de cotización"
+                                    value={
+                                        <FormattedDate
+                                            value={quotation.quotation_date}
+                                            format="short"
+                                        />
+                                    }
+                                />
+                                <DetailItem
+                                    label="Validez"
+                                    value={
+                                        quotation.validity_days_label ??
+                                        (quotation.validity_days
+                                            ? `${quotation.validity_days} días`
+                                            : null)
+                                    }
+                                />
+                                <DetailItem
+                                    label="Forma de pago"
+                                    value={
+                                        quotation.payment_method_label ??
+                                        quotation.payment_method
+                                    }
+                                />
+                                <DetailItem
+                                    label="Entrega"
+                                    value={quotation.delivery_time}
+                                />
+                                <DetailItem
+                                    label="Tecnología"
+                                    value={quotation.technology}
+                                />
+                                <DetailItem
+                                    label="Línea"
+                                    value={quotation.line}
+                                />
+                                <DetailItem
+                                    label="Área"
+                                    value={quotation.area}
+                                />
+                                <DetailItem
+                                    label="Espesor (mils)"
+                                    value={quotation.thickness_mils}
+                                />
+                                <DetailItem
+                                    label="Método de aplicación"
+                                    value={quotation.application_method}
+                                />
+                                <DetailItem
+                                    label="Creada"
+                                    value={
+                                        <>
+                                            <FormattedDate
+                                                value={quotation.created_at}
+                                                format="datetime"
+                                            />
+                                            {quotation.creator
+                                                ? ` por ${quotation.creator.name}`
+                                                : ''}
+                                        </>
+                                    }
+                                />
+                            </DetailList>
                         </CardContent>
                     </Card>
                 </div>
@@ -705,24 +741,18 @@ export default function QuotationsShow({
                         </CardContent>
                     </Card>
                 )}
-
-                <div className="text-sm text-muted-foreground">
-                    Creada el{' '}
-                    <FormattedDate
-                        value={quotation.created_at}
-                        format="datetime"
-                    />
-                    {quotation.creator ? ` por ${quotation.creator.name}` : ''}
-                </div>
             </div>
         </>
     );
 }
 
-// Las migas son la única forma de volver al listado (DESIGN.md §10).
+// Las migas son la única forma de volver al listado (DESIGN.md §10); el listado conserva sus filtros con `returnTo`.
 QuotationsShow.layout = (props: Props) => ({
     breadcrumbs: [
-        { title: 'Cotizaciones', href: quotationsIndex() },
+        {
+            title: 'Cotizaciones',
+            href: breadcrumbHref(props.returnTo, quotationsIndex().url),
+        },
         {
             title: quotationName(props.quotation),
             href: quotationsShow(props.quotation.id),

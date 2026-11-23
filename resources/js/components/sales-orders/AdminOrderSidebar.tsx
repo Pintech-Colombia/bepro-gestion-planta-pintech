@@ -1,9 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { RefreshCw, Save } from 'lucide-react';
 
-import { EmptyCell } from '@/components/empty-cell';
 import { FormField } from '@/components/form-field';
-import { FormattedDate } from '@/components/formatted-date';
 import { PlantDateInput } from '@/components/plant-date-input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,18 +32,15 @@ type SalesOrderMeta = {
     priority_label: string;
     estimated_delivery_date: string | null;
     notes: string | null;
-    shipping_address: string | null;
-    required_date: string | null;
-    created_at: string;
     /** Día de planta en que se creó el pedido: la fecha estimada de entrega no puede ser anterior (D-PV3). */
     created_on: string | null;
-    creator: { name: string } | null;
     client: { contact_name: string | null; phone: string | null };
 };
 
 type Props = {
     order: SalesOrderMeta;
     statusTransitions: StatusTransition[];
+    priorityOptions: { value: string; label: string }[];
     can: {
         /** Editar datos del pedido: mientras no arranca («Por aprobar», «Retenido» o «Pendiente»). */
         update: boolean;
@@ -57,6 +52,7 @@ type Props = {
 export default function AdminOrderSidebar({
     order,
     statusTransitions,
+    priorityOptions,
     can,
 }: Props) {
     const dataForm = useForm({
@@ -111,15 +107,14 @@ export default function AdminOrderSidebar({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="low">
-                                                Baja
-                                            </SelectItem>
-                                            <SelectItem value="medium">
-                                                Media
-                                            </SelectItem>
-                                            <SelectItem value="high">
-                                                Alta
-                                            </SelectItem>
+                                            {priorityOptions.map((option) => (
+                                                <SelectItem
+                                                    key={option.value}
+                                                    value={option.value}
+                                                >
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 )}
@@ -207,48 +202,6 @@ export default function AdminOrderSidebar({
                     </CardContent>
                 </Card>
             )}
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Metadatos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                    <p>
-                        <span className="text-muted-foreground">
-                            Creado por:
-                        </span>{' '}
-                        {order.creator?.name ?? <EmptyCell />}
-                    </p>
-                    <p>
-                        <span className="text-muted-foreground">
-                            Fecha creación:
-                        </span>{' '}
-                        <FormattedDate
-                            value={order.created_at}
-                            format="datetime"
-                        />
-                    </p>
-                    <p>
-                        <span className="text-muted-foreground">
-                            Fecha req.:
-                        </span>{' '}
-                        <FormattedDate
-                            value={order.required_date}
-                            format="short"
-                        />
-                    </p>
-                    {order.shipping_address && (
-                        <p>
-                            <span className="text-muted-foreground">
-                                Dirección:
-                            </span>{' '}
-                            <span className="whitespace-pre-wrap">
-                                {order.shipping_address}
-                            </span>
-                        </p>
-                    )}
-                </CardContent>
-            </Card>
         </div>
     );
 }

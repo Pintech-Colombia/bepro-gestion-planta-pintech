@@ -12,6 +12,7 @@ import Pagination from '@/components/pagination';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
+import { withReturnTo } from '@/lib/navigation';
 import {
     create as quotationsCreate,
     edit as quotationsEdit,
@@ -177,7 +178,9 @@ export default function QuotationsIndex({
                 <DataListing
                     rows={quotations.data}
                     rowKey={(quotation) => quotation.id}
-                    rowHref={(quotation) => quotationsShow(quotation.id).url}
+                    rowHref={(quotation) =>
+                        withReturnTo(quotationsShow(quotation.id).url)
+                    }
                     rowLabel={(quotation) =>
                         `la cotización ${quotation.quotation_number ?? quotation.id}`
                     }
@@ -187,7 +190,9 @@ export default function QuotationsIndex({
                         {
                             label: 'Editar',
                             icon: Pencil,
-                            href: quotationsEdit(quotation.id).url,
+                            href: withReturnTo(
+                                quotationsEdit(quotation.id).url,
+                            ),
                             hidden: !quotation.can.update,
                         },
                     ]}

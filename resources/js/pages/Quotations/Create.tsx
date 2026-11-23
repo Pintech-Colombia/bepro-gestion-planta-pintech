@@ -33,7 +33,7 @@ export default function QuotationsCreate({
 
     return (
         <>
-            <Head title="Nueva Cotización" />
+            <Head title="Nueva cotización" />
             <QuotationForm
                 clients={clients}
                 products={products}
@@ -61,9 +61,9 @@ export default function QuotationsCreate({
                 }}
                 submitUrl={quotationStore().url}
                 previewUrl={quotationPreviewPricing().url}
-                title="Nueva Cotización"
+                title="Nueva cotización"
                 backUrl={quotationsIndex().url}
-                submitLabel="Guardar Cotización"
+                submitLabel="Guardar cotización"
             />
         </>
     );

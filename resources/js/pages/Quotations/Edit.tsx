@@ -7,8 +7,9 @@ import type {
     ProductOption,
     QuotationFormData,
 } from '@/components/quotations/QuotationForm';
+import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
-import { newRowKey } from '@/lib/quotation-pricing-rows';
+import { newRowKey } from '@/lib/row-key';
 import {
     edit as quotationsEdit,
     editPreviewPricing as quotationEditPreviewPricing,
@@ -57,6 +58,7 @@ type Props = {
     validityDaysOptions: { value: string; label: string }[];
     paymentMethodOptions: { value: string; label: string }[];
     itemTypeOptions: { value: string; label: string }[];
+    returnTo?: string | null;
 };
 
 function mapQuotationToForm(quotation: QuotationDetail): QuotationFormData {
@@ -105,7 +107,12 @@ export default function QuotationsEdit({
     validityDaysOptions,
     paymentMethodOptions,
     itemTypeOptions,
+    returnTo,
 }: Props) {
+    const showHref = returnTo
+        ? withReturnTo(quotationsShow(quotation.id).url, returnTo)
+        : quotationsShow(quotation.id).url;
+
     return (
         <>
             <Head title={`Editar ${quotationName(quotation)}`} />
@@ -119,9 +126,9 @@ export default function QuotationsEdit({
                 submitUrl={quotationUpdate(quotation.id).url}
                 previewUrl={quotationEditPreviewPricing(quotation.id).url}
                 method="put"
-                title="Editar Cotización"
-                backUrl={quotationsShow(quotation.id).url}
-                submitLabel="Actualizar Cotización"
+                title="Editar cotización"
+                backUrl={showHref}
+                submitLabel="Guardar cambios"
             />
         </>
     );
@@ -129,10 +136,18 @@ export default function QuotationsEdit({
 
 QuotationsEdit.layout = (props: Props) => ({
     breadcrumbs: [
-        { title: 'Cotizaciones', href: quotationsIndex() },
+        {
+            title: 'Cotizaciones',
+            href: breadcrumbHref(props.returnTo, quotationsIndex().url),
+        },
         {
             title: quotationName(props.quotation),
-            href: quotationsShow(props.quotation.id),
+            href: props.returnTo
+                ? withReturnTo(
+                      quotationsShow(props.quotation.id).url,
+                      props.returnTo,
+                  )
+                : quotationsShow(props.quotation.id),
         },
         { title: 'Editar', href: quotationsEdit(props.quotation.id) },
     ],

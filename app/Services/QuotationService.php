@@ -154,9 +154,31 @@ class QuotationService
 
     public function updateStatus(Quotation $quotation, QuotationStatus $status): Quotation
     {
-        $quotation->update(['status' => $status]);
+        return DB::transaction(function () use ($quotation, $status): Quotation {
+            $lockedQuotation = Quotation::query()->where('id', $quotation->id)->lockForUpdate()->first();
 
-        return $quotation->fresh();
+            if ($lockedQuotation === null) {
+                throw ValidationException::withMessages([
+                    'status' => __('La cotización ya no existe.'),
+                ]);
+            }
+
+            if ($lockedQuotation->convert_to_order_id !== null) {
+                throw ValidationException::withMessages([
+                    'status' => __('No se puede cambiar el estado de una cotización convertida en pedido.'),
+                ]);
+            }
+
+            if (! in_array($status, $lockedQuotation->status->nextTransitions(), true)) {
+                throw ValidationException::withMessages([
+                    'status' => __('La transición de estado no es válida.'),
+                ]);
+            }
+
+            $lockedQuotation->update(['status' => $status]);
+
+            return $lockedQuotation->fresh();
+        });
     }
 
     /**

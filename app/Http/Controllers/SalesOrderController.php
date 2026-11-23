@@ -110,6 +110,7 @@ class SalesOrderController extends Controller
         return Inertia::render('SalesOrders/Create', [
             'clients' => $clients,
             'products' => $products,
+            'priorityOptions' => EnumOptions::for(SalesOrderPriority::cases()),
         ]);
     }
 
@@ -180,6 +181,8 @@ class SalesOrderController extends Controller
                 fn (SalesOrderStatus $status) => ['value' => $status->value, 'label' => $status->label()],
                 $statusTransitions
             ),
+            'priorityOptions' => EnumOptions::for(SalesOrderPriority::cases()),
+            'returnTo' => $this->resolveReturnTo($request),
             'can' => [
                 'update' => $user?->can('update', $salesOrder) ?? false,
                 'updateStatus' => $user?->can('updateStatus', $salesOrder) ?? false,

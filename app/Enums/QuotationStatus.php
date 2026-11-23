@@ -32,4 +32,19 @@ enum QuotationStatus: string implements HasTone
             self::Rejected => Tone::Danger,
         };
     }
+
+    /**
+     * Devuelve los estados a los que se puede transicionar desde el estado actual.
+     *
+     * @return array<int, self>
+     */
+    public function nextTransitions(): array
+    {
+        return match ($this) {
+            self::Draft => [self::Sent],
+            self::Sent => [self::Accepted, self::Rejected, self::Draft],
+            self::Rejected => [self::Draft],
+            self::Accepted => [self::Sent],
+        };
+    }
 }

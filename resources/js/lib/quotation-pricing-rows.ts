@@ -30,14 +30,6 @@ export type PricingLine = {
     subtotal: string;
 };
 
-let lastRowKey = 0;
-
-export function newRowKey(): string {
-    lastRowKey += 1;
-
-    return `row-${lastRowKey}`;
-}
-
 /** Los campos de precio que se mandan al servidor, al guardar y en la vista previa: solo el que manda. */
 export function pricingFieldsFor(row: QuotationPricingRow): PricingFields {
     const adjustment = toDecimalPayload(row.price_adjustment_pct) || null;

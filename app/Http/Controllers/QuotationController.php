@@ -10,6 +10,7 @@ use App\Enums\Permission;
 use App\Enums\QuotationItemType;
 use App\Enums\QuotationStatus;
 use App\Enums\QuotationValidity;
+use App\Enums\SalesOrderPriority;
 use App\Filters\QuotationFilter;
 use App\Http\Requests\Quotations\ConvertQuotationToOrderRequest;
 use App\Http\Requests\Quotations\IndexQuotationRequest;
@@ -130,14 +131,13 @@ class QuotationController extends Controller
                 'viewSalesOrder' => $salesOrder !== null && ($request->user()?->can('view', $salesOrder) ?? false),
             ],
             'salesOrderId' => $quotation->convert_to_order_id,
-            'statusOptions' => array_map(
-                fn (QuotationStatus $status) => ['value' => $status->value, 'label' => $status->label()],
-                QuotationStatus::cases()
-            ),
+            'statusOptions' => EnumOptions::for($quotation->status->nextTransitions()),
+            'priorityOptions' => EnumOptions::for(SalesOrderPriority::cases()),
+            'returnTo' => $this->resolveReturnTo($request),
         ]);
     }
 
-    public function edit(Quotation $quotation): Response
+    public function edit(Request $request, Quotation $quotation): Response
     {
         $this->authorize('update', $quotation);
 
@@ -151,6 +151,7 @@ class QuotationController extends Controller
             'validityDaysOptions' => EnumOptions::for(QuotationValidity::cases()),
             'paymentMethodOptions' => EnumOptions::for(PaymentMethod::cases()),
             'itemTypeOptions' => EnumOptions::for(QuotationItemType::cases()),
+            'returnTo' => $this->resolveReturnTo($request),
         ]);
     }
 
