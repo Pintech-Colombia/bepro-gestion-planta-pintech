@@ -20,6 +20,7 @@ use App\Models\ProductionOrder;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
 use App\Models\ProductionOrderPackagingPlan;
+use App\Models\ProductionOrderProductLine;
 use App\Models\ProductionRemnant;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
@@ -186,6 +187,15 @@ function summaryTypedData(object $test): array
     return [
         'ingredients' => [['id' => $test->detail->id, 'actual_quantity' => 30]],
         'packaging' => [['id' => $test->plan->id, 'actual_units' => 10]],
+        // Lo gastado de cada producto que lleva la orden: lo que traen sus saldos (el saldo crea su línea).
+        'product_lines' => ProductionOrderProductLine::query()
+            ->where('production_order_id', $test->order->id)
+            ->get()
+            ->map(fn (ProductionOrderProductLine $line): array => [
+                'id' => $line->id,
+                'actual_kg' => (string) $line->remnantConsumptions()->sum('quantity_kg'),
+            ])
+            ->all(),
         'remnant_quantity_kg' => 10,
         'density_kg_per_gallon' => 5,
     ];
@@ -385,7 +395,7 @@ it('a cancelled order has no costs, on screen or in the preview', function () {
 
     $this->postJson(route('production-orders.preview-costs', $this->order), summaryTypedData($this))
         ->assertOk()
-        ->assertExactJson(['ingredients' => [], 'products' => [], 'summary' => null]);
+        ->assertExactJson(['ingredients' => [], 'products' => [], 'product_lines' => [], 'summary' => null]);
 });
 
 it('without «Ver costos» there is no summary on screen and the preview refuses', function (SystemRole $role) {

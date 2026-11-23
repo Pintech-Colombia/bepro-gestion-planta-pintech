@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Production\BuildProductionOrderExportDataAction;
 use App\Enums\FinishedInventoryMovementReason;
 use App\Enums\FormulaLineCostingBasis;
 use App\Enums\InventoryMovementType;
@@ -736,6 +737,81 @@ it('warns that the order changed when a lot was added after the screen loaded', 
         ->assertSessionHasErrors(['batch_consumptions' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
 
     expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress);
+});
+
+it('warns that the order changed when the screen did not send what was spent of a product line', function (string $route) {
+    $order = opsRalOrder($this);
+
+    // La pantalla cargó antes de que la orden tuviera la línea: no manda su renglón.
+    opsComplete($this, $order, opsRows($order), $route, actualKg: null)
+        ->assertSessionHasErrors(['product_lines' => __(ProductionOrderCompletionLines::ORDER_CHANGED_MESSAGE)]);
+
+    expect($order->fresh()->status)->toBe(ProductionOrderStatus::InProgress)
+        ->and(ProductionOrderProductLine::query()->where('production_order_id', $order->id)->value('actual_kg'))->toBeNull();
+})->with(['completar' => 'production-orders.complete', 'enviar a revisión' => 'production-orders.submit-for-review']);
+
+it('previews the cost of each product row of the consumption table, the same as its lots', function () {
+    $order = opsRalOrder($this);
+    $line = ProductionOrderProductLine::query()->where('production_order_id', $order->id)->sole();
+    $source = ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->sole();
+    $detail = ProductionOrderDetail::query()->where('production_order_id', $order->id)->firstOrFail();
+    $plan = ProductionOrderPackagingPlan::query()->where('production_order_id', $order->id)->firstOrFail();
+
+    $preview = $this->postJson(route('production-orders.preview-costs', $order), [
+        'ingredients' => [['id' => $detail->id, 'actual_quantity' => 10]],
+        'packaging' => [['id' => $plan->id, 'actual_units' => 10]],
+        'batch_consumptions' => [['id' => $source->id, 'has_leftover' => true, 'leftover_kg' => '5.7']],
+    ])->assertOk()->json();
+
+    // El renglón del producto cuesta lo que sus fuentes: los 20 cuñetes menos lo que vuelve al saldo.
+    expect($preview['product_lines'])->toHaveCount(1)
+        ->and($preview['product_lines'][0]['id'])->toBe($line->id)
+        ->and($preview['product_lines'][0]['cost'])->toBe('4491297.0844')
+        ->and($preview['product_lines'][0]['cost'])->toBe($preview['summary']['bulk']['products_used']);
+});
+
+it('prints the product inside its step with its lot, and the open bucket line only while producing', function () {
+    $order = opsRalOrder($this);
+    $lot = sprintf('Lote %s (%s) · 20 × %s', $this->origin->lot_number, $this->origin->order_number, $this->lot->productVariant->presentation_label);
+    $sheets = function () use ($order): array {
+        $payload = app(BuildProductionOrderExportDataAction::class)->execute($order->fresh());
+
+        return [
+            $payload,
+            view('pdf.production-order', ['order' => $payload, 'logoBase64' => null, 'generatedAt' => '-'])->render(),
+            view('excel.production-order', ['order' => $payload])->render(),
+        ];
+    };
+
+    [$payload, $pdf, $excel] = $sheets();
+    $productRow = collect($payload['pdf_materials']['rows'])->firstWhere('kind', 'product');
+
+    expect($productRow['step_order'])->toBe(2)
+        ->and($productRow['raw_material_code'])->toBe('ESMALTE BLANCO')
+        ->and($productRow['observations'])->toBe([$lot, 'Quedó en cuñete abierto: ________ kg']);
+    foreach ([$pdf, $excel] as $html) {
+        expect($html)->toContain($lot)->toContain('Quedó en cuñete abierto: ________ kg');
+    }
+
+    // En revisión lo que quedó ya está registrado: se imprime el dato, no la raya.
+    opsComplete($this, $order, opsRows($order, '5.7'), 'production-orders.submit-for-review')->assertSessionHasNoErrors();
+    [, $pdf, $excel] = $sheets();
+    $leftover = "Quedaron 5,7 kg en un cuñete abierto del lote {$this->origin->lot_number}";
+
+    foreach ([$pdf, $excel] as $html) {
+        expect($html)->toContain($lot)->toContain($leftover)->not->toContain('Quedó en cuñete abierto: ________ kg');
+    }
+});
+
+it('leaves a line to write where the product comes from when nobody chose a source', function () {
+    $order = opsRalOrder($this);
+    ProductionOrderBatchConsumption::query()->where('production_order_id', $order->id)->delete();
+
+    $row = collect(app(BuildProductionOrderExportDataAction::class)->execute($order->fresh())['pdf_materials']['rows'])
+        ->firstWhere('kind', 'product');
+
+    // Sin lote elegido tampoco va la raya del cuñete: si sobra algo, la planta lo anota en la misma celda.
+    expect($row['observations'])->toBe(['De dónde sale: ______________________']);
 });
 
 it('estimates and stores the transfer cost of a lot that has none when consuming it', function () {

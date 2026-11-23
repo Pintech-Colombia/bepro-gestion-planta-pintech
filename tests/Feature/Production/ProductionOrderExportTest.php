@@ -22,6 +22,10 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Excel as ExcelFormat;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 uses(RefreshDatabase::class);
@@ -139,6 +143,30 @@ test('exportExcel returns an Excel download for an authenticated user', function
     } else {
         expect(strlen($response->getContent()))->toBeGreaterThan(0);
     }
+});
+
+// La hoja de planta en Excel se imprime como el PDF: carta vertical, una sola hoja, y el formato como texto («2.0»).
+test('the production order excel prints on one letter portrait page', function () {
+    [$order, $user] = createExportTestDependencies();
+
+    $this->actingAs($user);
+    $payload = app(BuildProductionOrderExportDataAction::class)->execute($order);
+    $path = tempnam(sys_get_temp_dir(), 'op-excel');
+    file_put_contents($path, Excel::raw(new ProductionOrderExport($payload), ExcelFormat::XLSX));
+
+    $sheet = IOFactory::load($path)->getActiveSheet();
+    unlink($path);
+    $pageSetup = $sheet->getPageSetup();
+
+    expect($sheet->getTitle())->toBe($order->order_number)
+        ->and($pageSetup->getPaperSize())->toBe(PageSetup::PAPERSIZE_LETTER)
+        ->and($pageSetup->getOrientation())->toBe(PageSetup::ORIENTATION_PORTRAIT)
+        ->and($pageSetup->getFitToWidth())->toBe(1)
+        ->and($pageSetup->getFitToHeight())->toBe(1)
+        ->and($pageSetup->getPrintArea())->toStartWith('A1:L')
+        ->and($sheet->getHighestColumn())->toBe('L')
+        ->and($sheet->getCell('K2')->getValue())->toBe('2.0')
+        ->and($sheet->getCell('K3')->getValue())->toBe('02/12/2020');
 });
 
 test('production order excel export skips missing logo drawing', function () {

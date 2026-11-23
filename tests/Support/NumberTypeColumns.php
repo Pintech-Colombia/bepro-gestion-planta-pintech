@@ -39,7 +39,7 @@ final class NumberTypeColumns
             'production_remnants.available_quantity_gallons', 'production_remnants.available_quantity_kg',
             'remnant_consumptions.quantity_gallons', 'remnant_consumptions.quantity_kg',
             'production_remnant_movements.quantity_kg', 'production_remnant_movements.balance_after_kg',
-            'production_order_product_lines.planned_kg',
+            'production_order_product_lines.planned_kg', 'production_order_product_lines.actual_kg',
             'production_order_batch_consumptions.used_kg', 'production_order_batch_consumptions.leftover_kg',
             'production_order_batch_consumptions.kg_per_unit',
             'raw_materials.minimum_stock',

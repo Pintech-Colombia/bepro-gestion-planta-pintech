@@ -64,7 +64,8 @@ function numericRequestFields(): array
             'grinding_hg' => 'production_orders.grinding_hg',
             'quality_solids' => 'production_orders.quality_solids',
             'spillage_quantity' => 'production_orders.spillage_quantity',
-            'batch_consumptions.*.used_kg' => 'production_order_batch_consumptions.used_kg',
+            // Lo gastado de cada producto va por línea; `used_kg` del lote quedó sin uso (se retira en otra migración).
+            'product_lines.*.actual_kg' => 'production_order_product_lines.actual_kg',
         ],
         'PlanBatchConsumptionRequest|UpdateBatchConsumptionRequest' => [
             'units' => 'production_order_batch_consumptions.units',
