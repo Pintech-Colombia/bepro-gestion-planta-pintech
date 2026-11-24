@@ -166,5 +166,6 @@ describe('countActiveFilters e isFilterFieldActive', () => {
         expect(hasActiveFilters({ warehouse_id: 5 })).toBe(true);
         expect(hasActiveFilters({ include_inactive: true })).toBe(true);
         expect(hasActiveFilters({ warehouse_id: null })).toBe(false);
+        expect(hasActiveFilters({ include_inactive: false })).toBe(false);
     });
 });

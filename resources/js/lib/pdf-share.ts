@@ -1,5 +1,5 @@
 export type PdfDeliveryOutcome =
-    'share' | 'download' | 'needs_gesture' | 'aborted';
+    'share' | 'download' | 'needs_gesture' | 'aborted' | 'share_stuck';
 
 export type PdfResponseValidation =
     | { valid: true }
@@ -121,6 +121,12 @@ export function resolvePdfShareAction(options: {
 
     if (name === 'AbortError') {
         return 'aborted';
+    }
+
+    // Otra hoja de compartir sigue «abierta» para el navegador: en algunos Android nunca avisa que se cerró y cada
+    // intento siguiente falla así hasta recargar. Descargar en silencio en cada toque confunde: se avisa.
+    if (name === 'InvalidStateError') {
+        return 'share_stuck';
     }
 
     if (name === 'NotAllowedError' && !options.fromReadyFile) {

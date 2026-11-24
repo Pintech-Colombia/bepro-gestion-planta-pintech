@@ -403,7 +403,6 @@ export function DateRangePicker({
             <button
                 type="button"
                 aria-label="Limpiar rango de fecha"
-                data-touch-target="hit"
                 onClick={handleClear}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-xs opacity-60 transition-opacity hover:opacity-100 hover:text-destructive focus:outline-hidden focus:ring-2 focus:ring-ring"
             >

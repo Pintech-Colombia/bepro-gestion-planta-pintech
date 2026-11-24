@@ -275,6 +275,16 @@ export function SharePdfButton({
 
             setReadyFile(null);
 
+            if (outcome === 'share_stuck') {
+                reportError({
+                    message:
+                        'El teléfono no volvió a abrir el menú de compartir. Recarga la página e intenta de nuevo.',
+                    retry: () => window.location.reload(),
+                });
+
+                return;
+            }
+
             if (outcome === 'download') {
                 triggerPdfDownload(file);
             }
@@ -357,11 +367,19 @@ export function SharePdfButton({
     );
 }
 
+/** Si el navegador muestra PDF por sí mismo (Safari de iOS sí; Chrome de Android no: los descarga siempre). */
+function browserShowsPdf(): boolean {
+    return (
+        typeof navigator !== 'undefined' && navigator.pdfViewerEnabled === true
+    );
+}
+
 /**
- * «Ver PDF» en el celular: pide el PDF fresco y lo abre en una pestaña nueva como documento temporal del navegador
- * (`blob:`). Se ve sin descargarlo al teléfono, siempre la versión actual (sin caché), y esa pestaña no tiene un
- * enlace que sirva a otra persona. La pestaña se abre en el mismo toque (si no, Safari la bloquea) y se llena cuando
- * llega el PDF; si el navegador no deja abrirla, el PDF se descarga.
+ * «Ver PDF» en el celular: pide el PDF fresco (sin caché). Si el navegador sabe mostrar PDF (iPhone), lo abre en una
+ * pestaña nueva como documento temporal (`blob:`): se ve sin descargarlo y esa pestaña no tiene un enlace que sirva a
+ * otra persona. La pestaña se abre en el mismo toque (si no, Safari la bloquea) y se llena cuando llega el PDF. Si no
+ * sabe mostrarlo (Chrome de Android, que descarga todo PDF) o no deja abrir la pestaña, lo descarga con su nombre
+ * («COT. N.pdf») y el teléfono lo abre en su visor.
  */
 export function ViewPdfButton({
     quotationId,
@@ -379,7 +397,7 @@ export function ViewPdfButton({
         setIsPreparing(true);
         const controller = start();
         // En el mismo toque: abrirla después del `await` la dejaría bloqueada como ventana emergente.
-        const tab = window.open('', '_blank');
+        const tab = browserShowsPdf() ? window.open('', '_blank') : null;
 
         const result = await fetchQuotationPdf(
             quotationId,
@@ -411,11 +429,9 @@ export function ViewPdfButton({
             return;
         }
 
-        const objectUrl = URL.createObjectURL(result.file);
-        tab.location.href = objectUrl;
-
-        // La pestaña ya cargó el documento: liberar la memoria después de un rato.
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        // No se libera con un temporizador: si el teléfono recarga esa pestaña más tarde, quedaría en blanco. El navegador
+        // lo libera al cerrar o recargar la página que lo creó.
+        tab.location.href = URL.createObjectURL(result.file);
     };
 
     return withLocalError(

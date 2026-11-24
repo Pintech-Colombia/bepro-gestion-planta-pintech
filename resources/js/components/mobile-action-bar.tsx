@@ -76,11 +76,25 @@ export function MobileActionBar({
         };
 
         // Sin `visualViewport` (navegadores viejos) se decide solo por el foco: `viewportShrunk` queda en `true`.
+        // Se compara contra la altura visible que había sin ningún campo enfocado (sin teclado), no contra
+        // `innerHeight`: en algunos navegadores el teclado achica las dos y la barra nunca se escondería.
         const viewport = window.visualViewport;
+        let heightWithoutKeyboard = viewport?.height ?? window.innerHeight;
         const syncViewport = () => {
-            if (viewport) {
-                setViewportShrunk(viewport.height < window.innerHeight * 0.85);
+            if (!viewport) {
+                return;
             }
+
+            const fieldFocused = opensKeyboard(
+                document.activeElement as FocusableElementLike | null,
+            );
+
+            // Sin foco en un campo no hay teclado: esa es la altura de referencia (cambia al girar el teléfono).
+            if (!fieldFocused) {
+                heightWithoutKeyboard = viewport.height;
+            }
+
+            setViewportShrunk(viewport.height < heightWithoutKeyboard * 0.85);
         };
 
         syncFromActiveElement();

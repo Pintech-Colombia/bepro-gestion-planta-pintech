@@ -186,6 +186,17 @@ describe('pdf-share', () => {
         });
     });
 
+    describe('resolvePdfShareAction con la hoja de compartir trabada', () => {
+        it('marca share_stuck ante InvalidStateError en vez de descargar', () => {
+            expect(
+                resolvePdfShareAction({
+                    canShare: true,
+                    error: new DOMException('Busy', 'InvalidStateError'),
+                }),
+            ).toBe('share_stuck');
+        });
+    });
+
     describe('canBrowserSharePdf', () => {
         it('devuelve false si faltan share o canShare', () => {
             expect(canBrowserSharePdf(undefined)).toBe(false);

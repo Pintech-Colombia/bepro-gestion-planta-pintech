@@ -37,7 +37,8 @@ function normalizeFilterValue(
     value: unknown,
     treatAllSentinel: boolean,
 ): string {
-    if (value === null || value === undefined) {
+    // `false` es «sin filtro» (p. ej. `include_inactive: false`), igual que vacío.
+    if (value === null || value === undefined || value === false) {
         return '';
     }
 
