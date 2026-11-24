@@ -14,6 +14,7 @@ use App\Models\ProductionCost;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\SalesOrder;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
@@ -39,6 +40,7 @@ function seededModels(): array
 {
     return [
         UnitOfMeasure::class,
+        RawMaterialFamily::class,
         RawMaterialCategory::class,
         RawMaterial::class,
         ProductCategory::class,

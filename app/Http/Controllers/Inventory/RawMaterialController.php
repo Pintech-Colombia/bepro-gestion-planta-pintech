@@ -15,6 +15,7 @@ use App\Http\Requests\RawMaterials\UpdateRawMaterialRequest;
 use App\Models\InventoryBatch;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Services\RawMaterialUsageService;
@@ -103,6 +104,12 @@ class RawMaterialController extends Controller
         return Inertia::render('Inventory/RawMaterials/Index', [
             'rawMaterials' => $rawMaterials,
             'filters' => $request->validated(),
+            // Todas, también las inactivas: sus materias primas se siguen buscando.
+            'familyOptions' => RawMaterialFamily::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (RawMaterialFamily $family): array => ['value' => (string) $family->id, 'label' => $family->name])
+                ->all(),
             'can' => [
                 'create' => Gate::allows('create', RawMaterial::class),
                 'view_costs' => $canViewCosts,
@@ -147,7 +154,8 @@ class RawMaterialController extends Controller
         $canViewCosts = $request->user()?->can(Permission::CostsView->value) ?? false;
 
         $rawMaterial->load([
-            'category:id,name,code,type',
+            'category:id,name,code,type,family_id',
+            'category.family:id,name',
             'unitOfMeasure:id,name,symbol',
             'inventoryBatches' => fn ($query) => $query
                 ->select(
@@ -190,6 +198,7 @@ class RawMaterialController extends Controller
                     'id' => $rawMaterial->category->id,
                     'name' => $rawMaterial->category->name,
                     'code' => $rawMaterial->category->code,
+                    'family_name' => $rawMaterial->category->family?->name,
                     'type' => $rawMaterial->category->type->value,
                     'type_label' => $rawMaterial->category->type->label(),
                 ] : null,
@@ -346,18 +355,26 @@ class RawMaterialController extends Controller
      * cuanto se elige la categoría.
      *
      * @param  Builder<RawMaterialCategory>  $query
-     * @return list<array{id: int, name: string, code: string, type: string, type_label: string}>
+     *                                               El formulario las agrupa por familia: van ordenadas por familia y luego por nombre (las sin familia, al final).
+     * @return list<array{id: int, name: string, code: string, family_name: string|null, type: string, type_label: string}>
      */
     private function categoryOptions(Builder $query): array
     {
         return $query
-            ->select('id', 'name', 'code', 'type')
+            ->select('id', 'name', 'code', 'type', 'family_id')
+            ->with('family:id,name')
             ->orderBy('name')
             ->get()
+            ->sortBy(fn (RawMaterialCategory $category): array => [
+                $category->family === null ? 1 : 0,
+                mb_strtolower($category->family->name ?? ''),
+            ])
+            ->values()
             ->map(fn (RawMaterialCategory $category): array => [
                 'id' => $category->id,
                 'name' => $category->name,
                 'code' => $category->code,
+                'family_name' => $category->family?->name,
                 'type' => $category->type->value,
                 'type_label' => $category->type->label(),
             ])

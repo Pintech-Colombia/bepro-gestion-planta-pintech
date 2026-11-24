@@ -12,7 +12,9 @@ use App\Http\Requests\Catalogs\IndexRawMaterialCategoryRequest;
 use App\Http\Requests\Catalogs\StoreRawMaterialCategoryRequest;
 use App\Http\Requests\Catalogs\UpdateRawMaterialCategoryRequest;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Support\EnumOptions;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -31,7 +33,7 @@ class RawMaterialCategoryController extends Controller
     public function index(IndexRawMaterialCategoryRequest $request): Response
     {
         $categories = (new RawMaterialCategoryFilter($request))
-            ->apply(RawMaterialCategory::query()->withCount('rawMaterials'))
+            ->apply(RawMaterialCategory::query()->with('family:id,name')->withCount('rawMaterials'))
             ->orderBy('name')
             ->orderBy('id')
             ->paginate(15)
@@ -49,6 +51,8 @@ class RawMaterialCategoryController extends Controller
             'categories' => $categories,
             'filters' => $request->validated(),
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
+            // Todas, también las inactivas: el filtro debe poder mostrar las categorías de una familia ya desactivada.
+            'familyOptions' => $this->familyOptions(RawMaterialFamily::query()),
             'can' => [
                 'create' => Gate::allows('create', RawMaterialCategory::class),
             ],
@@ -61,6 +65,7 @@ class RawMaterialCategoryController extends Controller
 
         return Inertia::render('Settings/Catalogs/RawMaterialCategories/Create', [
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
+            'familyOptions' => $this->familyOptions(RawMaterialFamily::query()->selectable()),
         ]);
     }
 
@@ -80,7 +85,7 @@ class RawMaterialCategoryController extends Controller
     {
         $this->authorize('update', $rawMaterialCategory);
 
-        $rawMaterialCategory->loadCount('rawMaterials');
+        $rawMaterialCategory->load('family:id,name')->loadCount('rawMaterials');
 
         return Inertia::render('Settings/Catalogs/RawMaterialCategories/Edit', [
             'category' => [
@@ -88,6 +93,9 @@ class RawMaterialCategoryController extends Controller
                 'description' => $rawMaterialCategory->description,
             ],
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
+            'familyOptions' => $this->familyOptions(
+                RawMaterialFamily::query()->selectable([$rawMaterialCategory->family_id]),
+            ),
         ]);
     }
 
@@ -121,7 +129,20 @@ class RawMaterialCategoryController extends Controller
     }
 
     /**
-     * Requiere el conteo `raw_materials_count` cargado.
+     * @param  Builder<RawMaterialFamily>  $query
+     * @return list<array{value: string, label: string}>
+     */
+    private function familyOptions(Builder $query): array
+    {
+        return $query
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (RawMaterialFamily $family): array => ['value' => (string) $family->id, 'label' => $family->name])
+            ->all();
+    }
+
+    /**
+     * Requiere el conteo `raw_materials_count` y la familia cargados.
      *
      * @return array<string, mixed>
      */
@@ -131,6 +152,8 @@ class RawMaterialCategoryController extends Controller
             'id' => $category->id,
             'code' => $category->code,
             'name' => $category->name,
+            'family_id' => $category->family_id,
+            'family_name' => $category->family?->name,
             'type' => $category->type->value,
             'type_label' => $category->type->label(),
             'is_active' => $category->is_active,

@@ -6,6 +6,7 @@ namespace Database\Factories;
 
 use App\Enums\RawMaterialType;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -23,6 +24,7 @@ class RawMaterialCategoryFactory extends Factory
             'code' => $code,
             'name' => 'Categoria '.$code,
             'description' => $this->faker->optional()->sentence(),
+            'family_id' => RawMaterialFamily::factory(),
             'type' => RawMaterialType::Chemical,
             'is_active' => true,
         ];

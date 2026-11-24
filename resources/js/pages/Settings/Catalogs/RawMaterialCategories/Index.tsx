@@ -32,6 +32,7 @@ type Props = {
     categories: Paginated<CategoryRow>;
     filters: Record<string, string | null | undefined>;
     typeOptions: { value: string; label: string }[];
+    familyOptions: { value: string; label: string }[];
     can: {
         create: boolean;
     };
@@ -41,6 +42,7 @@ export default function RawMaterialCategoriesIndex({
     categories,
     filters,
     typeOptions,
+    familyOptions,
     can,
 }: Props) {
     const {
@@ -53,6 +55,7 @@ export default function RawMaterialCategoriesIndex({
             search: filters.search ?? '',
             status: filters.status ?? '',
             type: filters.type ?? '',
+            family: filters.family ?? '',
         },
     });
 
@@ -88,6 +91,15 @@ export default function RawMaterialCategoriesIndex({
             header: 'Nombre',
             cell: (category) => category.name,
             mobile: 'subtitle',
+        },
+        {
+            key: 'family',
+            header: 'Familia',
+            cell: (category) =>
+                category.family_name ?? (
+                    <span className="text-muted-foreground">Sin familia</span>
+                ),
+            mobile: 'meta',
         },
         {
             key: 'type',
@@ -146,6 +158,12 @@ export default function RawMaterialCategoriesIndex({
                             name: 'search',
                             label: 'Buscar',
                             placeholder: 'Buscar por código o nombre...',
+                        },
+                        {
+                            type: 'select',
+                            name: 'family',
+                            label: 'Familia',
+                            options: familyOptions,
                         },
                         {
                             type: 'select',

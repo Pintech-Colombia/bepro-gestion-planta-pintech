@@ -6,6 +6,7 @@ use App\Enums\RawMaterialType;
 use App\Enums\SystemRole;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 
@@ -22,6 +23,7 @@ function rawCategoryPayload(array $overrides = []): array
         'code' => 'RESINAS',
         'name' => 'Resinas',
         'description' => null,
+        'family_id' => $overrides['family_id'] ?? RawMaterialFamily::factory()->create()->id,
         'type' => RawMaterialType::Chemical->value,
         'is_active' => true,
     ], $overrides);
@@ -161,4 +163,44 @@ it('elimina una categoría sin materias primas y rechaza una con materias primas
 
     expect(RawMaterialCategory::query()->whereKey($empty->id)->exists())->toBeFalse()
         ->and(RawMaterialCategory::query()->whereKey($used->id)->exists())->toBeTrue();
+});
+
+it('exige una familia activa al crear la categoría', function (?Closure $family) {
+    actingAsRole(SystemRole::SuperAdmin);
+
+    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload(['family_id' => $family ? $family()->id : '']))
+        ->assertSessionHasErrors('family_id');
+})->with([
+    'sin familia' => [null],
+    'familia inactiva' => [fn () => RawMaterialFamily::factory()->create(['is_active' => false])],
+]);
+
+it('conserva al editar la familia que se desactivó, pero no deja pasarse a otra inactiva', function () {
+    actingAsRole(SystemRole::SuperAdmin);
+    $family = RawMaterialFamily::factory()->create();
+    $category = RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'family_id' => $family->id]);
+    $family->update(['is_active' => false]);
+    $otherInactive = RawMaterialFamily::factory()->create(['is_active' => false]);
+
+    $this->get(route('catalogs.raw-material-categories.edit', $category))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('category.family_id', $family->id)
+            ->where('familyOptions', fn ($options) => collect($options)->pluck('value')->all() === [(string) $family->id]));
+
+    $this->put(route('catalogs.raw-material-categories.update', $category), rawCategoryPayload(['family_id' => $family->id]))
+        ->assertSessionHasNoErrors();
+    $this->put(route('catalogs.raw-material-categories.update', $category), rawCategoryPayload(['family_id' => $otherInactive->id]))
+        ->assertSessionHasErrors('family_id');
+});
+
+it('filtra las categorías por familia y muestra el nombre de la familia', function () {
+    actingAsRole(SystemRole::SuperAdmin);
+    $additives = RawMaterialFamily::factory()->create(['name' => 'ADITIVO']);
+    RawMaterialCategory::factory()->create(['code' => 'ADIT-DISP', 'family_id' => $additives->id]);
+    RawMaterialCategory::factory()->create(['code' => 'RESINAS']);
+
+    $this->get(route('catalogs.raw-material-categories.index', ['family' => $additives->id]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('categories.data', fn ($rows) => collect($rows)->pluck('code')->all() === ['ADIT-DISP']
+                && $rows[0]['family_name'] === 'ADITIVO'));
 });

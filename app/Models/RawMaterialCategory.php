@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Spatie\Activitylog\LogOptions;
@@ -23,10 +24,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string $code
  * @property string $name
  * @property string|null $description
+ * @property int|null $family_id
  * @property RawMaterialType $type
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read RawMaterialFamily|null $family
  * @property-read Collection|RawMaterial[] $rawMaterials
  * @property-read int|null $raw_materials_count
  */
@@ -34,6 +37,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'code',
     'name',
     'description',
+    'family_id',
     'type',
     'is_active',
 ])]
@@ -53,7 +57,7 @@ class RawMaterialCategory extends Model
         return LogOptions::defaults()
             ->useLogName('categorias_materia_prima')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['code', 'name', 'description', 'type', 'is_active'])
+            ->logOnly(['code', 'name', 'description', 'family_id', 'type', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -66,6 +70,11 @@ class RawMaterialCategory extends Model
             'type' => RawMaterialType::class,
             'is_active' => 'boolean',
         ];
+    }
+
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(RawMaterialFamily::class, 'family_id');
     }
 
     public function rawMaterials(): HasMany

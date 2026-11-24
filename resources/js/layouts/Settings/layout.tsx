@@ -9,6 +9,7 @@ import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { index as productCategoriesIndex } from '@/routes/catalogs/product-categories';
 import { index as rawMaterialCategoriesIndex } from '@/routes/catalogs/raw-material-categories';
+import { index as rawMaterialFamiliesIndex } from '@/routes/catalogs/raw-material-families';
 import { index as shrinkWrapTypesIndex } from '@/routes/catalogs/shrink-wrap-types';
 import { index as suppliersIndex } from '@/routes/catalogs/suppliers';
 import { index as unitsOfMeasureIndex } from '@/routes/catalogs/units-of-measure';
@@ -38,6 +39,12 @@ const settingsNavGroups: NavGroup[] = [
             {
                 title: 'Unidades de medida',
                 href: unitsOfMeasureIndex().url,
+                icon: null,
+                allowedPermissions: ['catalogs.view'],
+            },
+            {
+                title: 'Familias de materia prima',
+                href: rawMaterialFamiliesIndex().url,
                 icon: null,
                 allowedPermissions: ['catalogs.view'],
             },

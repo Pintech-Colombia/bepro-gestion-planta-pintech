@@ -22,6 +22,7 @@ class IndexRawMaterialRequest extends FormRequest
         return [
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'string', 'in:active,inactive,all'],
+            'family' => ['nullable', 'integer'],
         ];
     }
 }

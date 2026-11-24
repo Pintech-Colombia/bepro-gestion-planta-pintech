@@ -34,6 +34,13 @@ class UpdateRawMaterialCategoryRequest extends StoreRawMaterialCategoryRequest
         ];
     }
 
+    protected function currentFamilyId(): ?int
+    {
+        $category = $this->route('raw_material_category');
+
+        return $category instanceof RawMaterialCategory ? $category->family_id : null;
+    }
+
     protected function defaultIsActive(): bool
     {
         $category = $this->route('raw_material_category');

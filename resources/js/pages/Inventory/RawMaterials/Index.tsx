@@ -54,7 +54,9 @@ type Props = {
     filters: {
         search?: string;
         status?: string;
+        family?: string;
     };
+    familyOptions: { value: string; label: string }[];
     can: {
         create: boolean;
         view_costs: boolean;
@@ -72,6 +74,7 @@ const statusOptions = [
 export default function RawMaterialsIndex({
     rawMaterials,
     filters,
+    familyOptions,
     can,
 }: Props) {
     const {
@@ -89,7 +92,13 @@ export default function RawMaterialsIndex({
             type: 'text',
             name: 'search',
             label: 'Buscar',
-            placeholder: 'Buscar por código…',
+            placeholder: 'Buscar por código o categoría…',
+        },
+        {
+            type: 'select',
+            name: 'family',
+            label: 'Familia',
+            options: familyOptions,
         },
         {
             type: 'select',

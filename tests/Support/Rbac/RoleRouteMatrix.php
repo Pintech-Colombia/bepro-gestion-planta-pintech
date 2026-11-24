@@ -84,6 +84,8 @@ final class RoleRouteMatrix
             // Catálogos, en Configuración (§3): Admin los consulta; solo SuperAdmin los gestiona.
             'catalogs.units-of-measure.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
             'catalogs.units-of-measure.create' => self::only(SystemRole::SuperAdmin),
+            'catalogs.raw-material-families.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
+            'catalogs.raw-material-families.create' => self::only(SystemRole::SuperAdmin),
             'catalogs.raw-material-categories.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),
             'catalogs.raw-material-categories.create' => self::only(SystemRole::SuperAdmin),
             'catalogs.product-categories.index' => self::only(SystemRole::SuperAdmin, SystemRole::Admin),

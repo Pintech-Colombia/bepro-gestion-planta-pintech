@@ -43,6 +43,7 @@ type Props = {
             id: number;
             name: string;
             code: string;
+            family_name: string | null;
             type_label: string;
         } | null;
         inventory_batches: InventoryBatch[];
@@ -158,6 +159,11 @@ export default function RawMaterialsShow({
                                 label="Código interno"
                                 value={rawMaterial.code}
                                 valueClassName="font-mono"
+                            />
+
+                            <DetailItem
+                                label="Familia"
+                                value={rawMaterial.category?.family_name}
                             />
 
                             <DetailItem
