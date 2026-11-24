@@ -23,10 +23,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { update as salesOrderUpdate } from '@/routes/sales-orders';
-
-/** Máximo de la dirección de envío (`Client::SHIPPING_ADDRESS_MAX_LENGTH`). */
-const SHIPPING_ADDRESS_MAX_LENGTH = 255;
 
 type EditOrderDialogProps = {
     order: {
@@ -61,8 +59,13 @@ export function EditOrderDialog({
         notes: order.notes ?? '',
     });
 
-    const { data, setData, patch, processing, errors, clearErrors } =
+    const { data, setData, patch, processing, errors, clearErrors, transform } =
         useForm(savedData());
+
+    // Un pedido viejo puede no tener dirección (la columna acepta vacío). El servidor la exige solo si llega
+    // (`sometimes`): se manda solo si el usuario la cambió, para poder corregir, por ejemplo, la prioridad sin
+    // tener que inventar una dirección.
+    const hasSavedAddress = (order.shipping_address ?? '').trim() !== '';
 
     const handleOpenChange = (next: boolean) => {
         if (processing) {
@@ -81,6 +84,17 @@ export function EditOrderDialog({
 
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        transform((formData) =>
+            formData.shipping_address === (order.shipping_address ?? '')
+                ? {
+                      priority: formData.priority,
+                      estimated_delivery_date: formData.estimated_delivery_date,
+                      client_contact_name: formData.client_contact_name,
+                      client_phone: formData.client_phone,
+                      notes: formData.notes,
+                  }
+                : formData,
+        );
         patch(salesOrderUpdate(order.id).url, {
             preserveScroll: true,
             onSuccess: () => setOpen(false),
@@ -169,9 +183,13 @@ export function EditOrderDialog({
                             <FormField
                                 id="shipping_address"
                                 label="Dirección de entrega"
-                                required
+                                required={hasSavedAddress}
                                 error={errors.shipping_address}
-                                help="Solo cambia la de este pedido; la del cliente no se modifica."
+                                help={
+                                    hasSavedAddress
+                                        ? 'Solo cambia la de este pedido; la del cliente no se modifica.'
+                                        : 'Este pedido no tiene dirección registrada: escríbela si ya la conoces.'
+                                }
                             >
                                 <Textarea
                                     rows={2}

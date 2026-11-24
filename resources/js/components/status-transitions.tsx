@@ -28,8 +28,11 @@ export type TransitionCopy = {
 
 type StatusTransitionsProps = {
     transitions: StatusTransition[];
-    /** Textos de cada transición según el estado destino. */
-    copy: (value: string) => TransitionCopy;
+    /**
+     * Textos de cada transición según el estado destino. Sin texto para un estado (`undefined`), se usa la etiqueta que
+     * manda el servidor, nunca el código del estado.
+     */
+    copy: (value: string) => TransitionCopy | undefined;
     /** URL del cambio de estado (`PATCH` con `{ status }`). */
     url: string;
     /** Nombre del registro para el menú «⋯» del celular: «Acciones de la cotización No. 57». */
@@ -54,8 +57,19 @@ export function StatusTransitions({
     const confirm = useConfirm();
     const [processing, setProcessing] = useState(false);
 
+    const textFor = (transition: StatusTransition): TransitionCopy =>
+        copy(transition.value) ?? {
+            label: transition.label,
+            title: `¿Pasar a «${transition.label}»?`,
+            description: `El estado cambia a «${transition.label}».`,
+        };
+
     const run = async (transition: StatusTransition) => {
-        const text = copy(transition.value);
+        if (processing) {
+            return;
+        }
+
+        const text = textFor(transition);
         const destructive = transition.tone === 'danger';
 
         const confirmed = await confirm({
@@ -89,9 +103,13 @@ export function StatusTransitions({
     const mobileActions: RowAction[] = [
         ...mobileExtraActions,
         ...ordered.map((transition): RowAction => ({
-            label: copy(transition.value).label,
+            label: textFor(transition).label,
             destructive: transition.tone === 'danger',
             onSelect: () => void run(transition),
+            // Mientras se guarda un cambio, el menú del celular tampoco deja mandar otro.
+            disabledReason: processing
+                ? 'Se está guardando un cambio de estado.'
+                : undefined,
         })),
     ];
 
@@ -106,7 +124,7 @@ export function StatusTransitions({
                     disabled={processing}
                     onClick={() => void run(transition)}
                 >
-                    {copy(transition.value).label}
+                    {textFor(transition).label}
                 </Button>
             ))}
             <RowActions

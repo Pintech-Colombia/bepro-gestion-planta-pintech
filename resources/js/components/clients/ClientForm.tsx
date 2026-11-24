@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { index as clientsIndex } from '@/routes/clients';
 
 interface ClientFormData {
@@ -108,7 +109,7 @@ export default function ClientForm({
                             className="md:col-span-2"
                         >
                             <Textarea
-                                maxLength={255}
+                                maxLength={SHIPPING_ADDRESS_MAX_LENGTH}
                                 value={data.shipping_address}
                                 onChange={(e) =>
                                     setData('shipping_address', e.target.value)

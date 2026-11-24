@@ -95,24 +95,24 @@ type Props = {
 };
 
 /** Textos de cada cambio de estado del pedido. */
-function orderTransitionCopy(value: string): TransitionCopy {
+function orderTransitionCopy(value: string): TransitionCopy | undefined {
     switch (value) {
         case 'in_progress':
             return {
-                label: 'Marcar en progreso',
+                label: 'Marcar «En progreso»',
                 title: '¿Pasar el pedido a «En progreso»?',
                 description: 'Indica que la planta ya está trabajando en él.',
             };
         case 'ready':
             return {
-                label: 'Marcar como lista',
-                title: '¿Marcar el pedido como listo?',
-                description: 'Indica que está listo para despachar.',
+                label: 'Marcar «Lista»',
+                title: '¿Pasar el pedido a «Lista»?',
+                description: 'Indica que el pedido está listo para despachar.',
             };
         case 'delivered':
             return {
-                label: 'Marcar como entregada',
-                title: '¿Marcar el pedido como entregado?',
+                label: 'Marcar «Entregada»',
+                title: '¿Pasar el pedido a «Entregada»?',
                 description: 'El pedido queda cerrado: ya no cambia de estado.',
             };
         case 'cancelled':
@@ -122,11 +122,7 @@ function orderTransitionCopy(value: string): TransitionCopy {
                 description: 'El pedido se cancela y no se puede reabrir.',
             };
         default:
-            return {
-                label: value,
-                title: '¿Cambiar el estado del pedido?',
-                description: 'El estado del pedido cambia.',
-            };
+            return undefined;
     }
 }
 
@@ -167,17 +163,6 @@ export default function SalesOrdersShow({
                                         priorityOptions={priorityOptions}
                                     />
                                 )}
-                                {showTransitions && (
-                                    <StatusTransitions
-                                        transitions={statusTransitions}
-                                        copy={orderTransitionCopy}
-                                        url={
-                                            salesOrdersUpdateStatus(order.id)
-                                                .url
-                                        }
-                                        itemLabel={`el pedido #${order.id}`}
-                                    />
-                                )}
                                 {can.hold && (
                                     <HoldOrderDialog orderId={order.id} />
                                 )}
@@ -188,6 +173,17 @@ export default function SalesOrdersShow({
                                         canApprovePartially={
                                             can.approvePartially
                                         }
+                                    />
+                                )}
+                                {showTransitions && (
+                                    <StatusTransitions
+                                        transitions={statusTransitions}
+                                        copy={orderTransitionCopy}
+                                        url={
+                                            salesOrdersUpdateStatus(order.id)
+                                                .url
+                                        }
+                                        itemLabel={`el pedido #${order.id}`}
                                     />
                                 )}
                             </>

@@ -48,6 +48,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { quotationPdfFilename } from '@/lib/pdf-share';
 import { quotationName } from '@/lib/quotation-name';
+import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { cn } from '@/lib/utils';
 import {
     convertToOrder as quotationsConvertToOrder,
@@ -128,7 +129,7 @@ type Props = {
 
 /** Textos de cada cambio de estado de la cotización. El de «Enviado» depende de desde dónde se llega. */
 function quotationTransitionCopy(currentStatus: string) {
-    return (value: string): TransitionCopy => {
+    return (value: string): TransitionCopy | undefined => {
         switch (value) {
             case 'sent':
                 return currentStatus === 'accepted'
@@ -168,11 +169,7 @@ function quotationTransitionCopy(currentStatus: string) {
                         'Se puede editar otra vez. Después hay que marcarla de nuevo como enviada.',
                 };
             default:
-                return {
-                    label: value,
-                    title: '¿Cambiar el estado de la cotización?',
-                    description: 'El estado de la cotización cambia.',
-                };
+                return undefined;
         }
     };
 }
@@ -488,7 +485,9 @@ export default function QuotationsShow({
                                     >
                                         <Textarea
                                             rows={2}
-                                            maxLength={255}
+                                            maxLength={
+                                                SHIPPING_ADDRESS_MAX_LENGTH
+                                            }
                                             value={
                                                 convertForm.data
                                                     .shipping_address

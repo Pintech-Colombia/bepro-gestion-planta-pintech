@@ -335,7 +335,7 @@ it('sends the next status transitions with their tone on sales order show', func
 
 it('saves every field of the edit data dialog, including the shipping address', function () {
     $admin = User::factory()->create();
-    $admin->assignRole('admin');
+    $admin->assignRole(SystemRole::Admin->value);
 
     $order = SalesOrder::factory()->pending()->create([
         'priority' => 'low',
@@ -363,7 +363,7 @@ it('saves every field of the edit data dialog, including the shipping address', 
 
 it('rejects an empty shipping address in the edit data dialog', function () {
     $admin = User::factory()->create();
-    $admin->assignRole('admin');
+    $admin->assignRole(SystemRole::Admin->value);
 
     $order = SalesOrder::factory()->pending()->create(['shipping_address' => 'Calle 1 # 2-3, Cali']);
 
@@ -372,6 +372,33 @@ it('rejects an empty shipping address in the edit data dialog', function () {
         ->assertSessionHasErrors(['shipping_address']);
 
     expect($order->fresh()->shipping_address)->toBe('Calle 1 # 2-3, Cali');
+});
+
+it('lets the edit data dialog save an order without shipping address when the address is not sent', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole(SystemRole::Admin->value);
+
+    // Un pedido viejo puede no tener dirección: la columna acepta vacío. El diálogo solo la manda si el usuario la
+    // cambió, así que cambiar la prioridad no exige inventar una dirección.
+    $order = SalesOrder::factory()->pending()->create([
+        'priority' => 'low',
+        'shipping_address' => null,
+    ]);
+
+    $this->actingAs($admin)
+        ->patch(route('sales-orders.update', $order), [
+            'priority' => 'high',
+            'estimated_delivery_date' => '',
+            'client_contact_name' => '',
+            'client_phone' => '',
+            'notes' => '',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $order->refresh();
+    expect($order->priority->value)->toBe('high')
+        ->and($order->shipping_address)->toBeNull();
 });
 
 it('prevents invalid status transitions', function () {
