@@ -757,7 +757,7 @@ it('sends valid next status transitions, priority options and returnTo on quotat
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Quotations/Show')
-            ->where('statusOptions', EnumOptions::for(QuotationStatus::Draft->nextTransitions()))
+            ->where('statusTransitions', EnumOptions::for(QuotationStatus::Draft->nextTransitions()))
             ->where('priorityOptions', EnumOptions::for(SalesOrderPriority::cases()))
             ->where('returnTo', '/quotations?status=draft')
         );

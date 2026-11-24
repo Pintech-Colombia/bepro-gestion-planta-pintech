@@ -518,10 +518,8 @@ describe('contrato de DESIGN.md', () => {
             'resources/js/pages/Products/Show.tsx',
             // Revisión de la solicitud de I+D: con su módulo.
             'resources/js/pages/PaintDevelopmentRequests/Show.tsx',
-            // El IVA dentro de la tarjeta de totales y el diálogo «Convertir en pedido»: con el rediseño de la
-            // cotización.
+            // El IVA dentro de la tarjeta de totales: con el rediseño del formulario de cotización.
             'resources/js/components/quotations/QuotationForm.tsx',
-            'resources/js/pages/Quotations/Show.tsx',
         ];
         const allowed = [
             ...excluded,

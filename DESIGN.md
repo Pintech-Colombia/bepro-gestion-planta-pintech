@@ -539,6 +539,18 @@ they open nothing.
 - **Stacking and safe area:** `z-40` keeps the bar below `Dialog`, `Sheet`, `Popover` and notifications (`z-50`). Never
   add `viewport-fit=cover` to the viewport `<meta>` tag in `resources/views/app.blade.php`.
 
+### Status changes
+
+- A document changes status with one button per allowed transition, never a `<select>` plus «Actualizar estado»:
+  `<StatusTransitions>` (`components/status-transitions.tsx`). The server sends only the data,
+  `EnumOptions::for($model->status->nextTransitions())` (`{ value, label, tone }`), and enforces the same list in the
+  service. The button and dialog texts live in the screen, in a function `(value) => { label, title, description,
+  confirmLabel? }`; the server never sends UI copy.
+- Every transition asks for confirmation (`useConfirm`); `tone === 'danger'` (reject, cancel) confirms in red and goes
+  last. On desktop the transitions are outline buttons in `<PageHeader>`; on the phone they collapse into a «⋯» menu
+  together with other secondary actions (`mobileExtraActions`, e.g. «Editar»). Errors come back in `errors.status` and
+  the screen shows them with `<FormError id="status">`.
+
 ## 11. Libraries
 
 - Components: shadcn/ui on Radix, added with the shadcn CLI into `components/ui/`. When you touch a component that

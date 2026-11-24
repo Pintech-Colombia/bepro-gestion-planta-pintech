@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\SalesOrderPriority;
+use App\Enums\SalesOrderStatus;
 use App\Enums\SystemRole;
 use App\Models\Client;
 use App\Models\Product;
@@ -313,6 +314,64 @@ it('prevents editing order data once the order is in progress', function () {
         ->assertForbidden();
 
     expect($order->fresh()->priority->value)->toBe('low');
+});
+
+it('sends the next status transitions with their tone on sales order show', function () {
+    $user = User::factory()->create();
+    $user->assignRole(SystemRole::Production->value);
+
+    $order = SalesOrder::factory()->pending()->create();
+
+    // Con `tone`: la pantalla confirma en rojo la que anula el pedido (Cancelado).
+    $this->actingAs($user)
+        ->get(route('sales-orders.show', $order))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('SalesOrders/Show')
+            ->where('statusTransitions', EnumOptions::for(SalesOrderStatus::Pending->nextTransitions()))
+            ->where('statusTransitions.1.tone', 'danger')
+        );
+});
+
+it('saves every field of the edit data dialog, including the shipping address', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $order = SalesOrder::factory()->pending()->create([
+        'priority' => 'low',
+        'shipping_address' => 'Calle 1 # 2-3, Cali',
+    ]);
+
+    $this->actingAs($admin)
+        ->patch(route('sales-orders.update', $order), [
+            'priority' => 'high',
+            'estimated_delivery_date' => '',
+            'shipping_address' => 'Carrera 50 # 10-20, Bodega 3, Yumbo',
+            'client_contact_name' => 'Ana Pérez',
+            'client_phone' => '3001234567',
+            'notes' => 'Entregar en portería.',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $order->refresh();
+    expect($order->priority->value)->toBe('high')
+        ->and($order->shipping_address)->toBe('Carrera 50 # 10-20, Bodega 3, Yumbo')
+        ->and($order->client_contact_name)->toBe('Ana Pérez')
+        ->and($order->notes)->toBe('Entregar en portería.');
+});
+
+it('rejects an empty shipping address in the edit data dialog', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $order = SalesOrder::factory()->pending()->create(['shipping_address' => 'Calle 1 # 2-3, Cali']);
+
+    $this->actingAs($admin)
+        ->patch(route('sales-orders.update', $order), ['shipping_address' => ''])
+        ->assertSessionHasErrors(['shipping_address']);
+
+    expect($order->fresh()->shipping_address)->toBe('Calle 1 # 2-3, Cali');
 });
 
 it('prevents invalid status transitions', function () {

@@ -1,17 +1,23 @@
-import { Head } from '@inertiajs/react';
-import { ShoppingCart } from 'lucide-react';
+import { Head, usePage } from '@inertiajs/react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
+import { FormError } from '@/components/form-field';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
+import Heading from '@/components/heading';
 import { PageHeader } from '@/components/page-header';
 import { PriorityBadge } from '@/components/priority-badge';
 import { RecordLink } from '@/components/record-link';
-import AdminOrderSidebar from '@/components/sales-orders/AdminOrderSidebar';
 import { ApproveOrderDialog } from '@/components/sales-orders/approve-order-dialog';
+import { EditOrderDialog } from '@/components/sales-orders/edit-order-dialog';
 import { HoldOrderDialog } from '@/components/sales-orders/hold-order-dialog';
 import { StatusBadge } from '@/components/status-badge';
+import { StatusTransitions } from '@/components/status-transitions';
+import type {
+    StatusTransition,
+    TransitionCopy,
+} from '@/components/status-transitions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { breadcrumbHref } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
@@ -19,6 +25,7 @@ import { show as quotationsShow } from '@/routes/quotations';
 import {
     index as salesOrdersIndex,
     show as salesOrdersShow,
+    updateStatus as salesOrdersUpdateStatus,
 } from '@/routes/sales-orders';
 
 type ProductItem = {
@@ -69,11 +76,6 @@ type SalesOrderDetail = {
     };
 };
 
-type StatusTransition = {
-    value: string;
-    label: string;
-};
-
 type Props = {
     order: SalesOrderDetail;
     statusTransitions: StatusTransition[];
@@ -92,12 +94,51 @@ type Props = {
     };
 };
 
+/** Textos de cada cambio de estado del pedido. */
+function orderTransitionCopy(value: string): TransitionCopy {
+    switch (value) {
+        case 'in_progress':
+            return {
+                label: 'Marcar en progreso',
+                title: '¿Pasar el pedido a «En progreso»?',
+                description: 'Indica que la planta ya está trabajando en él.',
+            };
+        case 'ready':
+            return {
+                label: 'Marcar como lista',
+                title: '¿Marcar el pedido como listo?',
+                description: 'Indica que está listo para despachar.',
+            };
+        case 'delivered':
+            return {
+                label: 'Marcar como entregada',
+                title: '¿Marcar el pedido como entregado?',
+                description: 'El pedido queda cerrado: ya no cambia de estado.',
+            };
+        case 'cancelled':
+            return {
+                label: 'Cancelar pedido',
+                title: '¿Cancelar el pedido?',
+                description: 'El pedido se cancela y no se puede reabrir.',
+            };
+        default:
+            return {
+                label: value,
+                title: '¿Cambiar el estado del pedido?',
+                description: 'El estado del pedido cambia.',
+            };
+    }
+}
+
 export default function SalesOrdersShow({
     order,
     statusTransitions,
     priorityOptions,
     can,
 }: Props) {
+    const { errors } = usePage().props;
+    const showTransitions = can.updateStatus && statusTransitions.length > 0;
+
     return (
         <>
             <Head title={`Pedido #${order.id}`} />
@@ -115,8 +156,28 @@ export default function SalesOrdersShow({
                         </div>
                     }
                     actions={
-                        (can.approve || can.hold) && (
-                            <div className="flex flex-wrap items-center gap-2">
+                        (can.update ||
+                            showTransitions ||
+                            can.hold ||
+                            can.approve) && (
+                            <>
+                                {can.update && (
+                                    <EditOrderDialog
+                                        order={order}
+                                        priorityOptions={priorityOptions}
+                                    />
+                                )}
+                                {showTransitions && (
+                                    <StatusTransitions
+                                        transitions={statusTransitions}
+                                        copy={orderTransitionCopy}
+                                        url={
+                                            salesOrdersUpdateStatus(order.id)
+                                                .url
+                                        }
+                                        itemLabel={`el pedido #${order.id}`}
+                                    />
+                                )}
                                 {can.hold && (
                                     <HoldOrderDialog orderId={order.id} />
                                 )}
@@ -129,285 +190,254 @@ export default function SalesOrdersShow({
                                         }
                                     />
                                 )}
-                            </div>
+                            </>
                         )
                     }
                 />
 
-                <div className="grid gap-6 lg:grid-cols-3">
-                    {/* min-w-0: sin él, la columna de la grilla se ensancha con la tabla y esta no se desplaza. */}
-                    <div className="min-w-0 space-y-6 lg:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Información del pedido</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <DetailList>
-                                    <DetailItem
-                                        label="Razón social"
-                                        value={order.client.business_name}
+                <FormError id="status" message={errors.status} />
+
+                {/* Lo que la planta y quien aprueba necesitan primero: cuándo y a dónde. */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Datos del pedido</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DetailList>
+                            <DetailItem
+                                label="Fecha requerida"
+                                value={
+                                    <FormattedDate
+                                        value={order.required_date}
+                                        format="short"
                                     />
-                                    <DetailItem
-                                        label="NIT"
-                                        value={order.client.nit}
+                                }
+                            />
+                            <DetailItem
+                                label="Fecha estimada de entrega"
+                                value={
+                                    <FormattedDate
+                                        value={order.estimated_delivery_date}
+                                        format="short"
+                                        emptyValue="Sin estimar"
                                     />
-                                    <DetailItem
-                                        label="Contacto"
-                                        value={order.client.contact_name}
+                                }
+                            />
+                            <DetailItem
+                                label="Dirección de entrega"
+                                value={order.shipping_address}
+                                span="full"
+                                valueClassName="whitespace-pre-wrap"
+                            />
+                            <DetailItem
+                                label="Cliente"
+                                value={order.client.business_name}
+                            />
+                            <DetailItem label="NIT" value={order.client.nit} />
+                            <DetailItem
+                                label="Contacto"
+                                value={order.client.contact_name}
+                            />
+                            <DetailItem
+                                label="Teléfono"
+                                value={order.client.phone}
+                            />
+                        </DetailList>
+                    </CardContent>
+                </Card>
+
+                <section className="space-y-4">
+                    <Heading title="Productos solicitados" />
+
+                    <DetailTable
+                        rows={order.items}
+                        rowKey={(item) => item.id}
+                        caption="Productos solicitados"
+                        columns={[
+                            {
+                                key: 'product',
+                                header: 'Producto',
+                                cell: (item) => item.product.name,
+                            },
+                            {
+                                key: 'presentation',
+                                header: 'Presentación',
+                                cell: (item) =>
+                                    item.product_variant?.presentation_label ??
+                                    'Base',
+                                className: 'text-muted-foreground',
+                            },
+                            {
+                                key: 'color',
+                                header: 'Color',
+                                cell: (item) => item.color,
+                                className: 'text-muted-foreground',
+                            },
+                            {
+                                key: 'quantity',
+                                header: 'Cantidad',
+                                cell: (item) => (
+                                    <FormattedNumber
+                                        value={item.quantity}
+                                        kind="units"
                                     />
-                                    <DetailItem
-                                        label="Teléfono"
-                                        value={order.client.phone}
-                                    />
-                                    <DetailItem
-                                        label="Fecha requerida"
-                                        value={
-                                            <FormattedDate
-                                                value={order.required_date}
-                                                format="short"
-                                            />
-                                        }
-                                    />
-                                    <DetailItem
-                                        label="Fecha estimada de entrega"
-                                        value={
-                                            <FormattedDate
-                                                value={
-                                                    order.estimated_delivery_date
-                                                }
-                                                format="short"
-                                                emptyValue="Sin estimar"
-                                            />
-                                        }
-                                    />
-                                    <DetailItem
-                                        label="Dirección de entrega"
-                                        value={order.shipping_address}
-                                        span="full"
-                                        valueClassName="whitespace-pre-wrap"
-                                    />
-                                    <DetailItem
-                                        label="Creado por"
-                                        value={order.creator?.name}
-                                    />
-                                    <DetailItem
-                                        label="Fecha de creación"
-                                        value={
-                                            <FormattedDate
-                                                value={order.created_at}
-                                                format="datetime"
-                                            />
-                                        }
-                                    />
-                                    {order.quotation && can.viewQuotation && (
+                                ),
+                                align: 'right',
+                                className: 'font-medium',
+                            },
+                        ]}
+                        empty="No hay productos en este pedido."
+                    />
+                </section>
+
+                {(order.approval.held_at || order.approval.approved_at) && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Aprobación</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <DetailList>
+                                {order.approval.held_at && (
+                                    <>
                                         <DetailItem
-                                            label="Origen"
+                                            label="Retenido por"
                                             value={
-                                                <RecordLink
-                                                    href={
-                                                        quotationsShow(
-                                                            order.quotation.id,
-                                                        ).url
-                                                    }
-                                                >
-                                                    {quotationName(
-                                                        order.quotation,
-                                                    )}
-                                                </RecordLink>
+                                                <>
+                                                    {order.approval.held_by} el{' '}
+                                                    <FormattedDate
+                                                        value={
+                                                            order.approval
+                                                                .held_at
+                                                        }
+                                                        format="datetime"
+                                                    />
+                                                </>
                                             }
                                         />
-                                    )}
-                                </DetailList>
-                            </CardContent>
-                        </Card>
-
-                        {(order.approval.held_at ||
-                            order.approval.approved_at) && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Aprobación</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <DetailList>
-                                        {order.approval.held_at && (
-                                            <>
-                                                <DetailItem
-                                                    label="Retenido por"
-                                                    value={
-                                                        <>
-                                                            {
-                                                                order.approval
-                                                                    .held_by
-                                                            }{' '}
-                                                            el{' '}
-                                                            <FormattedDate
-                                                                value={
-                                                                    order
-                                                                        .approval
-                                                                        .held_at
-                                                                }
-                                                                format="datetime"
-                                                            />
-                                                        </>
-                                                    }
-                                                />
-                                                <DetailItem
-                                                    label="Motivo de la retención"
-                                                    value={
+                                        <DetailItem
+                                            label="Motivo de la retención"
+                                            value={order.approval.hold_reason}
+                                            valueClassName="whitespace-pre-wrap"
+                                        />
+                                    </>
+                                )}
+                                {order.approval.approved_at && (
+                                    <>
+                                        <DetailItem
+                                            label="Aprobado por"
+                                            value={
+                                                <>
+                                                    {order.approval.approved_by}{' '}
+                                                    el{' '}
+                                                    <FormattedDate
+                                                        value={
+                                                            order.approval
+                                                                .approved_at
+                                                        }
+                                                        format="datetime"
+                                                    />
+                                                </>
+                                            }
+                                        />
+                                        <DetailItem
+                                            label="Nota de la aprobación"
+                                            value={order.approval.note}
+                                            valueClassName="whitespace-pre-wrap"
+                                        />
+                                    </>
+                                )}
+                                {order.approval.remainder_id !== null && (
+                                    <DetailItem
+                                        label="Lo no aprobado"
+                                        value={
+                                            <RecordLink
+                                                href={
+                                                    salesOrdersShow(
                                                         order.approval
-                                                            .hold_reason
-                                                    }
-                                                    valueClassName="whitespace-pre-wrap"
-                                                />
-                                            </>
-                                        )}
-                                        {order.approval.approved_at && (
-                                            <>
-                                                <DetailItem
-                                                    label="Aprobado por"
-                                                    value={
-                                                        <>
-                                                            {
-                                                                order.approval
-                                                                    .approved_by
-                                                            }{' '}
-                                                            el{' '}
-                                                            <FormattedDate
-                                                                value={
-                                                                    order
-                                                                        .approval
-                                                                        .approved_at
-                                                                }
-                                                                format="datetime"
-                                                            />
-                                                        </>
-                                                    }
-                                                />
-                                                <DetailItem
-                                                    label="Nota de la aprobación"
-                                                    value={order.approval.note}
-                                                    valueClassName="whitespace-pre-wrap"
-                                                />
-                                            </>
-                                        )}
-                                        {order.approval.remainder_id !==
-                                            null && (
-                                            <DetailItem
-                                                label="Lo no aprobado"
-                                                value={
-                                                    <RecordLink
-                                                        href={
-                                                            salesOrdersShow(
-                                                                order.approval
-                                                                    .remainder_id,
-                                                            ).url
-                                                        }
-                                                    >
-                                                        Resto en el pedido #
-                                                        {
-                                                            order.approval
-                                                                .remainder_id
-                                                        }
-                                                    </RecordLink>
+                                                            .remainder_id,
+                                                    ).url
                                                 }
-                                            />
-                                        )}
-                                        {order.approval.parent_id !== null && (
-                                            <DetailItem
-                                                label="Pedido de origen"
-                                                value={
-                                                    <RecordLink
-                                                        href={
-                                                            salesOrdersShow(
-                                                                order.approval
-                                                                    .parent_id,
-                                                            ).url
-                                                        }
-                                                    >
-                                                        Resto del pedido #
-                                                        {
-                                                            order.approval
-                                                                .parent_id
-                                                        }
-                                                    </RecordLink>
+                                            >
+                                                Resto en el pedido #
+                                                {order.approval.remainder_id}
+                                            </RecordLink>
+                                        }
+                                    />
+                                )}
+                                {order.approval.parent_id !== null && (
+                                    <DetailItem
+                                        label="Pedido de origen"
+                                        value={
+                                            <RecordLink
+                                                href={
+                                                    salesOrdersShow(
+                                                        order.approval
+                                                            .parent_id,
+                                                    ).url
                                                 }
-                                            />
-                                        )}
-                                    </DetailList>
-                                </CardContent>
-                            </Card>
-                        )}
+                                            >
+                                                Resto del pedido #
+                                                {order.approval.parent_id}
+                                            </RecordLink>
+                                        }
+                                    />
+                                )}
+                            </DetailList>
+                        </CardContent>
+                    </Card>
+                )}
 
-                        <section className="space-y-4">
-                            <h2 className="flex items-center gap-2 text-lg font-semibold">
-                                <ShoppingCart className="h-5 w-5" />
-                                Productos solicitados
-                            </h2>
+                {order.notes && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Notas</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                                {order.notes}
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
 
-                            <DetailTable
-                                rows={order.items}
-                                rowKey={(item) => item.id}
-                                caption="Productos solicitados"
-                                columns={[
-                                    {
-                                        key: 'product',
-                                        header: 'Producto',
-                                        cell: (item) => item.product.name,
-                                    },
-                                    {
-                                        key: 'presentation',
-                                        header: 'Presentación',
-                                        cell: (item) =>
-                                            item.product_variant
-                                                ?.presentation_label ?? 'Base',
-                                        className: 'text-muted-foreground',
-                                    },
-                                    {
-                                        key: 'color',
-                                        header: 'Color',
-                                        cell: (item) => item.color,
-                                        className: 'text-muted-foreground',
-                                    },
-                                    {
-                                        key: 'quantity',
-                                        header: 'Cantidad',
-                                        cell: (item) => (
-                                            <FormattedNumber
-                                                value={item.quantity}
-                                                kind="units"
-                                            />
-                                        ),
-                                        align: 'right',
-                                        className: 'font-medium',
-                                    },
-                                ]}
-                                empty="No hay productos en este pedido."
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Trazabilidad</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DetailList columns={3}>
+                            <DetailItem
+                                label="Creado por"
+                                value={order.creator?.name}
                             />
-                        </section>
-
-                        {order.notes && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Notas</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                                        {order.notes}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
-
-                    {(can.update || can.updateStatus) && (
-                        <AdminOrderSidebar
-                            order={order}
-                            statusTransitions={statusTransitions}
-                            priorityOptions={priorityOptions}
-                            can={can}
-                        />
-                    )}
-                </div>
+                            <DetailItem
+                                label="Fecha de creación"
+                                value={
+                                    <FormattedDate
+                                        value={order.created_at}
+                                        format="datetime"
+                                    />
+                                }
+                            />
+                            {order.quotation && can.viewQuotation && (
+                                <DetailItem
+                                    label="Origen"
+                                    value={
+                                        <RecordLink
+                                            href={
+                                                quotationsShow(
+                                                    order.quotation.id,
+                                                ).url
+                                            }
+                                        >
+                                            {quotationName(order.quotation)}
+                                        </RecordLink>
+                                    }
+                                />
+                            )}
+                        </DetailList>
+                    </CardContent>
+                </Card>
             </div>
         </>
     );
