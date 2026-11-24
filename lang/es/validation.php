@@ -203,6 +203,8 @@ return [
         'code' => 'código',
         'brand' => 'marca',
         'category_id' => 'categoría',
+        'family_id' => 'familia',
+        'family' => 'familia',
         'unit_of_measure_id' => 'unidad de medida',
         'symbol' => 'símbolo',
         'to_kg_conversion' => 'equivalencia en kilogramos',

@@ -15,6 +15,8 @@ import type { RawMaterialCategoryFormData, RawMaterialType } from '@/types';
 type Props = {
     form: ReturnType<typeof useForm<RawMaterialCategoryFormData>>;
     typeOptions: { value: string; label: string }[];
+    /** Familias activas; en edición, también la que ya tiene aunque esté inactiva. */
+    familyOptions: { value: string; label: string }[];
     /** En edición: cuántas materias primas tiene. Con alguna, el tipo no se puede cambiar. */
     rawMaterialsCount?: number;
 };
@@ -22,6 +24,7 @@ type Props = {
 export function RawMaterialCategoryFields({
     form,
     typeOptions,
+    familyOptions,
     rawMaterialsCount = 0,
 }: Props) {
     const typeLocked = rawMaterialsCount > 0;
@@ -58,6 +61,37 @@ export function RawMaterialCategoryFields({
                     />
                 </FormField>
             </div>
+
+            <FormField
+                id="family_id"
+                label="Familia"
+                required
+                help="Agrupa las categorías para buscar e informar (Aditivo, Pigmento, Resina…)."
+                error={form.errors.family_id}
+            >
+                {(control) => (
+                    <Select
+                        value={form.data.family_id}
+                        onValueChange={(value) =>
+                            form.setData('family_id', value)
+                        }
+                    >
+                        <SelectTrigger {...control}>
+                            <SelectValue placeholder="Seleccionar familia" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {familyOptions.map((option) => (
+                                <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                >
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+            </FormField>
 
             <FormField
                 id="type"

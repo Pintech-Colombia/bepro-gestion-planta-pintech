@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Quotation;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\SalesOrder;
 use App\Models\ShrinkWrapType;
 use App\Models\Supplier;
@@ -79,6 +80,7 @@ final class FormRequestFixtures
             'quotation' => Quotation::factory()->create(),
             'raw_material' => RawMaterial::factory()->create(),
             'raw_material_category' => RawMaterialCategory::factory()->create(),
+            'raw_material_family' => RawMaterialFamily::factory()->create(),
             'role' => Role::create(['name' => 'Rol de prueba', 'guard_name' => 'web']),
             'sales_order' => SalesOrder::factory()->create(),
             'shrink_wrap_type' => ShrinkWrapType::factory()->create(),

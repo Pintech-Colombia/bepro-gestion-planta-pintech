@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
@@ -33,6 +35,8 @@ export type CategoryOption = {
     id: number;
     name: string;
     code: string;
+    /** El selector agrupa las categorías por familia; llegan ordenadas por familia y las sin familia al final. */
+    family_name: string | null;
     /** Tipo de insumo de la categoría: la materia prima lo hereda. */
     type: RawMaterialType;
     type_label: string;
@@ -50,6 +54,23 @@ export type RawMaterialFormData = {
     current_price: string;
     is_active: boolean;
 };
+
+/**
+ * Categorías agrupadas por familia, en el orden en que llegan del servidor. Las sin familia van en su propio grupo
+ * (clave `null`), aparte de una familia que se llame igual que su rótulo.
+ */
+function groupByFamily(
+    categories: CategoryOption[],
+): [string | null, CategoryOption[]][] {
+    const groups = new Map<string | null, CategoryOption[]>();
+
+    for (const category of categories) {
+        const family = category.family_name;
+        groups.set(family, [...(groups.get(family) ?? []), category]);
+    }
+
+    return [...groups.entries()];
+}
 
 /**
  * Only string fields of RawMaterialFormData
@@ -227,14 +248,25 @@ export function RawMaterialForm({
                                     <SelectValue placeholder="Seleccionar categoría" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {categories.map((category) => (
-                                        <SelectItem
-                                            key={category.id}
-                                            value={String(category.id)}
-                                        >
-                                            {category.name}
-                                        </SelectItem>
-                                    ))}
+                                    {groupByFamily(categories).map(
+                                        ([family, options]) => (
+                                            <SelectGroup key={family}>
+                                                <SelectLabel>
+                                                    {family}
+                                                </SelectLabel>
+                                                {options.map((category) => (
+                                                    <SelectItem
+                                                        key={category.id}
+                                                        value={String(
+                                                            category.id,
+                                                        )}
+                                                    >
+                                                        {category.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        ),
+                                    )}
                                 </SelectContent>
                             </Select>
                         )}

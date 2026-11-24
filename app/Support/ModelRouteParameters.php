@@ -43,6 +43,7 @@ final class ModelRouteParameters
         'quotation',
         'raw_material',
         'raw_material_category',
+        'raw_material_family',
         'remnant',
         'role',
         'sales_order',

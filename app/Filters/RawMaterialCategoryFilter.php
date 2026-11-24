@@ -6,7 +6,7 @@ namespace App\Filters;
 
 class RawMaterialCategoryFilter extends QueryFilter
 {
-    protected array $filterable = ['search', 'status', 'type'];
+    protected array $filterable = ['search', 'status', 'type', 'family'];
 
     protected function search(string $value): void
     {
@@ -21,5 +21,10 @@ class RawMaterialCategoryFilter extends QueryFilter
     protected function type(string $value): void
     {
         $this->applyExact('type', $value);
+    }
+
+    protected function family(string $value): void
+    {
+        $this->applyExact('family_id', $value);
     }
 }

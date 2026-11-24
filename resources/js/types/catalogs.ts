@@ -35,10 +35,26 @@ export type UnitOfMeasureFormData = {
 export type RawMaterialType =
     'chemical' | 'container' | 'label' | 'secondary_packaging';
 
+export type RawMaterialFamilyRow = {
+    id: number;
+    name: string;
+    description: string | null;
+    is_active: boolean;
+    categories_count: number;
+};
+
+export type RawMaterialFamilyFormData = {
+    name: string;
+    description: string;
+    is_active: boolean;
+};
+
 export type RawMaterialCategoryRow = {
     id: number;
     code: string;
     name: string;
+    family_id: number | null;
+    family_name: string | null;
     type: RawMaterialType;
     type_label: string;
     is_active: boolean;
@@ -49,6 +65,7 @@ export type RawMaterialCategoryFormData = {
     code: string;
     name: string;
     description: string;
+    family_id: string;
     type: RawMaterialType;
     is_active: boolean;
 };

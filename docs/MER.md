@@ -68,7 +68,24 @@ uso (envase de una presentación, línea de fórmula) a una categoría de otro t
 | `code` | VARCHAR(50) |  | UNIQUE. En mayúsculas (`TextFormat::Code`) |
 | `name` | VARCHAR(100) |  | UNIQUE sobre `LOWER(name)` (`raw_material_categories_name_lower_unique`) |
 | `description` | TEXT | sí |  |
+| `family_id` | BIGINT | sí | FK → `raw_material_families` (RESTRICT). Nula solo en categorías anteriores a las familias; el formulario la exige |
 | `type` | VARCHAR(255) |  | `RawMaterialType`, default `chemical` |
+| `is_active` | BOOLEAN |  | default `true` |
+| `created_at` | TIMESTAMP | sí |  |
+| `updated_at` | TIMESTAMP | sí |  |
+
+### 2.1.3b `raw_material_families`
+
+Familias de materia prima (Configuración → Catálogos), auditadas (`familias_materia_prima`): Aditivo, Pigmento, Resina…
+Agrupan las categorías para buscar e informar por familia. La materia prima solo apunta a su categoría, y el tipo de
+insumo vive en la categoría: una familia puede reunir tipos distintos («Envase y empaque»: envases y empaque
+secundario). Una familia con categorías se desactiva; una sin categorías se elimina.
+
+| Columna | Tipo | Nulo | Notas |
+| --- | --- | :-: | --- |
+| `id` | BIGINT |  | PK |
+| `name` | VARCHAR(100) |  | UNIQUE sobre `LOWER(name)` (`raw_material_families_name_lower_unique`) |
+| `description` | TEXT | sí |  |
 | `is_active` | BOOLEAN |  | default `true` |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |

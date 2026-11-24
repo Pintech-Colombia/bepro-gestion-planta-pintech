@@ -15,16 +15,19 @@ import type {
 type Props = {
     category: RawMaterialCategoryRow & { description: string | null };
     typeOptions: { value: string; label: string }[];
+    familyOptions: { value: string; label: string }[];
 };
 
 export default function RawMaterialCategoriesEdit({
     category,
     typeOptions,
+    familyOptions,
 }: Props) {
     const form = useForm<RawMaterialCategoryFormData>({
         code: category.code,
         name: category.name,
         description: category.description ?? '',
+        family_id: category.family_id ? String(category.family_id) : '',
         type: category.type,
         is_active: category.is_active,
     });
@@ -50,6 +53,7 @@ export default function RawMaterialCategoriesEdit({
                     <RawMaterialCategoryFields
                         form={form}
                         typeOptions={typeOptions}
+                        familyOptions={familyOptions}
                         rawMaterialsCount={category.raw_materials_count}
                     />
 

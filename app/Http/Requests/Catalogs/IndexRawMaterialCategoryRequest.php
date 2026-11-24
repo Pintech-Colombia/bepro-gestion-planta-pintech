@@ -25,6 +25,7 @@ class IndexRawMaterialCategoryRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'string', 'in:active,inactive,all'],
             'type' => ['nullable', Rule::enum(RawMaterialType::class)],
+            'family' => ['nullable', 'integer'],
         ];
     }
 }

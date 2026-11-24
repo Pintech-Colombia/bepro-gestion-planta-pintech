@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\Permission;
 use App\Http\Controllers\Settings\Catalogs\ProductCategoryController;
 use App\Http\Controllers\Settings\Catalogs\RawMaterialCategoryController;
+use App\Http\Controllers\Settings\Catalogs\RawMaterialFamilyController;
 use App\Http\Controllers\Settings\Catalogs\ShrinkWrapTypeController;
 use App\Http\Controllers\Settings\Catalogs\SupplierController;
 use App\Http\Controllers\Settings\Catalogs\UnitOfMeasureController;
@@ -27,6 +28,14 @@ Route::middleware(['auth', 'verified'])->prefix('settings/catalogs')->name('cata
     Route::resource('units-of-measure', UnitOfMeasureController::class)
         ->except('show')
         ->parameters(['units-of-measure' => 'unit_of_measure'])
+        ->middlewareFor('index', 'can:'.Permission::CatalogsView->value)
+        ->middlewareFor(['create', 'store'], 'can:'.Permission::CatalogsCreate->value)
+        ->middlewareFor(['edit', 'update'], 'can:'.Permission::CatalogsEdit->value)
+        ->middlewareFor('destroy', 'can:'.Permission::CatalogsDelete->value);
+
+    Route::resource('raw-material-families', RawMaterialFamilyController::class)
+        ->except('show')
+        ->parameters(['raw-material-families' => 'raw_material_family'])
         ->middlewareFor('index', 'can:'.Permission::CatalogsView->value)
         ->middlewareFor(['create', 'store'], 'can:'.Permission::CatalogsCreate->value)
         ->middlewareFor(['edit', 'update'], 'can:'.Permission::CatalogsEdit->value)

@@ -11,13 +11,18 @@ import type { RawMaterialCategoryFormData } from '@/types';
 
 type Props = {
     typeOptions: { value: string; label: string }[];
+    familyOptions: { value: string; label: string }[];
 };
 
-export default function RawMaterialCategoriesCreate({ typeOptions }: Props) {
+export default function RawMaterialCategoriesCreate({
+    typeOptions,
+    familyOptions,
+}: Props) {
     const form = useForm<RawMaterialCategoryFormData>({
         code: '',
         name: '',
         description: '',
+        family_id: '',
         type: 'chemical',
         is_active: true,
     });
@@ -43,6 +48,7 @@ export default function RawMaterialCategoriesCreate({ typeOptions }: Props) {
                     <RawMaterialCategoryFields
                         form={form}
                         typeOptions={typeOptions}
+                        familyOptions={familyOptions}
                     />
 
                     <FormActions

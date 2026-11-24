@@ -6,6 +6,7 @@ namespace App\Http\Requests\Catalogs;
 
 use App\Enums\RawMaterialType;
 use App\Enums\TextFormat;
+use App\Http\Requests\Concerns\CatalogSelectionRules;
 use App\Http\Requests\Concerns\NormalizesText;
 use App\Models\RawMaterialCategory;
 use App\Rules\UniqueIgnoringCase;
@@ -14,7 +15,7 @@ use Illuminate\Validation\Rule;
 
 class StoreRawMaterialCategoryRequest extends FormRequest
 {
-    use NormalizesText;
+    use CatalogSelectionRules, NormalizesText;
 
     public function authorize(): bool
     {
@@ -40,9 +41,18 @@ class StoreRawMaterialCategoryRequest extends FormRequest
     {
         return [
             'description' => ['nullable', 'string', 'max:1000'],
+            'family_id' => $this->activeOrCurrentRules('raw_material_families', 'family_id', $this->currentFamilyId()),
             'type' => ['bail', 'required', Rule::enum(RawMaterialType::class)],
             'is_active' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /**
+     * La familia que tiene hoy la categoría que se edita: la conserva aunque se haya desactivado. `null` al crear.
+     */
+    protected function currentFamilyId(): ?int
+    {
+        return null;
     }
 
     /**

@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\RawMaterial;
+use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -167,4 +169,45 @@ it('rejects invalid status value', function (): void {
     $response = getJson(route('raw-materials.index', ['status' => 'xyz']));
 
     $response->assertJsonValidationErrors(['status']);
+});
+
+it('searches by category name', function (): void {
+    actingAs($this->admin);
+    $category = RawMaterialCategory::factory()->create(['name' => 'ADITIVO - DISPERSANTE BASE AGUA']);
+    $match = RawMaterial::factory()->create(['code' => 'ABA - 1 P', 'category_id' => $category->id]);
+
+    get(route('raw-materials.index', ['search' => 'base agua']))
+        ->assertInertia(fn ($page) => $page
+            ->has('rawMaterials.data', 1)
+            ->where('rawMaterials.data.0.id', $match->id));
+});
+
+it('filters by family through the category', function (): void {
+    actingAs($this->admin);
+    $additives = RawMaterialFamily::factory()->create(['name' => 'ADITIVO']);
+    $match = RawMaterial::factory()->create([
+        'category_id' => RawMaterialCategory::factory()->create(['family_id' => $additives->id])->id,
+    ]);
+
+    get(route('raw-materials.index', ['family' => $additives->id]))
+        ->assertInertia(fn ($page) => $page
+            ->has('rawMaterials.data', 1)
+            ->where('rawMaterials.data.0.id', $match->id)
+            ->where('familyOptions', fn ($options) => collect($options)->contains('label', 'ADITIVO')));
+});
+
+it('sends the category options grouped by family, without family last', function (): void {
+    actingAs($this->admin);
+    $resins = RawMaterialFamily::factory()->create(['name' => 'RESINA']);
+    $additives = RawMaterialFamily::factory()->create(['name' => 'ADITIVO']);
+    RawMaterialCategory::factory()->create(['name' => 'RESINA - ALQUIDICA', 'family_id' => $resins->id]);
+    RawMaterialCategory::factory()->create(['name' => 'ADITIVO - SECANTE', 'family_id' => $additives->id]);
+    RawMaterialCategory::factory()->create(['name' => 'A SUELTA', 'family_id' => null]);
+
+    get(route('raw-materials.create'))
+        ->assertInertia(fn ($page) => $page->where('categories', fn ($options) => collect($options)
+            ->whereIn('name', ['RESINA - ALQUIDICA', 'ADITIVO - SECANTE', 'A SUELTA'])
+            ->pluck('family_name')
+            ->values()
+            ->all() === ['ADITIVO', 'RESINA', null]));
 });

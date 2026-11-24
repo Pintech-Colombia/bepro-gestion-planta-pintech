@@ -15,6 +15,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\ShrinkWrapType;
 use App\Models\Supplier;
 use App\Models\UnitOfMeasure;
@@ -68,7 +69,9 @@ function textNormalizationCreate(string $module, array $overrides = []): array
         ]],
         'warehouse' => [route('warehouses.store'), ['name' => 'Bodega Pasto', 'city' => 'Pasto', 'type' => 'storage']],
         'product-category' => [route('catalogs.product-categories.store'), ['name' => 'Lacas']],
-        'raw-material-category' => [route('catalogs.raw-material-categories.store'), ['code' => 'SOL', 'name' => 'Solventes', 'type' => 'chemical']],
+        'raw-material-category' => [route('catalogs.raw-material-categories.store'), [
+            'code' => 'SOL', 'name' => 'Solventes', 'type' => 'chemical', 'family_id' => RawMaterialFamily::factory()->create()->id,
+        ]],
         'shrink-wrap-type' => [route('catalogs.shrink-wrap-types.store'), [
             'name' => 'Cuñete x2', 'items' => [['raw_material_id' => $test->bag->id, 'quantity' => '1']],
         ]],
