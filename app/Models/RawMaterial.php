@@ -31,6 +31,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $alert_days_before_expiry
  * @property string|null $price_variation_threshold
  * @property bool $tracks_inventory
+ * @property bool $is_controlled_substance
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -54,6 +55,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'alert_days_before_expiry',
     'price_variation_threshold',
     'tracks_inventory',
+    'is_controlled_substance',
     'is_active',
 ])]
 class RawMaterial extends Model
@@ -75,7 +77,7 @@ class RawMaterial extends Model
         return LogOptions::defaults()
             ->useLogName('materias_primas')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['code', 'unit_of_measure_id', 'current_price', 'minimum_stock', 'tracks_inventory', 'is_active'])
+            ->logOnly(['code', 'unit_of_measure_id', 'current_price', 'minimum_stock', 'tracks_inventory', 'is_controlled_substance', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -90,6 +92,7 @@ class RawMaterial extends Model
             'alert_days_before_expiry' => 'integer',
             'price_variation_threshold' => 'decimal:2',
             'tracks_inventory' => 'boolean',
+            'is_controlled_substance' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

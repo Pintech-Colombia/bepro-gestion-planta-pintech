@@ -189,6 +189,7 @@ Materias primas. **Sin columna `name`**: se identifican solo por `code` (privaci
 | `minimum_stock` | DECIMAL(12,4) |  | default `0` |
 | `alert_days_before_expiry` | INTEGER |  | default `30` |
 | `tracks_inventory` | BOOLEAN |  | default `true` |
+| `is_controlled_substance` | BOOLEAN |  | default `false`. Sustancia controlada: sus movimientos se registran en SICOQ (Ministerio de Justicia) |
 | `is_active` | BOOLEAN |  | default `true` |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |

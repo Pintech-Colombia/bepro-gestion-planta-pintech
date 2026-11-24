@@ -44,7 +44,7 @@ final class BaseDataImporter
         'Categorias' => ['codigo', 'nombre', 'familia', 'tipo'],
         'Proveedores' => ['nombre', 'notas'],
         // `categoria` es el código de la categoría.
-        'Materias primas' => ['codigo', 'categoria', 'unidad', 'stock_minimo', 'dias_alerta', 'controla_inventario', 'precio_manual'],
+        'Materias primas' => ['codigo', 'categoria', 'unidad', 'stock_minimo', 'dias_alerta', 'controla_inventario', 'precio_manual', 'sustancia_controlada'],
         'Lotes iniciales' => ['codigo_mp', 'cantidad', 'precio', 'fecha_entrada', 'vencimiento', 'proveedor'],
     ];
 
@@ -261,6 +261,8 @@ final class BaseDataImporter
             'stock_minimo' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0'],
             'dias_alerta' => ['bail', 'required', 'integer', 'min:0', 'max:'.RawMaterial::MAX_EXPIRY_ALERT_DAYS],
             'controla_inventario' => ['required', Rule::in(['SI', 'NO', 'si', 'no', 'Si', 'No'])],
+            // SICOQ: vacío cuenta como NO.
+            'sustancia_controlada' => ['nullable', Rule::in(['SI', 'NO', 'si', 'no', 'Si', 'No'])],
             // Sin control de inventario no hay lotes: el precio de referencia se escribe a mano.
             'precio_manual' => $tracksInventory
                 ? ['prohibited']
@@ -276,6 +278,7 @@ final class BaseDataImporter
             'minimum_stock' => $data['stock_minimo'],
             'alert_days_before_expiry' => (int) $data['dias_alerta'],
             'tracks_inventory' => $tracksInventory,
+            'is_controlled_substance' => mb_strtoupper($data['sustancia_controlada']) === 'SI',
             'current_price' => $tracksInventory ? null : $data['precio_manual'],
             'is_active' => true,
         ]);

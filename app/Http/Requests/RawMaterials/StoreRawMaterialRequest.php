@@ -42,6 +42,7 @@ class StoreRawMaterialRequest extends FormRequest
             'alert_days_before_expiry' => ['bail', 'required', 'integer', 'min:0', 'max:'.RawMaterial::MAX_EXPIRY_ALERT_DAYS],
             'price_variation_threshold' => ['bail', 'nullable', ...NumberType::Percentage->rules('100'), 'min:0.01'],
             'tracks_inventory' => ['sometimes', 'boolean'],
+            'is_controlled_substance' => ['sometimes', 'boolean'],
             'current_price' => $this->manualPriceRules(),
             'is_active' => ['sometimes', 'boolean'],
         ];
@@ -70,6 +71,7 @@ class StoreRawMaterialRequest extends FormRequest
             'alert_days_before_expiry' => $this->input('alert_days_before_expiry', 30),
             'price_variation_threshold' => $this->nullablePriceVariationThreshold(),
             'tracks_inventory' => $this->boolean('tracks_inventory', true),
+            'is_controlled_substance' => $this->boolean('is_controlled_substance'),
             'is_active' => $this->boolean('is_active', true),
         ]);
     }

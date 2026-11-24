@@ -62,7 +62,7 @@ function fullTemplateRows(): array
         ],
         'Proveedores' => [['QUIMICA COSMOS', 'Razón social sin verificar'], ['ENVMETALPLAST', '']],
         'Materias primas' => [
-            ['ABS - 10', 'ADITIVO - SECANTE', 'kg', '0', '90', 'SI', ''],
+            ['ABS - 10', 'ADITIVO - SECANTE', 'kg', '0', '90', 'SI', '', 'SI'],
             ['ENV-MET-GTD', 'ENVASES METALICOS', 'u', '0', '90', 'SI', ''],
             ['AGUA', 'AGUA', 'kg', '0', '90', 'NO', '1000'],
         ],
@@ -101,6 +101,8 @@ it('carga familias, categorías, proveedores, materias primas y lotes como entra
         ->and($batches[1]->supplier_id)->toBeNull()
         ->and(InventoryBatch::query()->pluck('warehouse_id')->unique()->all())->toBe([$this->factory->id])
         ->and(InventoryMovement::query()->where('notes', BaseDataImporter::BATCH_NOTE)->count())->toBe(3)
+        ->and($material->is_controlled_substance)->toBeTrue()
+        ->and(RawMaterial::query()->where('code', 'ENV-MET-GTD')->sole()->is_controlled_substance)->toBeFalse()
         // Sin control de inventario: sin lotes y con su precio de referencia a mano.
         ->and(RawMaterial::query()->where('code', 'AGUA')->sole()->current_price)->toBe('1000.0000')
         ->and(Activity::query()->where('subject_type', RawMaterial::class)->where('subject_id', $material->id)->value('causer_id'))

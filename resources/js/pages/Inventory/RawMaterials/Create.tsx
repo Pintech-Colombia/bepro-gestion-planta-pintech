@@ -37,6 +37,7 @@ export default function RawMaterialsCreate({ categories, units, can }: Props) {
         alert_days_before_expiry: '30',
         price_variation_threshold: '',
         tracks_inventory: true,
+        is_controlled_substance: false,
         current_price: '',
         is_active: true,
     });
