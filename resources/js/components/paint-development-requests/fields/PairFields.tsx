@@ -44,7 +44,7 @@ function PairInput({
                 onValueChange={field.onChange}
                 placeholder={field.placeholder}
             />
-            <span className="pointer-events-none absolute top-2.5 right-3 text-xs text-muted-foreground">
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground">
                 {field.suffix}
             </span>
         </div>

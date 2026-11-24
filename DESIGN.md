@@ -287,6 +287,19 @@ Same in all three:
   fields keep their component's size (14 px from `md`). Never block zoom in the viewport (`maximum-scale=1` also stops pinch zoom on Android). Because
   the rule is outside `@layer`, a utility cannot change a field's size on touch screens; a field that must be larger
   than 16 px there sets it with `style={{ fontSize }}`.
+- **Touch targets of 44 px.** Where the primary pointer is a finger (`pointer: coarse`: phones and tablets), inputs,
+  `Select` and `Combobox` triggers, `PlantDateInput` and every `Button` except `variant="link"` are at least 44 px tall,
+  and icon buttons are 44×44 (a `min-height`/`min-width` rule in `resources/css/app.css`, outside `@layer`, so it beats
+  `h-8`, `h-9`, `size-8`). On desktop they keep their component's size (36 px). This rule uses `pointer` and the 16 px
+  rule above uses `any-pointer` on purpose: the 16 px rule prevents iOS zoom, which happens on any touch screen even
+  with a trackpad attached; 44 px is comfort, and with `any-pointer` a touch laptop used with a mouse would get large
+  controls. Buttons are matched by `data-touch-target`, which `<Button>` always sets **after** `{...props}` (`="icon"`
+  for icon buttons, none for `variant="link"`): a Radix trigger with `asChild` replaces `data-slot`, so the rule never
+  relies on it for buttons. An element styled as a button that is not a `<Button>` (the `Pagination` links) sets
+  `data-touch-target` itself; `AlertDialog` actions are matched by their own `data-slot`. A text or unit inside a field
+  is centred with `top-1/2 -translate-y-1/2`, never a fixed offset. `design-contract.test.ts` checks the rule. Never set
+  a fixed height on a control to beat this rule. _(pending)_ The close «X» of `Dialog`/`Sheet`, the flash messages and
+  small clear buttons inside fields are still below 44 px.
 - `noValidate` on the `<form>`: the server validates. Empty numeric fields start empty with a placeholder, never a typed
   `0`: «0,00» for decimals, «0» for integers.
 - Confirmations use the app dialog: `const confirm = useConfirm()` and `if (await confirm({ title, description,

@@ -212,3 +212,32 @@
         font-size: max(16px, 1em);
     }
 }
+
+/*
+ * Objetivo táctil de 44 px (DESIGN.md §8): en el celular y la tableta, campos, selectores y botones miden al menos
+ * 44 px de alto para tocarlos con el dedo; en el computador quedan como los define su componente (36 px). Va fuera de
+ * `@layer` para ganarles a las alturas de utilidad (`h-8`, `h-9`, `size-8`) sin `!important`: `min-height` manda sobre
+ * `height` cuando es mayor.
+ * `pointer` y no `any-pointer` (al revés que la regla de 16 px de arriba): aquí se trata de comodidad, no de evitar el
+ * zoom de iOS, y con `any-pointer` un portátil con pantalla táctil que se usa con mouse recibiría controles grandes.
+ * Los botones se reconocen por `data-touch-target`, que `<Button>` pone siempre (no por `data-slot`, que un activador de
+ * Radix con `asChild` reemplaza); los `variant="link"` (texto dentro de una línea) no lo llevan. Los de solo ícono
+ * (`="icon"`) quedan de 44×44. Un elemento con aspecto de botón que no es `<Button>` (la paginación) lleva la marca a
+ * mano. Los botones de confirmación (`AlertDialog`) se reconocen por su `data-slot`. El calendario usa `<button>`
+ * nativos sin marca: no lo toca esta regla.
+ */
+@media (pointer: coarse) {
+    [data-slot='input'],
+    [data-slot='select-trigger'],
+    [data-slot='combobox-trigger'],
+    [data-slot='plant-date-input'],
+    [data-slot='alert-dialog-action'],
+    [data-slot='alert-dialog-cancel'],
+    [data-touch-target] {
+        min-height: 44px;
+    }
+
+    [data-touch-target='icon'] {
+        min-width: 44px;
+    }
+}
