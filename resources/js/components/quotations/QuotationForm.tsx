@@ -156,12 +156,13 @@ export default function QuotationForm({
     // Los clientes creados con «Nuevo cliente» se suman a los que mandó el servidor, sin recargar la página. Si el
     // servidor vuelve a mandar la lista (una recarga de props), ya los trae: se descartan por id para no repetirlos.
     const [createdClients, setCreatedClients] = useState<ClientOption[]>([]);
+    // En orden alfabético, como los manda el servidor: el cliente nuevo queda donde se espera encontrarlo.
     const allClients = [
         ...clients,
         ...createdClients.filter(
             (created) => !clients.some((client) => client.id === created.id),
         ),
-    ];
+    ].sort((a, b) => a.business_name.localeCompare(b.business_name, 'es'));
 
     const clientOptions = allClients.map((client) => ({
         id: String(client.id),

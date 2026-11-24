@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Enums\Permission;
+use App\Enums\QuotationStatus;
 use App\Enums\SystemRole;
 use App\Models\Client;
+use App\Models\Quotation;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,5 +96,35 @@ it('tells the quotation form whether the user can create clients', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Quotations/Create')
             ->where('can.createClient', true)
+        );
+});
+
+it('tells the quotation edit form whether the user can create clients', function () {
+    $quotation = Quotation::factory()->create([
+        'client_id' => Client::factory()->create()->id,
+        'created_by' => $this->commercial->id,
+        'status' => QuotationStatus::Draft,
+    ]);
+
+    $this->actingAs($this->commercial)
+        ->get(route('quotations.edit', $quotation))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Quotations/Edit')
+            ->where('can.createClient', true)
+        );
+});
+
+it('hides «Nuevo cliente» from a user who can quote but cannot create clients', function () {
+    // Un rol a la medida: cotiza, pero no crea clientes.
+    $user = User::factory()->create();
+    $user->givePermissionTo(Permission::QuotationsCreate->value);
+
+    $this->actingAs($user)
+        ->get(route('quotations.create'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Quotations/Create')
+            ->where('can.createClient', false)
         );
 });

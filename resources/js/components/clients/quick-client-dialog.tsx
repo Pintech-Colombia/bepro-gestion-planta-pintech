@@ -69,6 +69,9 @@ export function QuickClientDialog({ onCreated }: QuickClientDialogProps) {
 
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        // El diálogo se dibuja en un portal, pero en React vive dentro del formulario de la cotización: sin esto, el envío
+        // sube hasta ella y la guarda (a medio editar) junto con el cliente.
+        event.stopPropagation();
         setFailure(null);
 
         http.post(clientsQuickStore().url, {
@@ -85,7 +88,7 @@ export function QuickClientDialog({ onCreated }: QuickClientDialogProps) {
             onHttpException: (response) => {
                 setFailure(
                     response.status === 419
-                        ? 'La sesión venció. Recarga la página e intenta de nuevo; lo escrito en la cotización se pierde si no la guardas antes.'
+                        ? 'La sesión venció. Hay que recargar la página e iniciar sesión otra vez; lo escrito en la cotización se pierde.'
                         : 'No se pudo crear el cliente. Intenta de nuevo.',
                 );
 
@@ -93,7 +96,7 @@ export function QuickClientDialog({ onCreated }: QuickClientDialogProps) {
             },
             onNetworkError: () => {
                 setFailure(
-                    'No hay conexión. Revisa la señal e intenta de nuevo: lo escrito sigue aquí.',
+                    'No hubo respuesta del servidor. El cliente pudo quedar creado: búscalo en la lista antes de intentar de nuevo, para no repetirlo.',
                 );
 
                 return false;
