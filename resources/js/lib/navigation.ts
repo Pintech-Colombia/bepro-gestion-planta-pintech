@@ -75,3 +75,13 @@ export function breadcrumbHref(
 
     return pathname(returnTo) === pathname(href) ? returnTo : href;
 }
+
+/**
+ * Opciones de Wayfinder para mandar el `return_to` en la URL de una acción (guardar, cambiar el estado, aprobar): el
+ * servidor vuelve a la ficha con él y la miga sigue llevando al listado con sus filtros. Sin `returnTo`, nada.
+ */
+export function returnToQuery(
+    returnTo: string | null | undefined,
+): { query: { return_to: string } } | undefined {
+    return returnTo ? { query: { return_to: returnTo } } : undefined;
+}

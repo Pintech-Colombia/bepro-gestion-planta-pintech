@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { returnToQuery } from '@/lib/navigation';
 import { hold as salesOrdersHold } from '@/routes/sales-orders';
 
 /** Máximo del motivo: el mismo del servidor (`HoldSalesOrderRequest`). */
@@ -21,13 +22,15 @@ const REASON_MAX_LENGTH = 2000;
 
 type HoldOrderDialogProps = {
     orderId: number;
+    /** El `return_to` con que se abrió la ficha: el servidor vuelve a ella con él. */
+    returnTo?: string | null;
 };
 
 /**
  * Retiene un pedido «Por aprobar» con un motivo: queda «Retenido» hasta que se apruebe o se cancele, y quien lo creó
  * recibe un aviso. Quien la muestra decide si se puede (`can.hold`); el servidor vuelve a revisar el estado.
  */
-export function HoldOrderDialog({ orderId }: HoldOrderDialogProps) {
+export function HoldOrderDialog({ orderId, returnTo }: HoldOrderDialogProps) {
     const [open, setOpen] = useState(false);
     const { data, setData, post, processing, errors, clearErrors, reset } =
         useForm({ reason: '' });
@@ -40,7 +43,7 @@ export function HoldOrderDialog({ orderId }: HoldOrderDialogProps) {
 
     const submit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        post(salesOrdersHold(orderId).url, {
+        post(salesOrdersHold(orderId, returnToQuery(returnTo)).url, {
             preserveScroll: true,
             onSuccess: () => setOpen(false),
         });

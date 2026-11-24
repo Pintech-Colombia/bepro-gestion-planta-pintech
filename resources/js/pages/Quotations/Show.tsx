@@ -14,6 +14,7 @@ import { PlantDateInput } from '@/components/plant-date-input';
 import {
     SharePdfButton,
     useCanSharePdf,
+    ViewPdfButton,
 } from '@/components/quotations/share-pdf-button';
 import type { SharePdfErrorState } from '@/components/quotations/share-pdf-button';
 import { RecordLink } from '@/components/record-link';
@@ -45,8 +46,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
-import { quotationPdfFilename } from '@/lib/pdf-share';
+import { breadcrumbHref, returnToQuery, withReturnTo } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
 import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { cn } from '@/lib/utils';
@@ -109,6 +109,8 @@ type QuotationDetail = {
     items: QuotationItem[];
     created_at: string;
     creator: { name: string; email: string } | null;
+    /** El nombre del archivo PDF, como lo arma el servidor (`Quotation::pdfFilename()`). */
+    pdf_filename: string;
 };
 
 type Props = {
@@ -194,6 +196,16 @@ export default function QuotationsShow({
     } | null>(null);
     const isMobile = useIsMobile();
     const canSharePdf = useCanSharePdf();
+
+    // Al girar el teléfono (o cambiar el ancho) los botones del PDF cambian de lugar o desaparecen: un aviso de un botón
+    // que ya no está se quita. Ajuste durante el render, no en un efecto.
+    const [errorLayoutIsMobile, setErrorLayoutIsMobile] = useState(isMobile);
+
+    if (errorLayoutIsMobile !== isMobile) {
+        setErrorLayoutIsMobile(isMobile);
+        setPdfShareError(null);
+    }
+
     const activePdfShareError =
         pdfShareError?.quotationId === quotation.id
             ? pdfShareError.state
@@ -273,7 +285,11 @@ export default function QuotationsShow({
             <div
                 className={cn(
                     'space-y-6 p-6',
-                    mobilePrimaryAction && 'pb-24 md:pb-6',
+                    // Espacio para la barra fija; más alto cuando la barra muestra un aviso de error.
+                    mobilePrimaryAction &&
+                        (pdfShareErrorInBar && activePdfShareError
+                            ? 'pb-56 md:pb-6'
+                            : 'pb-24 md:pb-6'),
                 )}
             >
                 <PageHeader
@@ -297,31 +313,22 @@ export default function QuotationsShow({
                                             quotationNumber={
                                                 quotation.quotation_number
                                             }
+                                            filename={quotation.pdf_filename}
                                             variant="outline"
                                             onErrorChange={handlePdfShareError}
                                         />
                                     )}
-                                    <Button variant="outline" asChild>
-                                        {isMobile ? (
-                                            <a
-                                                href={
-                                                    quotationsExportPdf(
-                                                        quotation.id,
-                                                        {
-                                                            query: {
-                                                                download: 1,
-                                                            },
-                                                        },
-                                                    ).url
-                                                }
-                                                download={quotationPdfFilename(
-                                                    quotation,
-                                                )}
-                                            >
-                                                <FileText className="size-4" />
-                                                Ver PDF
-                                            </a>
-                                        ) : (
+                                    {isMobile ? (
+                                        // En el celular, el PDF fresco en una pestaña temporal: se ve sin descargarlo
+                                        // y sin un enlace del sistema que se pueda compartir.
+                                        <ViewPdfButton
+                                            key={quotation.id}
+                                            quotationId={quotation.id}
+                                            filename={quotation.pdf_filename}
+                                            onErrorChange={handlePdfShareError}
+                                        />
+                                    ) : (
+                                        <Button variant="outline" asChild>
                                             <a
                                                 href={
                                                     quotationsExportPdf(
@@ -334,8 +341,8 @@ export default function QuotationsShow({
                                                 <FileText className="size-4" />
                                                 Ver PDF
                                             </a>
-                                        )}
-                                    </Button>
+                                        </Button>
+                                    )}
                                 </>
                             )}
                             {can.update && (
@@ -362,7 +369,10 @@ export default function QuotationsShow({
                                         quotation.status,
                                     )}
                                     url={
-                                        quotationsUpdateStatus(quotation.id).url
+                                        quotationsUpdateStatus(
+                                            quotation.id,
+                                            returnToQuery(returnTo),
+                                        ).url
                                     }
                                     itemLabel={`la cotización ${quotation.quotation_number ?? quotation.id}`}
                                     mobileExtraActions={mobileExtraActions}
@@ -825,6 +835,7 @@ export default function QuotationsShow({
                             key={quotation.id}
                             quotationId={quotation.id}
                             quotationNumber={quotation.quotation_number}
+                            filename={quotation.pdf_filename}
                             variant="default"
                             onErrorChange={handlePdfShareError}
                         />

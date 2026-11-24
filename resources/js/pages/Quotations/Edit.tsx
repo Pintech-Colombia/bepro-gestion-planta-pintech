@@ -7,7 +7,7 @@ import type {
     ProductOption,
     QuotationFormData,
 } from '@/components/quotations/QuotationForm';
-import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
+import { breadcrumbHref, returnToQuery, withReturnTo } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
 import { newRowKey } from '@/lib/row-key';
 import {
@@ -126,7 +126,9 @@ export default function QuotationsEdit({
                 itemTypeOptions={itemTypeOptions}
                 canCreateClient={can.createClient}
                 initialData={mapQuotationToForm(quotation)}
-                submitUrl={quotationUpdate(quotation.id).url}
+                submitUrl={
+                    quotationUpdate(quotation.id, returnToQuery(returnTo)).url
+                }
                 previewUrl={quotationEditPreviewPricing(quotation.id).url}
                 method="put"
                 title="Editar cotización"

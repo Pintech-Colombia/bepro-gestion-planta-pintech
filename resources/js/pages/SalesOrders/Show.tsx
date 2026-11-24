@@ -1,4 +1,5 @@
 import { Head, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
@@ -19,7 +20,7 @@ import type {
     TransitionCopy,
 } from '@/components/status-transitions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { breadcrumbHref } from '@/lib/navigation';
+import { breadcrumbHref, returnToQuery } from '@/lib/navigation';
 import { quotationName } from '@/lib/quotation-name';
 import { show as quotationsShow } from '@/routes/quotations';
 import {
@@ -131,9 +132,14 @@ export default function SalesOrdersShow({
     statusTransitions,
     priorityOptions,
     can,
+    returnTo,
 }: Props) {
     const { errors } = usePage().props;
     const showTransitions = can.updateStatus && statusTransitions.length > 0;
+    // En el celular, «Editar datos» va en el «⋯» de los cambios de estado cuando lo hay (como «Editar» en la
+    // cotización); si no, queda como botón.
+    const editInMobileMenu = can.update && showTransitions;
+    const [editRequest, setEditRequest] = useState(0);
 
     return (
         <>
@@ -161,14 +167,25 @@ export default function SalesOrdersShow({
                                     <EditOrderDialog
                                         order={order}
                                         priorityOptions={priorityOptions}
+                                        returnTo={returnTo}
+                                        triggerClassName={
+                                            editInMobileMenu
+                                                ? 'hidden md:inline-flex'
+                                                : undefined
+                                        }
+                                        openRequest={editRequest}
                                     />
                                 )}
                                 {can.hold && (
-                                    <HoldOrderDialog orderId={order.id} />
+                                    <HoldOrderDialog
+                                        orderId={order.id}
+                                        returnTo={returnTo}
+                                    />
                                 )}
                                 {can.approve && (
                                     <ApproveOrderDialog
                                         orderId={order.id}
+                                        returnTo={returnTo}
                                         items={order.items}
                                         canApprovePartially={
                                             can.approvePartially
@@ -180,10 +197,27 @@ export default function SalesOrdersShow({
                                         transitions={statusTransitions}
                                         copy={orderTransitionCopy}
                                         url={
-                                            salesOrdersUpdateStatus(order.id)
-                                                .url
+                                            salesOrdersUpdateStatus(
+                                                order.id,
+                                                returnToQuery(returnTo),
+                                            ).url
                                         }
                                         itemLabel={`el pedido #${order.id}`}
+                                        mobileExtraActions={
+                                            editInMobileMenu
+                                                ? [
+                                                      {
+                                                          label: 'Editar datos',
+                                                          onSelect: () =>
+                                                              setEditRequest(
+                                                                  (current) =>
+                                                                      current +
+                                                                      1,
+                                                              ),
+                                                      },
+                                                  ]
+                                                : []
+                                        }
                                     />
                                 )}
                             </>

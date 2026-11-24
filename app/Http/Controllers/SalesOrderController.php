@@ -198,7 +198,7 @@ class SalesOrderController extends Controller
 
         Inertia::flash('success', 'Pedido actualizado con éxito.');
 
-        return redirect()->route('sales-orders.show', $salesOrder);
+        return $this->redirectToRecord($request, 'sales-orders.show', ['sales_order' => $salesOrder]);
     }
 
     public function updateStatus(UpdateSalesOrderStatusRequest $request, SalesOrder $salesOrder): RedirectResponse
@@ -207,7 +207,7 @@ class SalesOrderController extends Controller
 
         Inertia::flash('success', 'Estado del pedido actualizado con éxito.');
 
-        return redirect()->route('sales-orders.show', $salesOrder);
+        return $this->redirectToRecord($request, 'sales-orders.show', ['sales_order' => $salesOrder]);
     }
 
     public function approve(ApproveSalesOrderRequest $request, SalesOrder $salesOrder): RedirectResponse
@@ -224,7 +224,7 @@ class SalesOrderController extends Controller
 
         Inertia::flash('success', $isPartial ? 'Pedido aprobado como parcial.' : 'Pedido aprobado.');
 
-        return redirect()->route('sales-orders.show', $salesOrder);
+        return $this->redirectToRecord($request, 'sales-orders.show', ['sales_order' => $salesOrder]);
     }
 
     public function hold(HoldSalesOrderRequest $request, SalesOrder $salesOrder): RedirectResponse
@@ -233,7 +233,7 @@ class SalesOrderController extends Controller
 
         Inertia::flash('success', 'Pedido retenido.');
 
-        return redirect()->route('sales-orders.show', $salesOrder);
+        return $this->redirectToRecord($request, 'sales-orders.show', ['sales_order' => $salesOrder]);
     }
 
     private function buildOrderData(SalesOrder $salesOrder, bool $canViewQuotation): array

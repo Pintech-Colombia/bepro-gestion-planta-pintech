@@ -183,7 +183,7 @@ class QuotationController extends Controller
 
         Inertia::flash('success', __('Cotización actualizada con éxito.'));
 
-        return redirect()->route('quotations.show', $quotation);
+        return $this->redirectToRecord($request, 'quotations.show', ['quotation' => $quotation]);
     }
 
     public function updateStatus(UpdateQuotationStatusRequest $request, Quotation $quotation): RedirectResponse
@@ -193,7 +193,7 @@ class QuotationController extends Controller
 
         Inertia::flash('success', __('Estado de la cotización actualizado.'));
 
-        return redirect()->route('quotations.show', $quotation);
+        return $this->redirectToRecord($request, 'quotations.show', ['quotation' => $quotation]);
     }
 
     public function convertToOrder(ConvertQuotationToOrderRequest $request, Quotation $quotation): RedirectResponse
@@ -213,14 +213,14 @@ class QuotationController extends Controller
     {
         $this->authorize('exportPdf', $quotation);
 
-        $filename = 'COT. '.($quotation->quotation_number ?? $quotation->id).'.pdf';
+        $filename = $quotation->pdfFilename();
         $pdf = $this->renderQuotationPdf->execute($quotation);
 
-        if ($request->boolean('download')) {
-            return $pdf->download($filename);
-        }
+        $response = $request->boolean('download') ? $pdf->download($filename) : $pdf->stream($filename);
 
-        return $pdf->stream($filename);
+        // Sin caché: tras editar la cotización, abrir el PDF otra vez tiene que mostrar el nuevo (en Android salía el
+        // anterior).
+        return $response->header('Cache-Control', 'no-store, max-age=0');
     }
 
     /**
@@ -246,6 +246,7 @@ class QuotationController extends Controller
         return [
             'id' => $quotation->id,
             'quotation_number' => $quotation->quotation_number,
+            'pdf_filename' => $quotation->pdfFilename(),
             'client_id' => $quotation->client_id,
             'client' => [
                 'id' => $quotation->client_id,

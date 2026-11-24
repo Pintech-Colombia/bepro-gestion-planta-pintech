@@ -612,3 +612,16 @@ it('rejects client, product and presentation ids that are not integers with a fi
     'decimal' => ['1.5'],
     'mayor que un bigint' => ['9223372036854775808'],
 ]);
+
+it('keeps return_to when changing the status of an order', function () {
+    $user = User::factory()->create();
+    $user->assignRole(SystemRole::Production->value);
+
+    $order = SalesOrder::factory()->pending()->create();
+
+    $this->actingAs($user)
+        ->patch(route('sales-orders.update-status', ['sales_order' => $order, 'return_to' => '/sales-orders?status=pending']), [
+            'status' => 'in_progress',
+        ])
+        ->assertRedirect(route('sales-orders.show', ['sales_order' => $order, 'return_to' => '/sales-orders?status=pending']));
+});

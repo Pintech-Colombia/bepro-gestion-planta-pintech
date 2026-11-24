@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { returnToQuery } from '@/lib/navigation';
 import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { update as salesOrderUpdate } from '@/routes/sales-orders';
 
@@ -38,6 +39,12 @@ type EditOrderDialogProps = {
         client: { contact_name: string | null; phone: string | null };
     };
     priorityOptions: { value: string; label: string }[];
+    /** El `return_to` con que se abrió la ficha: el servidor vuelve a ella con él. */
+    returnTo?: string | null;
+    /** Clases del botón «Editar datos» (p. ej. `hidden md:inline-flex` cuando en el celular se abre desde el «⋯»). */
+    triggerClassName?: string;
+    /** Cada vez que cambia, el diálogo se abre: para abrirlo desde fuera (el menú «⋯» del celular). */
+    openRequest?: number;
 };
 
 /**
@@ -47,8 +54,12 @@ type EditOrderDialogProps = {
 export function EditOrderDialog({
     order,
     priorityOptions,
+    returnTo,
+    triggerClassName,
+    openRequest = 0,
 }: EditOrderDialogProps) {
     const [open, setOpen] = useState(false);
+    const [handledRequest, setHandledRequest] = useState(openRequest);
 
     const savedData = () => ({
         priority: order.priority,
@@ -82,6 +93,12 @@ export function EditOrderDialog({
         setOpen(next);
     };
 
+    // Abierto desde fuera (el «⋯» del celular): igual que con el botón. Ajuste durante el render, no en un efecto.
+    if (openRequest !== handledRequest) {
+        setHandledRequest(openRequest);
+        handleOpenChange(true);
+    }
+
     const submit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         transform((formData) =>
@@ -95,7 +112,7 @@ export function EditOrderDialog({
                   }
                 : formData,
         );
-        patch(salesOrderUpdate(order.id).url, {
+        patch(salesOrderUpdate(order.id, returnToQuery(returnTo)).url, {
             preserveScroll: true,
             onSuccess: () => setOpen(false),
         });
@@ -106,6 +123,7 @@ export function EditOrderDialog({
             <Button
                 type="button"
                 variant="outline"
+                className={triggerClassName}
                 onClick={() => handleOpenChange(true)}
             >
                 Editar datos

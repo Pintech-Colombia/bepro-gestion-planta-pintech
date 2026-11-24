@@ -273,6 +273,10 @@ it('exports quotation pdf', function () {
     expect($downloadResponse->headers->get('content-disposition'))
         ->toStartWith('attachment;')
         ->toContain('COT. 1.pdf');
+
+    // Sin caché: tras editar la cotización, abrir el PDF otra vez muestra el nuevo (en Android salía el anterior).
+    expect($response->headers->get('cache-control'))->toContain('no-store')
+        ->and($downloadResponse->headers->get('cache-control'))->toContain('no-store');
 });
 
 it('forbids exporting quotation pdf without permission or ownership', function () {
@@ -1140,3 +1144,33 @@ test('cliente y producto que no son enteros dan un error del campo, también en 
     'mayor que un bigint' => ['9223372036854775808'],
     'arreglo' => [[1]],
 ]);
+
+it('sends the pdf filename built by the server on quotation show', function () {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'quotation_number' => 57,
+    ]);
+
+    // Una sola fuente: el archivo que comparte el celular se llama igual que la descarga del servidor.
+    $this->actingAs($this->comercialUser)
+        ->get(route('quotations.show', $quotation))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('quotation.pdf_filename', 'COT. 57.pdf')
+        );
+});
+
+it('keeps return_to when changing the status, so the breadcrumb still goes back to the filtered list', function () {
+    $quotation = Quotation::factory()->create([
+        'client_id' => $this->client->id,
+        'created_by' => $this->comercialUser->id,
+        'status' => QuotationStatus::Draft,
+    ]);
+
+    $this->actingAs($this->comercialUser)
+        ->patch(route('quotations.update-status', ['quotation' => $quotation, 'return_to' => '/quotations?status=draft']), [
+            'status' => QuotationStatus::Sent->value,
+        ])
+        ->assertRedirect(route('quotations.show', ['quotation' => $quotation, 'return_to' => '/quotations?status=draft']));
+});

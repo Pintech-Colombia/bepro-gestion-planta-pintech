@@ -3,27 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
     canBrowserSharePdf,
     isPdfContentType,
-    quotationPdfFilename,
     quotationPdfTitle,
     resolvePdfShareAction,
     validatePdfResponse,
 } from '@/lib/pdf-share';
 
 describe('pdf-share', () => {
-    describe('quotationPdfFilename y quotationPdfTitle', () => {
+    describe('quotationPdfTitle', () => {
         it('usa el número de cotización cuando existe', () => {
-            expect(quotationPdfFilename({ id: 9, quotation_number: 42 })).toBe(
-                'COT. 42.pdf',
-            );
             expect(quotationPdfTitle({ id: 9, quotation_number: 42 })).toBe(
                 'Cotización 42',
             );
         });
 
         it('usa el id como respaldo si aún no hay número', () => {
-            expect(
-                quotationPdfFilename({ id: 9, quotation_number: null }),
-            ).toBe('COT. 9.pdf');
             expect(quotationPdfTitle({ id: 9, quotation_number: null })).toBe(
                 'Cotización 9',
             );
@@ -58,7 +51,7 @@ describe('pdf-share', () => {
             ).toEqual({ valid: true });
         });
 
-        it('marca sesión vencida cuando fetch siguió una redirección al login', () => {
+        it('marca una redirección (login, verificar correo u otra) sin afirmar la causa, y pide recargar', () => {
             expect(
                 validatePdfResponse({
                     ok: true,
@@ -68,10 +61,28 @@ describe('pdf-share', () => {
                 }),
             ).toEqual({
                 valid: false,
-                reason: 'session_expired',
+                reason: 'redirected',
                 requiresReload: true,
             });
         });
+
+        it.each([403, 404])(
+            'marca no disponible ante %i: reintentar no lo arregla',
+            (status) => {
+                expect(
+                    validatePdfResponse({
+                        ok: false,
+                        redirected: false,
+                        status,
+                        contentType: 'text/html',
+                    }),
+                ).toEqual({
+                    valid: false,
+                    reason: 'unavailable',
+                    requiresReload: false,
+                });
+            },
+        );
 
         it.each([401, 419])('marca sesión vencida ante estado %i', (status) => {
             expect(
@@ -88,7 +99,7 @@ describe('pdf-share', () => {
             });
         });
 
-        it('marca error HTTP recuperable sin recarga para 403 o 500', () => {
+        it('marca error HTTP recuperable sin recarga para un 500', () => {
             expect(
                 validatePdfResponse({
                     ok: false,

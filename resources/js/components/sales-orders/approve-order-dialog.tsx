@@ -17,6 +17,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { returnToQuery } from '@/lib/navigation';
 import { UNITS_MAX_DIGITS } from '@/lib/number-types';
 import { approve as salesOrdersApprove } from '@/routes/sales-orders';
 
@@ -34,6 +35,8 @@ export type ApproveOrderItem = {
 
 type ApproveOrderDialogProps = {
     orderId: number;
+    /** El `return_to` con que se abrió la ficha: el servidor vuelve a ella con él. */
+    returnTo?: string | null;
     items: ApproveOrderItem[];
     /** Si se puede aprobar parcial (`can.approvePartially`): sin al menos 2 unidades, la casilla no aparece. */
     canApprovePartially: boolean;
@@ -59,6 +62,7 @@ const leftOver = (item: ApproveOrderItem, approved: string): number =>
  */
 export function ApproveOrderDialog({
     orderId,
+    returnTo,
     items,
     canApprovePartially,
 }: ApproveOrderDialogProps) {
@@ -102,7 +106,7 @@ export function ApproveOrderDialog({
                 ? form
                 : { is_partial: false, note: form.note, items: [] },
         );
-        post(salesOrdersApprove(orderId).url, {
+        post(salesOrdersApprove(orderId, returnToQuery(returnTo)).url, {
             preserveScroll: true,
             onSuccess: () => setOpen(false),
         });
