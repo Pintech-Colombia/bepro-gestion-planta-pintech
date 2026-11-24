@@ -193,6 +193,7 @@ final class RoutePermissionMap
             'clients.index' => Permission::ClientsView,
             'clients.create' => Permission::ClientsCreate,
             'clients.store' => Permission::ClientsCreate,
+            'clients.quick-store' => Permission::ClientsCreate,
             'clients.edit' => Permission::ClientsEdit,
             'clients.update' => Permission::ClientsEdit,
             'clients.destroy' => Permission::ClientsDelete,

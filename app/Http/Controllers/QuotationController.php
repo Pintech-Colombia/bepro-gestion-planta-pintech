@@ -88,12 +88,16 @@ class QuotationController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $this->authorize('create', Quotation::class);
 
         return Inertia::render('Quotations/Create', [
             'clients' => $this->clientOptions(),
+            'can' => [
+                // «Nuevo cliente» sin salir de la cotización (`clients.quick-store`).
+                'createClient' => $request->user()?->can('create', Client::class) ?? false,
+            ],
             'products' => $this->quotationService->catalogProducts(),
             'validityDaysOptions' => EnumOptions::for(QuotationValidity::cases()),
             'paymentMethodOptions' => EnumOptions::for(PaymentMethod::cases()),
@@ -152,6 +156,9 @@ class QuotationController extends Controller
             'paymentMethodOptions' => EnumOptions::for(PaymentMethod::cases()),
             'itemTypeOptions' => EnumOptions::for(QuotationItemType::cases()),
             'returnTo' => $this->resolveReturnTo($request),
+            'can' => [
+                'createClient' => $request->user()?->can('create', Client::class) ?? false,
+            ],
         ]);
     }
 
