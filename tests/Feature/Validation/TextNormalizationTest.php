@@ -15,7 +15,6 @@ use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
-use App\Models\RawMaterialFamily;
 use App\Models\ShrinkWrapType;
 use App\Models\Supplier;
 use App\Models\UnitOfMeasure;
@@ -70,7 +69,8 @@ function textNormalizationCreate(string $module, array $overrides = []): array
         'warehouse' => [route('warehouses.store'), ['name' => 'Bodega Pasto', 'city' => 'Pasto', 'type' => 'storage']],
         'product-category' => [route('catalogs.product-categories.store'), ['name' => 'Lacas']],
         'raw-material-category' => [route('catalogs.raw-material-categories.store'), [
-            'code' => 'SOL', 'name' => 'Solventes', 'type' => 'chemical', 'family_id' => RawMaterialFamily::factory()->create()->id,
+            // En la familia de «Resinas»: el nombre de la categoría solo es único dentro de su familia.
+            'code' => 'SOL', 'name' => 'Solventes', 'type' => 'chemical', 'family_id' => $test->rawMaterialCategory->family_id,
         ]],
         'shrink-wrap-type' => [route('catalogs.shrink-wrap-types.store'), [
             'name' => 'Cuñete x2', 'items' => [['raw_material_id' => $test->bag->id, 'quantity' => '1']],
@@ -198,6 +198,11 @@ test('al editar choca con otro registro que solo cambia en mayúsculas', functio
 
 // Respaldo de la regla: un registro que no pasa por un formulario (o dos guardados a la vez) choca con el índice.
 test('la base rechaza el nombre que solo cambia en mayúsculas', function (string $table, array $row): void {
+    // El nombre de la categoría de MP solo es único dentro de su familia: va en la de «Resinas».
+    if ($table === 'raw_material_categories') {
+        $row['family_id'] = $this->rawMaterialCategory->family_id;
+    }
+
     expect(fn () => DB::table($table)->insert([...$row, 'created_at' => now(), 'updated_at' => now()]))
         ->toThrow(UniqueConstraintViolationException::class);
 })->with([

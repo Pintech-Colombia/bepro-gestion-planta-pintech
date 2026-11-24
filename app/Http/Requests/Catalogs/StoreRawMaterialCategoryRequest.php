@@ -29,7 +29,7 @@ class StoreRawMaterialCategoryRequest extends FormRequest
     {
         return [
             'code' => ['bail', 'required', 'string', 'max:50', ...TextFormat::Code->rules(), Rule::unique('raw_material_categories', 'code')],
-            'name' => ['bail', 'required', 'string', 'max:100', new UniqueIgnoringCase('raw_material_categories', 'name')],
+            'name' => ['bail', 'required', 'string', 'max:100', $this->uniqueNameInFamily()],
             ...$this->sharedRules(),
         ];
     }
@@ -45,6 +45,17 @@ class StoreRawMaterialCategoryRequest extends FormRequest
             'type' => ['bail', 'required', Rule::enum(RawMaterialType::class)],
             'is_active' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /**
+     * El nombre es único dentro de su familia: «BASE AGUA» existe en Resina y en Solvente. Sin familia válida, la regla de
+     * `family_id` ya rechaza la petición.
+     */
+    protected function uniqueNameInFamily(?int $ignoreId = null): UniqueIgnoringCase
+    {
+        $familyId = filter_var($this->input('family_id'), FILTER_VALIDATE_INT);
+
+        return new UniqueIgnoringCase('raw_material_categories', 'name', $ignoreId, $familyId === false ? [] : ['family_id' => $familyId]);
     }
 
     /**

@@ -88,14 +88,14 @@ it('crea una categoría con el código en mayúsculas y la audita', function () 
 
 it('valida los campos de la categoría', function (array $overrides, string $field) {
     actingAsRole(SystemRole::SuperAdmin);
-    RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas']);
+    $existing = RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas']);
 
-    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload($overrides))
+    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload([...$overrides, 'family_id' => $existing->family_id]))
         ->assertSessionHasErrors($field);
 })->with([
     'código repetido, aunque cambien las mayúsculas' => [['code' => 'resinas', 'name' => 'Otra'], 'code'],
-    // Dos categorías con el mismo nombre no se distinguirían en el selector de la materia prima.
-    'nombre repetido, aunque cambien las mayúsculas' => [['code' => 'OTRA', 'name' => 'RESINAS'], 'name'],
+    // En la misma familia, dos categorías con el mismo nombre no se distinguirían en el selector de la materia prima.
+    'nombre repetido en la familia, aunque cambien las mayúsculas' => [['code' => 'OTRA', 'name' => 'RESINAS'], 'name'],
     'sin nombre' => [['code' => 'OTRA', 'name' => ''], 'name'],
     'tipo que no existe' => [['code' => 'OTRA', 'type' => 'pintura'], 'type'],
 ]);
@@ -126,14 +126,15 @@ it('deja cambiar el tipo de una categoría vacía y editar el resto de una con m
         ->and($used->fresh()->name)->toBe('Envases de lata');
 });
 
-it('no deja poner el nombre de otra categoría al editar, pero sí cambiar las mayúsculas del propio', function () {
+it('no deja poner el nombre de otra categoría de la familia al editar, pero sí cambiar las mayúsculas del propio', function () {
     actingAsRole(SystemRole::SuperAdmin);
-    RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas']);
-    $solvents = RawMaterialCategory::factory()->create(['code' => 'SOLVENTES', 'name' => 'Solventes']);
+    $family = RawMaterialFamily::factory()->create();
+    RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas', 'family_id' => $family->id]);
+    $solvents = RawMaterialCategory::factory()->create(['code' => 'SOLVENTES', 'name' => 'Solventes', 'family_id' => $family->id]);
 
-    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'resinas']))
+    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'resinas', 'family_id' => $family->id]))
         ->assertSessionHasErrors('name');
-    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'SOLVENTES']))
+    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'SOLVENTES', 'family_id' => $family->id]))
         ->assertSessionHasNoErrors();
 
     expect($solvents->fresh()->name)->toBe('SOLVENTES');
@@ -203,4 +204,16 @@ it('filtra las categorías por familia y muestra el nombre de la familia', funct
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('categories.data', fn ($rows) => collect($rows)->pluck('code')->all() === ['ADIT-DISP']
                 && $rows[0]['family_name'] === 'ADITIVO'));
+});
+
+it('deja el mismo nombre de categoría en familias distintas', function () {
+    actingAsRole(SystemRole::SuperAdmin);
+    $resins = RawMaterialFamily::factory()->create(['name' => 'RESINA']);
+    $solvents = RawMaterialFamily::factory()->create(['name' => 'SOLVENTE']);
+    RawMaterialCategory::factory()->create(['code' => 'RESINA - BASE AGUA', 'name' => 'BASE AGUA', 'family_id' => $resins->id]);
+
+    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload(['code' => 'SOLVENTE - BASE AGUA', 'name' => 'BASE AGUA', 'family_id' => $solvents->id]))
+        ->assertSessionHasNoErrors();
+
+    expect(RawMaterialCategory::query()->where('name', 'BASE AGUA')->count())->toBe(2);
 });
