@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/empty-state';
 import { RecordLink } from '@/components/record-link';
 import { RowActions } from '@/components/row-actions';
 import type { RowAction } from '@/components/row-actions';
+import { Button } from '@/components/ui/button';
 import {
     Table,
     TableBody,
@@ -53,8 +54,12 @@ type DataListingProps<T> = {
     actions?: (row: T) => RowAction[];
     /** Nombre del registro para el lector de pantalla («Acciones de MP-001»). */
     rowLabel?: (row: T) => string;
-    /** Mensaje cuando no hay filas. */
+    /** Mensaje cuando no hay filas (y no hay filtros activos). */
     empty: ReactNode;
+    /** Con filtros activos: muestra «No hay resultados con estos filtros» y la acción para quitarlos. */
+    hasFilters?: boolean;
+    /** Acción del botón «Quitar filtros» cuando el listado queda vacío con filtros activos. */
+    onClearFilters?: () => void;
 };
 
 const alignClasses = {
@@ -74,6 +79,8 @@ export function DataListing<T>({
     actions,
     rowLabel,
     empty,
+    hasFilters = false,
+    onClearFilters,
 }: DataListingProps<T>) {
     // Firma estable (clave y papel): `columns` es un arreglo nuevo en cada render y el aviso se repetiría.
     // Solo en desarrollo: en producción no se calcula nada.
@@ -100,6 +107,26 @@ export function DataListing<T>({
     }, [columnSignature]);
 
     if (rows.length === 0) {
+        if (hasFilters) {
+            return (
+                <EmptyState>
+                    <div className="flex flex-col items-center gap-3">
+                        <p>No hay resultados con estos filtros.</p>
+                        {onClearFilters && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={onClearFilters}
+                            >
+                                Quitar filtros
+                            </Button>
+                        )}
+                    </div>
+                </EmptyState>
+            );
+        }
+
         return <EmptyState>{empty}</EmptyState>;
     }
 

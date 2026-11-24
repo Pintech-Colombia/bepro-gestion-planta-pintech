@@ -1,12 +1,13 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
 import { FormError } from '@/components/form-field';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
+import { MobileActionBar } from '@/components/mobile-action-bar';
 import { PageHeader } from '@/components/page-header';
 import { PlantDateInput } from '@/components/plant-date-input';
 import {
@@ -36,7 +37,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
@@ -51,6 +51,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { quotationPdfFilename } from '@/lib/pdf-share';
 import { quotationName } from '@/lib/quotation-name';
+import { cn } from '@/lib/utils';
 import {
     convertToOrder as quotationsConvertToOrder,
     edit as quotationsEdit,
@@ -145,6 +146,9 @@ export default function QuotationsShow({
     });
 
     const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+    // El diálogo se abre desde dos botones (encabezado en escritorio, barra fija en el celular) sin `DialogTrigger`:
+    // se recuerda cuál lo abrió para devolverle el foco al cerrarlo.
+    const convertOpenerRef = useRef<HTMLButtonElement | null>(null);
     const [pdfShareError, setPdfShareError] = useState<{
         quotationId: number;
         state: SharePdfErrorState;
@@ -164,6 +168,42 @@ export default function QuotationsShow({
         shipping_address: quotation.client.shipping_address ?? '',
     });
 
+    const mobilePrimaryAction = can.convertToOrder
+        ? 'convert'
+        : can.exportPdf
+          ? 'share'
+          : null;
+    // En el celular sin «Convertir», «Compartir PDF» vive en la barra fija: su error se muestra ahí, a la vista, y no
+    // bajo el encabezado.
+    const pdfShareErrorInBar = isMobile && mobilePrimaryAction === 'share';
+
+    const handlePdfShareError = (state: SharePdfErrorState | null) => {
+        setPdfShareError(
+            state
+                ? {
+                      quotationId: quotation.id,
+                      state,
+                  }
+                : null,
+        );
+    };
+
+    const handleConvertDialogOpenChange = (open: boolean) => {
+        if (convertForm.processing) {
+            return;
+        }
+
+        // Se limpia al abrir y no en un useEffect: useForm devuelve un
+        // objeto nuevo en cada render y como dependencia causaba un bucle
+        // infinito (pantalla en blanco).
+        if (open) {
+            convertForm.reset();
+            convertForm.clearErrors();
+        }
+
+        setConvertDialogOpen(open);
+    };
+
     const handleStatusUpdate = () => {
         patch(quotationsUpdateStatus(quotation.id).url, {
             preserveScroll: true,
@@ -181,7 +221,12 @@ export default function QuotationsShow({
         <>
             <Head title={quotationName(quotation)} />
 
-            <div className="space-y-6 p-6">
+            <div
+                className={cn(
+                    'space-y-6 p-6',
+                    mobilePrimaryAction && 'pb-24 md:pb-6',
+                )}
+            >
                 <PageHeader
                     title={quotationName(quotation)}
                     badge={
@@ -203,27 +248,17 @@ export default function QuotationsShow({
                             )}
                             {can.exportPdf && (
                                 <>
-                                    {(isMobile || canSharePdf) && (
+                                    {((isMobile &&
+                                        mobilePrimaryAction !== 'share') ||
+                                        (!isMobile && canSharePdf)) && (
                                         <SharePdfButton
                                             key={quotation.id}
                                             quotationId={quotation.id}
                                             quotationNumber={
                                                 quotation.quotation_number
                                             }
-                                            variant={
-                                                isMobile ? 'default' : 'outline'
-                                            }
-                                            onErrorChange={(state) =>
-                                                setPdfShareError(
-                                                    state
-                                                        ? {
-                                                              quotationId:
-                                                                  quotation.id,
-                                                              state,
-                                                          }
-                                                        : null,
-                                                )
-                                            }
+                                            variant="outline"
+                                            onErrorChange={handlePdfShareError}
                                         />
                                     )}
                                     <Button variant="outline" asChild>
@@ -264,7 +299,14 @@ export default function QuotationsShow({
                                 </>
                             )}
                             {can.update && (
-                                <Button asChild>
+                                <Button
+                                    variant={
+                                        isMobile && mobilePrimaryAction !== null
+                                            ? 'outline'
+                                            : 'default'
+                                    }
+                                    asChild
+                                >
                                     <Link
                                         href={
                                             returnTo
@@ -283,206 +325,168 @@ export default function QuotationsShow({
                                 </Button>
                             )}
                             {can.convertToOrder && (
-                                <Dialog
-                                    open={convertDialogOpen}
-                                    onOpenChange={(open) => {
-                                        if (convertForm.processing) {
-                                            return;
-                                        }
-
-                                        // Se limpia al abrir y no en un useEffect: useForm devuelve un
-                                        // objeto nuevo en cada render y como dependencia causaba un bucle
-                                        // infinito (pantalla en blanco).
-                                        if (open) {
-                                            convertForm.reset();
-                                            convertForm.clearErrors();
-                                        }
-
-                                        setConvertDialogOpen(open);
+                                <Button
+                                    type="button"
+                                    className="hidden md:inline-flex"
+                                    onClick={(event) => {
+                                        convertOpenerRef.current =
+                                            event.currentTarget;
+                                        handleConvertDialogOpenChange(true);
                                     }}
                                 >
-                                    <DialogTrigger asChild>
-                                        <Button>Convertir en pedido</Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>
-                                                Convertir cotización en pedido
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                Se creará un pedido con los
-                                                productos de esta cotización.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="space-y-4 py-2">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="priority">
-                                                    Prioridad
-                                                </Label>
-                                                <Select
-                                                    value={
-                                                        convertForm.data
-                                                            .priority
-                                                    }
-                                                    onValueChange={(value) =>
-                                                        convertForm.setData(
-                                                            'priority',
-                                                            value,
-                                                        )
-                                                    }
-                                                >
-                                                    <SelectTrigger id="priority">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {priorityOptions.map(
-                                                            (option) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        option.value
-                                                                    }
-                                                                    value={
-                                                                        option.value
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        option.label
-                                                                    }
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                                {convertForm.errors
-                                                    .priority && (
-                                                    <p className="text-sm text-destructive">
-                                                        {
-                                                            convertForm.errors
-                                                                .priority
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="required_date">
-                                                    Fecha requerida
-                                                </Label>
-                                                <PlantDateInput
-                                                    id="required_date"
-                                                    notPast
-                                                    value={
-                                                        convertForm.data
-                                                            .required_date
-                                                    }
-                                                    onChange={(value) =>
-                                                        convertForm.setData(
-                                                            'required_date',
-                                                            value,
-                                                        )
-                                                    }
-                                                />
-                                                {convertForm.errors
-                                                    .required_date && (
-                                                    <p className="text-sm text-destructive">
-                                                        {
-                                                            convertForm.errors
-                                                                .required_date
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="shipping_address">
-                                                    Dirección de envío *
-                                                </Label>
-                                                <Textarea
-                                                    id="shipping_address"
-                                                    rows={2}
-                                                    maxLength={255}
-                                                    value={
-                                                        convertForm.data
-                                                            .shipping_address
-                                                    }
-                                                    onChange={(e) =>
-                                                        convertForm.setData(
-                                                            'shipping_address',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                />
-                                                <p className="text-xs text-muted-foreground">
-                                                    {quotation.client
-                                                        .shipping_address
-                                                        ? 'Dirección registrada del cliente. Cámbiala si este pedido va a otro lugar.'
-                                                        : 'Este cliente no tiene dirección registrada: escribe a dónde va este pedido.'}
-                                                </p>
-                                                {convertForm.errors
-                                                    .shipping_address && (
-                                                    <p className="text-sm text-destructive">
-                                                        {
-                                                            convertForm.errors
-                                                                .shipping_address
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="notes">
-                                                    Notas
-                                                </Label>
-                                                <Textarea
-                                                    id="notes"
-                                                    rows={3}
-                                                    value={
-                                                        convertForm.data.notes
-                                                    }
-                                                    onChange={(e) =>
-                                                        convertForm.setData(
-                                                            'notes',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                />
-                                                {convertForm.errors.notes && (
-                                                    <p className="text-sm text-destructive">
-                                                        {
-                                                            convertForm.errors
-                                                                .notes
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <DialogFooter>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    setConvertDialogOpen(false)
-                                                }
-                                                disabled={
-                                                    convertForm.processing
-                                                }
-                                            >
-                                                Cancelar
-                                            </Button>
-                                            <Button
-                                                onClick={handleConvertToOrder}
-                                                disabled={
-                                                    convertForm.processing
-                                                }
-                                            >
-                                                Confirmar conversión
-                                            </Button>
-                                        </DialogFooter>
-                                    </DialogContent>
-                                </Dialog>
+                                    Convertir en pedido
+                                </Button>
                             )}
                         </>
                     }
                 />
 
-                {activePdfShareError && (
+                {can.convertToOrder && (
+                    <Dialog
+                        open={convertDialogOpen}
+                        onOpenChange={handleConvertDialogOpenChange}
+                    >
+                        <DialogContent
+                            onCloseAutoFocus={(event) => {
+                                event.preventDefault();
+                                convertOpenerRef.current?.focus();
+                            }}
+                        >
+                            <DialogHeader>
+                                <DialogTitle>
+                                    Convertir cotización en pedido
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Se creará un pedido con los productos de
+                                    esta cotización.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="priority">Prioridad</Label>
+                                    <Select
+                                        value={convertForm.data.priority}
+                                        onValueChange={(value) =>
+                                            convertForm.setData(
+                                                'priority',
+                                                value,
+                                            )
+                                        }
+                                    >
+                                        <SelectTrigger id="priority">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {priorityOptions.map((option) => (
+                                                <SelectItem
+                                                    key={option.value}
+                                                    value={option.value}
+                                                >
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {convertForm.errors.priority && (
+                                        <p className="text-sm text-destructive">
+                                            {convertForm.errors.priority}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="required_date">
+                                        Fecha requerida
+                                    </Label>
+                                    <PlantDateInput
+                                        id="required_date"
+                                        notPast
+                                        value={convertForm.data.required_date}
+                                        onChange={(value) =>
+                                            convertForm.setData(
+                                                'required_date',
+                                                value,
+                                            )
+                                        }
+                                    />
+                                    {convertForm.errors.required_date && (
+                                        <p className="text-sm text-destructive">
+                                            {convertForm.errors.required_date}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="shipping_address">
+                                        Dirección de envío *
+                                    </Label>
+                                    <Textarea
+                                        id="shipping_address"
+                                        rows={2}
+                                        maxLength={255}
+                                        value={
+                                            convertForm.data.shipping_address
+                                        }
+                                        onChange={(e) =>
+                                            convertForm.setData(
+                                                'shipping_address',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        {quotation.client.shipping_address
+                                            ? 'Dirección registrada del cliente. Cámbiala si este pedido va a otro lugar.'
+                                            : 'Este cliente no tiene dirección registrada: escribe a dónde va este pedido.'}
+                                    </p>
+                                    {convertForm.errors.shipping_address && (
+                                        <p className="text-sm text-destructive">
+                                            {
+                                                convertForm.errors
+                                                    .shipping_address
+                                            }
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="notes">Notas</Label>
+                                    <Textarea
+                                        id="notes"
+                                        rows={3}
+                                        value={convertForm.data.notes}
+                                        onChange={(e) =>
+                                            convertForm.setData(
+                                                'notes',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                    {convertForm.errors.notes && (
+                                        <p className="text-sm text-destructive">
+                                            {convertForm.errors.notes}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setConvertDialogOpen(false)}
+                                    disabled={convertForm.processing}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={handleConvertToOrder}
+                                    disabled={convertForm.processing}
+                                >
+                                    Confirmar conversión
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
+
+                {activePdfShareError && !pdfShareErrorInBar && (
                     <RetryableError
                         message={activePdfShareError.message}
                         onRetry={activePdfShareError.retry}
@@ -814,6 +818,39 @@ export default function QuotationsShow({
                     </Card>
                 )}
             </div>
+
+            {mobilePrimaryAction && (
+                <MobileActionBar
+                    notice={
+                        pdfShareErrorInBar && activePdfShareError ? (
+                            <RetryableError
+                                message={activePdfShareError.message}
+                                onRetry={activePdfShareError.retry}
+                            />
+                        ) : undefined
+                    }
+                >
+                    {mobilePrimaryAction === 'convert' ? (
+                        <Button
+                            type="button"
+                            onClick={(event) => {
+                                convertOpenerRef.current = event.currentTarget;
+                                handleConvertDialogOpenChange(true);
+                            }}
+                        >
+                            Convertir en pedido
+                        </Button>
+                    ) : (
+                        <SharePdfButton
+                            key={quotation.id}
+                            quotationId={quotation.id}
+                            quotationNumber={quotation.quotation_number}
+                            variant="default"
+                            onErrorChange={handlePdfShareError}
+                        />
+                    )}
+                </MobileActionBar>
+            )}
         </>
     );
 }

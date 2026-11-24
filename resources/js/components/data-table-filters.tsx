@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -10,32 +11,27 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Sheet,
+    SheetBody,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { countActiveFilters, hasActiveFilters } from '@/lib/table-filters';
+import type { FilterField, FilterValues } from '@/lib/table-filters';
+import { cn } from '@/lib/utils';
 
-type FilterField =
-    | {
-          type: 'text';
-          name: string;
-          label: string;
-          placeholder?: string;
-      }
-    | {
-          type: 'select';
-          name: string;
-          label: string;
-          options: { value: string; label: string }[];
-          allValue?: string;
-      }
-    | {
-          type: 'date-range';
-          nameFrom: string;
-          nameTo: string;
-          label: string;
-      };
+export type { FilterField };
 
 type DataTableFiltersProps = {
     fields: FilterField[];
-    filters: Record<string, string | null | undefined>;
-    defaultFilters?: Record<string, string | null | undefined>;
+    filters: FilterValues;
+    defaultFilters?: FilterValues;
     onFilter: (
         keyOrUpdates: string | Record<string, string | undefined>,
         value?: string | undefined,
@@ -47,6 +43,12 @@ type DataTableFiltersProps = {
     onClear: () => void;
 };
 
+function filterFieldKey(field: FilterField): string {
+    return field.type === 'date-range'
+        ? `${field.nameFrom}-${field.nameTo}`
+        : field.name;
+}
+
 export function DataTableFilters({
     fields,
     filters,
@@ -55,35 +57,107 @@ export function DataTableFilters({
     onFilterImmediate,
     onClear,
 }: DataTableFiltersProps) {
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const isMobile = useIsMobile();
     const handleImmediate = onFilterImmediate ?? onFilter;
 
-    const hasActiveFilters = fields.some((field) => {
-        if (field.type === 'date-range') {
-            const defaultFrom = defaultFilters?.[field.nameFrom] ?? '';
-            const defaultTo = defaultFilters?.[field.nameTo] ?? '';
+    const textFields = fields.filter(
+        (field): field is Extract<FilterField, { type: 'text' }> =>
+            field.type === 'text',
+    );
+    const secondaryFields = fields.filter((field) => field.type !== 'text');
+
+    const anyFilterActive = hasActiveFilters(filters, defaultFilters, fields);
+    const activeSecondaryCount = countActiveFilters(
+        secondaryFields,
+        filters,
+        defaultFilters,
+    );
+    const textFilterActive =
+        countActiveFilters(textFields, filters, defaultFilters) > 0;
+
+    // Al pasar a escritorio (rotar una tablet) el cajón se cierra de verdad: si no, `sheetOpen` seguiría en `true` y
+    // el cajón se abriría solo al volver al celular. Se ajusta durante el render (patrón de React para estado que
+    // depende de otro valor), no en un efecto.
+    const [wasMobile, setWasMobile] = useState(isMobile);
+
+    if (wasMobile !== isMobile) {
+        setWasMobile(isMobile);
+
+        if (!isMobile) {
+            setSheetOpen(false);
+        }
+    }
+
+    const renderSecondaryField = (field: FilterField, inSheet: boolean) => {
+        if (field.type === 'select') {
+            const allItemValue = field.allValue ?? '__all__';
+            const rawValue = filters[field.name] ?? '';
+            const selectValue =
+                rawValue === '__all__' && !field.allValue ? '' : rawValue;
 
             return (
-                (filters[field.nameFrom] ?? '') !== defaultFrom ||
-                (filters[field.nameTo] ?? '') !== defaultTo
+                <Select
+                    key={field.name}
+                    value={selectValue}
+                    onValueChange={(value) => {
+                        const resolvedValue =
+                            value === '__all__'
+                                ? (defaultFilters?.[field.name] ?? '')
+                                : value;
+
+                        handleImmediate(field.name, resolvedValue);
+                    }}
+                >
+                    <SelectTrigger
+                        aria-label={field.label}
+                        className={inSheet ? 'w-full' : 'w-full md:w-52'}
+                    >
+                        <SelectValue placeholder={field.label} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={allItemValue}>Todos</SelectItem>
+                        {field.options
+                            .filter((opt) => opt.value !== '')
+                            .map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </SelectItem>
+                            ))}
+                    </SelectContent>
+                </Select>
             );
         }
 
-        const defaultValue = defaultFilters?.[field.name] ?? '';
-        const rawValue = filters[field.name] ?? '';
-        const normalizedValue =
-            field.type === 'select' && rawValue === '__all__' ? '' : rawValue;
+        if (field.type === 'date-range') {
+            return (
+                <DateRangePicker
+                    key={`${field.nameFrom}-${field.nameTo}`}
+                    valueFrom={filters[field.nameFrom]}
+                    valueTo={filters[field.nameTo]}
+                    label={field.label}
+                    onChange={(from, to) => {
+                        handleImmediate({
+                            [field.nameFrom]: from,
+                            [field.nameTo]: to,
+                        });
+                    }}
+                    className={inSheet ? 'w-full' : 'w-full md:w-56'}
+                />
+            );
+        }
 
-        return normalizedValue !== defaultValue;
-    });
+        return null;
+    };
 
     return (
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
-            {fields.map((field) => {
-                if (field.type === 'text') {
-                    return (
+            {(textFields.length > 0 || secondaryFields.length > 0) && (
+                <div className="flex items-center gap-2 md:contents">
+                    {textFields.map((field) => (
                         <div
                             key={field.name}
-                            className="relative flex-1 md:min-w-56"
+                            className="relative min-w-0 flex-1 md:min-w-56"
                         >
                             <Search className="absolute top-2.5 left-3 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -96,86 +170,99 @@ export function DataTableFilters({
                                 className="pl-9"
                             />
                         </div>
-                    );
-                }
+                    ))}
 
-                if (field.type === 'select') {
-                    const allItemValue = field.allValue ?? '__all__';
-                    const rawValue = filters[field.name] ?? '';
-                    const selectValue =
-                        rawValue === '__all__' && !field.allValue
-                            ? ''
-                            : rawValue;
-
-                    return (
-                        <Select
-                            key={field.name}
-                            value={selectValue}
-                            onValueChange={(value) => {
-                                const resolvedValue =
-                                    value === '__all__'
-                                        ? (defaultFilters?.[field.name] ?? '')
-                                        : value;
-
-                                handleImmediate(field.name, resolvedValue);
-                            }}
+                    {/* En el celular, los filtros secundarios van en un cajón inferior (DESIGN.md §9). */}
+                    {secondaryFields.length > 0 && (
+                        <Sheet
+                            open={isMobile && sheetOpen}
+                            onOpenChange={setSheetOpen}
                         >
-                            <SelectTrigger
-                                aria-label={field.label}
-                                className="w-full md:w-52"
-                            >
-                                <SelectValue placeholder={field.label} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={allItemValue}>
-                                    Todos
-                                </SelectItem>
-                                {field.options
-                                    .filter((opt) => opt.value !== '')
-                                    .map((opt) => (
-                                        <SelectItem
-                                            key={opt.value}
-                                            value={opt.value}
+                            <SheetTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="shrink-0 md:hidden"
+                                >
+                                    {activeSecondaryCount > 0
+                                        ? `Filtros (${activeSecondaryCount})`
+                                        : 'Filtros'}
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="md:hidden">
+                                <SheetHeader>
+                                    <SheetTitle>Filtros</SheetTitle>
+                                    <SheetDescription className="sr-only">
+                                        Filtra los resultados del listado.
+                                    </SheetDescription>
+                                </SheetHeader>
+                                <SheetBody className="space-y-4">
+                                    {secondaryFields.map((field) => (
+                                        <div
+                                            key={filterFieldKey(field)}
+                                            className="space-y-1.5"
                                         >
-                                            {opt.label}
-                                        </SelectItem>
+                                            <p className="text-sm font-medium text-foreground">
+                                                {field.label}
+                                            </p>
+                                            {renderSecondaryField(field, true)}
+                                        </div>
                                     ))}
-                            </SelectContent>
-                        </Select>
-                    );
-                }
+                                </SheetBody>
+                                <SheetFooter className="flex-row items-center justify-between gap-2">
+                                    {anyFilterActive ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                onClear();
+                                                setSheetOpen(false);
+                                            }}
+                                        >
+                                            Quitar filtros
+                                        </Button>
+                                    ) : (
+                                        <span />
+                                    )}
+                                    <Button
+                                        type="button"
+                                        onClick={() => setSheetOpen(false)}
+                                    >
+                                        Listo
+                                    </Button>
+                                </SheetFooter>
+                            </SheetContent>
+                        </Sheet>
+                    )}
+                </div>
+            )}
 
-                if (field.type === 'date-range') {
-                    return (
-                        <DateRangePicker
-                            key={`${field.nameFrom}-${field.nameTo}`}
-                            valueFrom={filters[field.nameFrom]}
-                            valueTo={filters[field.nameTo]}
-                            label={field.label}
-                            onChange={(from, to) => {
-                                handleImmediate({
-                                    [field.nameFrom]: from,
-                                    [field.nameTo]: to,
-                                });
-                            }}
-                            className="w-full md:w-56"
-                        />
-                    );
-                }
+            {/* Desde md: todos los filtros secundarios van en línea, igual que en escritorio. */}
+            {secondaryFields.length > 0 && (
+                <div className="hidden md:contents">
+                    {secondaryFields.map((field) =>
+                        renderSecondaryField(field, false),
+                    )}
+                </div>
+            )}
 
-                return null;
-            })}
-
-            {hasActiveFilters && (
+            {anyFilterActive && (
                 <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={onClear}
-                    className="text-muted-foreground"
+                    className={cn(
+                        'self-start text-muted-foreground md:self-auto',
+                        // En el celular, con filtros secundarios, se quitan desde el cajón; pero si hay una
+                        // búsqueda escrita, el botón sigue a la vista para limpiarla sin abrir el cajón.
+                        secondaryFields.length > 0 &&
+                            !textFilterActive &&
+                            'hidden md:inline-flex',
+                    )}
                 >
-                    <X className="mr-1 h-4 w-4" />
-                    Limpiar
+                    <X className="size-4" />
+                    Quitar filtros
                 </Button>
             )}
         </div>

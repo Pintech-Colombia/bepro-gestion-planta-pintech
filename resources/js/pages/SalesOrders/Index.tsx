@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import { withReturnTo } from '@/lib/navigation';
+import { hasActiveFilters } from '@/lib/table-filters';
 import {
     create as salesOrdersCreate,
     index as salesOrdersIndex,
@@ -216,6 +217,8 @@ export default function SalesOrdersIndex({
                             </p>
                         </>
                     }
+                    hasFilters={hasActiveFilters(filters)}
+                    onClearFilters={clearFilters}
                 />
 
                 <Pagination paginator={orders} />
