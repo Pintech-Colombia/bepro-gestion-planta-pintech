@@ -281,6 +281,12 @@ Same in all three:
   ids are the row's error keys (`items.2.quantity`), so a 422 focuses the right field. Editors with many short lines
   (formula, packaging) pass `labelsOnFirstRowOnly`: from `md` only the first row shows its labels, the rest keep them
   for screen readers.
+  A line with many fields splits them in two groups: the main ones (what defines the line and its price) as children,
+  the rest in `secondary`. On the phone the secondary group folds under a button («Más detalles») with a one-line
+  `secondarySummary` of what has a value (a price adjustment always shows when it is not zero); from `md` it is always
+  visible as a second row (`secondaryClassName="md:grid-cols-12"`). The secondary fields stay mounted while folded
+  (only hidden), and the screen opens the group in the same render when one of them has an error, so the focus of a 422
+  reaches it. `secondaryOpen` and `onSecondaryOpenChange` are controlled by the screen. Example: the quotation lines.
 - **A 422 never closes the form**: data and errors stay. Focus goes to the first invalid field (`lib/focus-first-error.ts`).
 - On touch screens every field is at least 16 px (an `any-pointer: coarse` rule in `resources/css/app.css`, outside `@layer`, so it beats
   `text-sm`): below 16 px, iOS Safari zooms the page when a field gets focus, upright or in landscape. On desktop

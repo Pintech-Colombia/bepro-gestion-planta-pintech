@@ -1,4 +1,5 @@
-import { Trash2 } from 'lucide-react';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,21 @@ type FormLineItemProps = {
     className?: string;
     /** Lo que va bajo los campos, a todo el ancho (el subtotal de la línea). */
     footer?: ReactNode;
+    /**
+     * Campos secundarios (opcional). En el celular van plegados bajo un botón (`secondaryLabel`) con un resumen
+     * (`secondarySummary`); desde `md`, siempre a la vista en una segunda fila. Se quedan montados aunque estén plegados
+     * (solo se esconden): conservan lo escrito y el foco puede llegar a ellos al abrirlos.
+     */
+    secondary?: ReactNode;
+    /** Texto del botón que pliega los secundarios en el celular. */
+    secondaryLabel?: string;
+    /** Resumen de los secundarios que se ve con el grupo cerrado: «Imprimante · RAL 7035 · Ajuste -5%». */
+    secondarySummary?: string;
+    /** Abierto o cerrado en el celular (controlado). Quien lo usa lo abre también cuando un secundario tiene error. */
+    secondaryOpen?: boolean;
+    onSecondaryOpenChange?: (open: boolean) => void;
+    /** Clases de la fila de secundarios desde `md` (`md:grid-cols-12`). */
+    secondaryClassName?: string;
     children: ReactNode;
 };
 
@@ -35,9 +51,16 @@ export function FormLineItem({
     labelsOnFirstRowOnly = false,
     className,
     footer,
+    secondary,
+    secondaryLabel = 'Más detalles',
+    secondarySummary,
+    secondaryOpen = false,
+    onSecondaryOpenChange,
+    secondaryClassName,
     children,
 }: FormLineItemProps) {
     const title = `${label} ${index + 1}`;
+    const secondaryId = useId();
 
     return (
         <div
@@ -72,6 +95,47 @@ export function FormLineItem({
             >
                 {children}
             </div>
+            {secondary && (
+                <>
+                    {/* Solo en el celular: desde `md` los secundarios siempre se ven. */}
+                    <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:hidden">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={secondaryOpen}
+                            aria-controls={secondaryId}
+                            onClick={() =>
+                                onSecondaryOpenChange?.(!secondaryOpen)
+                            }
+                            className="-ml-3"
+                        >
+                            {secondaryLabel}
+                            <ChevronDown
+                                className={cn(
+                                    'transition-transform',
+                                    secondaryOpen && 'rotate-180',
+                                )}
+                            />
+                        </Button>
+                        {!secondaryOpen && secondarySummary && (
+                            <span className="min-w-0 truncate text-xs text-muted-foreground">
+                                {secondarySummary}
+                            </span>
+                        )}
+                    </div>
+                    <div
+                        id={secondaryId}
+                        className={cn(
+                            'col-span-2 grid min-w-0 gap-4 md:col-span-1 md:col-start-1',
+                            !secondaryOpen && 'max-md:hidden',
+                            secondaryClassName,
+                        )}
+                    >
+                        {secondary}
+                    </div>
+                </>
+            )}
             {footer && <div className="col-span-2">{footer}</div>}
         </div>
     );

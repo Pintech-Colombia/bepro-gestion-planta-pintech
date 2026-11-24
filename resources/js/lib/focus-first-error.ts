@@ -66,6 +66,15 @@ export function focusFirstError(
                 continue;
             }
 
+            // Escondido (un grupo plegado, el otro tamaño de una vista): enfocarlo no haría nada. Quien pliega campos
+            // los abre cuando tienen error, así que esto es solo un respaldo.
+            if (
+                typeof element.getClientRects === 'function' &&
+                element.getClientRects().length === 0
+            ) {
+                continue;
+            }
+
             element.scrollIntoView({ block: 'center', behavior: 'smooth' });
             element.focus({ preventScroll: true });
 
