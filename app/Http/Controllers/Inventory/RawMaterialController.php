@@ -105,11 +105,7 @@ class RawMaterialController extends Controller
             'rawMaterials' => $rawMaterials,
             'filters' => $request->validated(),
             // Todas, también las inactivas: sus materias primas se siguen buscando.
-            'familyOptions' => RawMaterialFamily::query()
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(fn (RawMaterialFamily $family): array => ['value' => (string) $family->id, 'label' => $family->name])
-                ->all(),
+            'familyOptions' => RawMaterialFamily::options(),
             'can' => [
                 'create' => Gate::allows('create', RawMaterial::class),
                 'view_costs' => $canViewCosts,
@@ -360,16 +356,16 @@ class RawMaterialController extends Controller
      */
     private function categoryOptions(Builder $query): array
     {
+        // Se ordena en SQL, como el filtro de familia: así «Óxidos» queda con la O y no después de la Z.
         return $query
-            ->select('id', 'name', 'code', 'type', 'family_id')
+            ->leftJoin('raw_material_families', 'raw_material_families.id', '=', 'raw_material_categories.family_id')
+            ->select('raw_material_categories.id', 'raw_material_categories.name', 'raw_material_categories.code', 'raw_material_categories.type', 'raw_material_categories.family_id')
             ->with('family:id,name')
-            ->orderBy('name')
+            ->orderByRaw('raw_material_families.id IS NULL')
+            ->orderBy('raw_material_families.name')
+            ->orderBy('raw_material_categories.name')
+            ->orderBy('raw_material_categories.id')
             ->get()
-            ->sortBy(fn (RawMaterialCategory $category): array => [
-                $category->family === null ? 1 : 0,
-                mb_strtolower($category->family->name ?? ''),
-            ])
-            ->values()
             ->map(fn (RawMaterialCategory $category): array => [
                 'id' => $category->id,
                 'name' => $category->name,

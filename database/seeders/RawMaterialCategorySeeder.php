@@ -16,11 +16,11 @@ class RawMaterialCategorySeeder extends Seeder
      */
     public function run(): void
     {
-        // Familias base: agrupan las categorías. Se buscan sin distinguir mayúsculas, porque el nombre se edita desde
-        // Configuración; si ya existe, no se toca (firstOrCreate, DatabaseSeederTest).
+        // Familias base: solo se buscan o crean cuando se va a crear una categoría suya. Así, una familia renombrada desde
+        // Configuración no reaparece con el nombre viejo al volver a sembrar (DatabaseSeederTest).
         $families = [
-            'chemicals' => $this->family('Químicos', 'Pigmentos, resinas, solventes, aditivos y demás componentes químicos'),
-            'packaging' => $this->family('Envase y empaque', 'Envases, etiquetas y material del termoencogido'),
+            'chemicals' => ['Químicos', 'Pigmentos, resinas, solventes, aditivos y demás componentes químicos'],
+            'packaging' => ['Envase y empaque', 'Envases, etiquetas y material del termoencogido'],
         ];
 
         $categories = [
@@ -77,7 +77,7 @@ class RawMaterialCategorySeeder extends Seeder
                 ->exists();
 
             if (! $exists) {
-                $family = $families[$category['family']];
+                $family = $this->family(...$families[$category['family']]);
                 unset($category['family']);
 
                 // Solo al crearla: una categoría existente conserva la familia que le hayan puesto en Configuración.

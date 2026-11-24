@@ -56,15 +56,16 @@ export type RawMaterialFormData = {
 };
 
 /**
- * Categorías agrupadas por familia, en el orden en que llegan del servidor.
+ * Categorías agrupadas por familia, en el orden en que llegan del servidor. Las sin familia van en su propio grupo
+ * (clave `null`), aparte de una familia que se llame igual que su rótulo.
  */
 function groupByFamily(
     categories: CategoryOption[],
-): [string, CategoryOption[]][] {
-    const groups = new Map<string, CategoryOption[]>();
+): [string | null, CategoryOption[]][] {
+    const groups = new Map<string | null, CategoryOption[]>();
 
     for (const category of categories) {
-        const family = category.family_name ?? 'Sin familia';
+        const family = category.family_name;
         groups.set(family, [...(groups.get(family) ?? []), category]);
     }
 

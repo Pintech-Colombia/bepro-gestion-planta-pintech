@@ -9,6 +9,7 @@ use App\Models\Concerns\HasAuditDescription;
 use App\Models\Concerns\SelectableWhenActive;
 use Database\Factories\RawMaterialFamilyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -62,6 +63,22 @@ class RawMaterialFamily extends Model
             'name' => TextFormat::Name->cast(),
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Opciones `{value, label}` para los selectores y filtros, ordenadas por nombre.
+     *
+     * @param  Builder<self>|null  $query  Por defecto, todas (también las inactivas, para filtrar).
+     * @return list<array{value: string, label: string}>
+     */
+    public static function options(?Builder $query = null): array
+    {
+        return ($query ?? self::query())
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['id', 'name'])
+            ->map(fn (self $family): array => ['value' => (string) $family->id, 'label' => $family->name])
+            ->all();
     }
 
     public function categories(): HasMany

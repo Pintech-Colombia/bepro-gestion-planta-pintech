@@ -14,7 +14,6 @@ use App\Http\Requests\Catalogs\UpdateRawMaterialCategoryRequest;
 use App\Models\RawMaterialCategory;
 use App\Models\RawMaterialFamily;
 use App\Support\EnumOptions;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -52,7 +51,7 @@ class RawMaterialCategoryController extends Controller
             'filters' => $request->validated(),
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
             // Todas, también las inactivas: el filtro debe poder mostrar las categorías de una familia ya desactivada.
-            'familyOptions' => $this->familyOptions(RawMaterialFamily::query()),
+            'familyOptions' => RawMaterialFamily::options(),
             'can' => [
                 'create' => Gate::allows('create', RawMaterialCategory::class),
             ],
@@ -65,7 +64,7 @@ class RawMaterialCategoryController extends Controller
 
         return Inertia::render('Settings/Catalogs/RawMaterialCategories/Create', [
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
-            'familyOptions' => $this->familyOptions(RawMaterialFamily::query()->selectable()),
+            'familyOptions' => RawMaterialFamily::options(RawMaterialFamily::query()->selectable()),
         ]);
     }
 
@@ -93,7 +92,7 @@ class RawMaterialCategoryController extends Controller
                 'description' => $rawMaterialCategory->description,
             ],
             'typeOptions' => EnumOptions::for(RawMaterialType::cases()),
-            'familyOptions' => $this->familyOptions(
+            'familyOptions' => RawMaterialFamily::options(
                 RawMaterialFamily::query()->selectable([$rawMaterialCategory->family_id]),
             ),
         ]);
@@ -126,19 +125,6 @@ class RawMaterialCategoryController extends Controller
 
         return redirect()
             ->route('catalogs.raw-material-categories.index');
-    }
-
-    /**
-     * @param  Builder<RawMaterialFamily>  $query
-     * @return list<array{value: string, label: string}>
-     */
-    private function familyOptions(Builder $query): array
-    {
-        return $query
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (RawMaterialFamily $family): array => ['value' => (string) $family->id, 'label' => $family->name])
-            ->all();
     }
 
     /**

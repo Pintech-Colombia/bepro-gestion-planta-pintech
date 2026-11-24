@@ -153,6 +153,19 @@ test('volver a sembrar no choca con una categoría a la que le cambiaron el cód
         ->and(RawMaterialCategory::query()->where('name', 'Etiquetas')->sole()->code)->toBe('ETIQ');
 });
 
+test('volver a sembrar no recrea una familia de materia prima renombrada', function () {
+    $this->seed(DatabaseSeeder::class);
+    $family = RawMaterialFamily::query()->where('name', 'Químicos')->sole();
+    $family->update(['name' => 'Químicos y reactivos']);
+    $count = RawMaterialFamily::query()->count();
+
+    $this->seed(DatabaseSeeder::class);
+
+    expect(RawMaterialFamily::query()->count())->toBe($count)
+        ->and(RawMaterialFamily::query()->where('name', 'Químicos')->exists())->toBeFalse()
+        ->and(RawMaterialCategory::query()->where('code', 'QUIMICOS')->sole()->family_id)->toBe($family->id);
+});
+
 test('volver a sembrar completa una fórmula que quedó sin líneas', function () {
     $this->seed(DatabaseSeeder::class);
     $formula = Formula::query()->has('details')->orderBy('id')->firstOrFail();
