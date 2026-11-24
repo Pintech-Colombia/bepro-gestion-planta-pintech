@@ -189,6 +189,7 @@ class RawMaterialController extends Controller
                 'minimum_stock' => $rawMaterial->minimum_stock,
                 'alert_days_before_expiry' => $rawMaterial->alert_days_before_expiry,
                 'tracks_inventory' => $rawMaterial->tracks_inventory,
+                'is_controlled_substance' => $rawMaterial->is_controlled_substance,
                 'is_active' => $rawMaterial->is_active,
                 'category' => $rawMaterial->category ? [
                     'id' => $rawMaterial->category->id,
@@ -246,6 +247,7 @@ class RawMaterialController extends Controller
                 'alert_days_before_expiry' => $rawMaterial->alert_days_before_expiry,
                 'price_variation_threshold' => $rawMaterial->price_variation_threshold,
                 'tracks_inventory' => $rawMaterial->tracks_inventory,
+                'is_controlled_substance' => $rawMaterial->is_controlled_substance,
                 ...($canUpdateCosts ? ['current_price' => $rawMaterial->current_price] : []),
                 'is_active' => $rawMaterial->is_active,
             ],

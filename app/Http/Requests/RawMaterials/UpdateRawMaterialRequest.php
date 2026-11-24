@@ -54,6 +54,7 @@ class UpdateRawMaterialRequest extends FormRequest
             'alert_days_before_expiry' => ['bail', 'required', 'integer', 'min:0', 'max:'.RawMaterial::MAX_EXPIRY_ALERT_DAYS],
             'price_variation_threshold' => ['bail', 'nullable', ...NumberType::Percentage->rules('100'), 'min:0.01'],
             'tracks_inventory' => ['sometimes', 'boolean'],
+            'is_controlled_substance' => ['sometimes', 'boolean'],
             'current_price' => $this->manualPriceRules(),
             'confirm_tracking_change' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
@@ -195,6 +196,10 @@ class UpdateRawMaterialRequest extends FormRequest
 
         if ($this->has('tracks_inventory')) {
             $prepared['tracks_inventory'] = $this->boolean('tracks_inventory');
+        }
+
+        if ($this->has('is_controlled_substance')) {
+            $prepared['is_controlled_substance'] = $this->boolean('is_controlled_substance');
         }
 
         $this->merge($prepared);

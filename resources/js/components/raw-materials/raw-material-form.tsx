@@ -50,6 +50,8 @@ export type RawMaterialFormData = {
     alert_days_before_expiry: string;
     price_variation_threshold: string;
     tracks_inventory: boolean;
+    /** Sustancia controlada: sus movimientos se registran en SICOQ. */
+    is_controlled_substance: boolean;
     /** Precio de referencia escrito a mano: solo sin control de inventario y con permiso de costos. */
     current_price: string;
     is_active: boolean;
@@ -390,6 +392,20 @@ export function RawMaterialForm({
                             onCheckedChange={(checked) =>
                                 form.setData(
                                     'tracks_inventory',
+                                    checked === true,
+                                )
+                            }
+                        />
+
+                        <FormCheckbox
+                            id="is_controlled_substance"
+                            label="Sustancia controlada (SICOQ)"
+                            help="Cada movimiento de su stock se registra en SICOQ, del Ministerio de Justicia."
+                            error={form.errors.is_controlled_substance}
+                            checked={form.data.is_controlled_substance}
+                            onCheckedChange={(checked) =>
+                                form.setData(
+                                    'is_controlled_substance',
                                     checked === true,
                                 )
                             }

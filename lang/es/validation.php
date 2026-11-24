@@ -204,6 +204,7 @@ return [
         'brand' => 'marca',
         'category_id' => 'categoría',
         'family_id' => 'familia',
+        'is_controlled_substance' => 'sustancia controlada',
         'family' => 'familia',
         'unit_of_measure_id' => 'unidad de medida',
         'symbol' => 'símbolo',

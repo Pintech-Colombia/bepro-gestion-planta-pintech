@@ -43,6 +43,7 @@ type RawMaterial = {
     alert_days_before_expiry: number;
     price_variation_threshold: string | null;
     tracks_inventory: boolean;
+    is_controlled_substance: boolean;
     /** Solo llega con permiso de costos. */
     current_price?: string | null;
     is_active: boolean;
@@ -79,6 +80,7 @@ export default function RawMaterialsEdit({
             rawMaterial.price_variation_threshold,
         ),
         tracks_inventory: rawMaterial.tracks_inventory,
+        is_controlled_substance: rawMaterial.is_controlled_substance,
         current_price: formatForInput(rawMaterial.current_price),
         is_active: rawMaterial.is_active,
     });

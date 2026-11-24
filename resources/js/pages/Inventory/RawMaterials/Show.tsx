@@ -37,6 +37,7 @@ type Props = {
         minimum_stock: string;
         alert_days_before_expiry: number;
         tracks_inventory: boolean;
+        is_controlled_substance: boolean;
         is_active: boolean;
         unit_of_measure: { id: number; name: string; symbol: string } | null;
         category: {
@@ -182,6 +183,15 @@ export default function RawMaterialsShow({
                                     rawMaterial.tracks_inventory
                                         ? 'Sí'
                                         : 'No (consumo sin descontar saldo, a precio fijado a mano)'
+                                }
+                            />
+
+                            <DetailItem
+                                label="Sustancia controlada (SICOQ)"
+                                value={
+                                    rawMaterial.is_controlled_substance
+                                        ? 'Sí'
+                                        : 'No'
                                 }
                             />
 
