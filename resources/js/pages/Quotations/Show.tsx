@@ -1,6 +1,6 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
@@ -146,6 +146,9 @@ export default function QuotationsShow({
     });
 
     const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+    // El diálogo se abre desde dos botones (encabezado en escritorio, barra fija en el celular) sin `DialogTrigger`:
+    // se recuerda cuál lo abrió para devolverle el foco al cerrarlo.
+    const convertOpenerRef = useRef<HTMLButtonElement | null>(null);
     const [pdfShareError, setPdfShareError] = useState<{
         quotationId: number;
         state: SharePdfErrorState;
@@ -170,6 +173,9 @@ export default function QuotationsShow({
         : can.exportPdf
           ? 'share'
           : null;
+    // En el celular sin «Convertir», «Compartir PDF» vive en la barra fija: su error se muestra ahí, a la vista, y no
+    // bajo el encabezado.
+    const pdfShareErrorInBar = isMobile && mobilePrimaryAction === 'share';
 
     const handlePdfShareError = (state: SharePdfErrorState | null) => {
         setPdfShareError(
@@ -322,9 +328,11 @@ export default function QuotationsShow({
                                 <Button
                                     type="button"
                                     className="hidden md:inline-flex"
-                                    onClick={() =>
-                                        handleConvertDialogOpenChange(true)
-                                    }
+                                    onClick={(event) => {
+                                        convertOpenerRef.current =
+                                            event.currentTarget;
+                                        handleConvertDialogOpenChange(true);
+                                    }}
                                 >
                                     Convertir en pedido
                                 </Button>
@@ -338,7 +346,12 @@ export default function QuotationsShow({
                         open={convertDialogOpen}
                         onOpenChange={handleConvertDialogOpenChange}
                     >
-                        <DialogContent>
+                        <DialogContent
+                            onCloseAutoFocus={(event) => {
+                                event.preventDefault();
+                                convertOpenerRef.current?.focus();
+                            }}
+                        >
                             <DialogHeader>
                                 <DialogTitle>
                                     Convertir cotización en pedido
@@ -473,7 +486,7 @@ export default function QuotationsShow({
                     </Dialog>
                 )}
 
-                {activePdfShareError && (
+                {activePdfShareError && !pdfShareErrorInBar && (
                     <RetryableError
                         message={activePdfShareError.message}
                         onRetry={activePdfShareError.retry}
@@ -807,11 +820,23 @@ export default function QuotationsShow({
             </div>
 
             {mobilePrimaryAction && (
-                <MobileActionBar>
+                <MobileActionBar
+                    notice={
+                        pdfShareErrorInBar && activePdfShareError ? (
+                            <RetryableError
+                                message={activePdfShareError.message}
+                                onRetry={activePdfShareError.retry}
+                            />
+                        ) : undefined
+                    }
+                >
                     {mobilePrimaryAction === 'convert' ? (
                         <Button
                             type="button"
-                            onClick={() => handleConvertDialogOpenChange(true)}
+                            onClick={(event) => {
+                                convertOpenerRef.current = event.currentTarget;
+                                handleConvertDialogOpenChange(true);
+                            }}
                         >
                             Convertir en pedido
                         </Button>

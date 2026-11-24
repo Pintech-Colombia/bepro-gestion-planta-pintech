@@ -10,6 +10,11 @@ type MobileActionBarProps = {
     summary?: ReactNode;
     /** Acción principal a la derecha, o a todo el ancho si es la única acción sin `summary`. */
     children: ReactNode;
+    /**
+     * Aviso opcional encima de las acciones (p. ej. el error de la acción de la barra): así se ve donde el usuario
+     * tocó, no arriba de la página fuera de la vista.
+     */
+    notice?: ReactNode;
     className?: string;
 };
 
@@ -21,6 +26,7 @@ type MobileActionBarProps = {
 export function MobileActionBar({
     summary,
     children,
+    notice,
     className,
 }: MobileActionBarProps) {
     const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -85,6 +91,7 @@ export function MobileActionBar({
                 className,
             )}
         >
+            {notice && <div className="mb-3">{notice}</div>}
             {summary ? (
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">{summary}</div>

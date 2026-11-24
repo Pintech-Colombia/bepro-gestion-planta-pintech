@@ -514,6 +514,11 @@ they open nothing.
   actions remain in `<PageHeader>` and `<FormActions>`.
 - Screens that render `<MobileActionBar>` reserve bottom space below `md` (`pb-24 md:pb-6` on the page wrapper) so the
   bar never covers the last block of content.
+- **Errors of a bar action:** pass them as `notice` (rendered inside the bar, above the actions), never only under the
+  `<PageHeader>`: the user tapped at the bottom of the screen and would not see a message at the top. On desktop, or
+  when the action lives in the header, the error stays where it is.
+- **Focus:** an action that opens a `Dialog` from both the header and the bar (no `DialogTrigger`) keeps a ref to the
+  button that opened it and returns focus there with `onCloseAutoFocus`.
 - **Soft keyboard:** the bar hides while focus is inside a control that opens the virtual keyboard (`opensKeyboard` in
   `lib/mobile-keyboard.ts`: text-like `<input>`, `<textarea>` or `[contenteditable]`, never `readOnly`/`disabled`,
   buttons, checkboxes, radios or Radix `Select` triggers). On `focusout` it waits one animation frame before reading

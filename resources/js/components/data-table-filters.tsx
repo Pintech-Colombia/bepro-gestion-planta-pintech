@@ -73,6 +73,21 @@ export function DataTableFilters({
         filters,
         defaultFilters,
     );
+    const textFilterActive =
+        countActiveFilters(textFields, filters, defaultFilters) > 0;
+
+    // Al pasar a escritorio (rotar una tablet) el cajón se cierra de verdad: si no, `sheetOpen` seguiría en `true` y
+    // el cajón se abriría solo al volver al celular. Se ajusta durante el render (patrón de React para estado que
+    // depende de otro valor), no en un efecto.
+    const [wasMobile, setWasMobile] = useState(isMobile);
+
+    if (wasMobile !== isMobile) {
+        setWasMobile(isMobile);
+
+        if (!isMobile) {
+            setSheetOpen(false);
+        }
+    }
 
     const renderSecondaryField = (field: FilterField, inSheet: boolean) => {
         if (field.type === 'select') {
@@ -239,7 +254,11 @@ export function DataTableFilters({
                     onClick={onClear}
                     className={cn(
                         'self-start text-muted-foreground md:self-auto',
-                        secondaryFields.length > 0 && 'hidden md:inline-flex',
+                        // En el celular, con filtros secundarios, se quitan desde el cajón; pero si hay una
+                        // búsqueda escrita, el botón sigue a la vista para limpiarla sin abrir el cajón.
+                        secondaryFields.length > 0 &&
+                            !textFilterActive &&
+                            'hidden md:inline-flex',
                     )}
                 >
                     <X className="size-4" />
