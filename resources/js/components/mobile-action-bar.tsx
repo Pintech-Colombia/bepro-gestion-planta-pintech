@@ -29,7 +29,11 @@ export function MobileActionBar({
     notice,
     className,
 }: MobileActionBarProps) {
+    // El foco está en un campo que abre el teclado.
     const [keyboardOpen, setKeyboardOpen] = useState(false);
+    // La parte visible de la pantalla se achicó (el teclado está a la vista). En Android, el gesto de atrás cierra el
+    // teclado sin quitar el foco del campo: sin esto, la barra quedaría escondida hasta tocar otra cosa.
+    const [viewportShrunk, setViewportShrunk] = useState(true);
     const rafIdRef = useRef<number | null>(null);
 
     useEffect(() => {
@@ -71,14 +75,39 @@ export function MobileActionBar({
             });
         };
 
+        // Sin `visualViewport` (navegadores viejos) se decide solo por el foco: `viewportShrunk` queda en `true`.
+        // Se compara contra la altura visible que había sin ningún campo enfocado (sin teclado), no contra
+        // `innerHeight`: en algunos navegadores el teclado achica las dos y la barra nunca se escondería.
+        const viewport = window.visualViewport;
+        let heightWithoutKeyboard = viewport?.height ?? window.innerHeight;
+        const syncViewport = () => {
+            if (!viewport) {
+                return;
+            }
+
+            const fieldFocused = opensKeyboard(
+                document.activeElement as FocusableElementLike | null,
+            );
+
+            // Sin foco en un campo no hay teclado: esa es la altura de referencia (cambia al girar el teléfono).
+            if (!fieldFocused) {
+                heightWithoutKeyboard = viewport.height;
+            }
+
+            setViewportShrunk(viewport.height < heightWithoutKeyboard * 0.85);
+        };
+
         syncFromActiveElement();
+        syncViewport();
         document.addEventListener('focusin', handleFocusIn);
         document.addEventListener('focusout', handleFocusOut);
+        viewport?.addEventListener('resize', syncViewport);
 
         return () => {
             cancelPendingCheck();
             document.removeEventListener('focusin', handleFocusIn);
             document.removeEventListener('focusout', handleFocusOut);
+            viewport?.removeEventListener('resize', syncViewport);
         };
     }, []);
 
@@ -87,7 +116,7 @@ export function MobileActionBar({
             data-slot="mobile-action-bar"
             className={cn(
                 'fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 md:hidden',
-                keyboardOpen && 'hidden',
+                keyboardOpen && viewportShrunk && 'hidden',
                 className,
             )}
         >

@@ -30,6 +30,19 @@ trait RedirectsWithContext
         return $redirect;
     }
 
+    /**
+     * Vuelve a la ficha de un registro tras guardarlo, conservando el `return_to` con que se abrió: así la miga del
+     * listado sigue llevando a la lista con sus filtros después de editar, aprobar o cambiar el estado.
+     *
+     * @param  array<string, mixed>  $parameters
+     */
+    protected function redirectToRecord(Request $request, string $route, array $parameters): RedirectResponse
+    {
+        $returnTo = $this->resolveReturnTo($request);
+
+        return redirect()->route($route, $returnTo !== null ? [...$parameters, 'return_to' => $returnTo] : $parameters);
+    }
+
     protected function resolveReturnTo(Request $request): ?string
     {
         $returnTo = $request->input('return_to');

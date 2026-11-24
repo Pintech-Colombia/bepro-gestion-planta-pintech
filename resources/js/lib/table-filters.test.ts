@@ -161,4 +161,11 @@ describe('countActiveFilters e isFilterFieldActive', () => {
             ),
         ).toBe(2);
     });
+
+    it('cuenta un filtro que llega como número o booleano', () => {
+        expect(hasActiveFilters({ warehouse_id: 5 })).toBe(true);
+        expect(hasActiveFilters({ include_inactive: true })).toBe(true);
+        expect(hasActiveFilters({ warehouse_id: null })).toBe(false);
+        expect(hasActiveFilters({ include_inactive: false })).toBe(false);
+    });
 });

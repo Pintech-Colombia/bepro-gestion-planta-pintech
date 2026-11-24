@@ -74,6 +74,7 @@ export function FlashMessages() {
                             <button
                                 type="button"
                                 onClick={() => dismiss(key)}
+                                data-touch-target="hit"
                                 className="absolute top-2 right-2 rounded-md p-1 opacity-70 transition-opacity hover:opacity-100"
                             >
                                 <X className="h-4 w-4" />

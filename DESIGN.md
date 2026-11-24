@@ -304,8 +304,11 @@ Same in all three:
   relies on it for buttons. An element styled as a button that is not a `<Button>` (the `Pagination` links) sets
   `data-touch-target` itself; `AlertDialog` actions are matched by their own `data-slot`. A text or unit inside a field
   is centred with `top-1/2 -translate-y-1/2`, never a fixed offset. `design-contract.test.ts` checks the rule. Never set
-  a fixed height on a control to beat this rule. _(pending)_ The close «X» of `Dialog`/`Sheet`, the flash messages and
-  small clear buttons inside fields are still below 44 px.
+  a fixed height on a control to beat this rule. A small button positioned over something else (the close «X» of a
+  `Dialog`/`Sheet` or a flash message) keeps its size and carries `data-touch-target="hit"`: an invisible 44×44
+  pseudo-element enlarges only the area that is tapped, so nothing around it moves. The button must be positioned
+  (`absolute`/`relative`), and the text next to it leaves room (`DialogHeader` has `pr-6`, `SheetHeader` `pr-12`). Not
+  for a clear button inside a field: the enlarged area would cover the field's text and clear it by mistake.
 - `noValidate` on the `<form>`: the server validates. Empty numeric fields start empty with a placeholder, never a typed
   `0`: «0,00» for decimals, «0» for integers.
 - Confirmations use the app dialog: `const confirm = useConfirm()` and `if (await confirm({ title, description,

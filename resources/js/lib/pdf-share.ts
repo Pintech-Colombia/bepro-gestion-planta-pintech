@@ -1,11 +1,16 @@
 export type PdfDeliveryOutcome =
-    'share' | 'download' | 'needs_gesture' | 'aborted';
+    'share' | 'download' | 'needs_gesture' | 'aborted' | 'share_stuck';
 
 export type PdfResponseValidation =
     | { valid: true }
     | {
           valid: false;
-          reason: 'session_expired' | 'http_error' | 'invalid_content_type';
+          reason:
+              | 'session_expired'
+              | 'redirected'
+              | 'unavailable'
+              | 'http_error'
+              | 'invalid_content_type';
           requiresReload: boolean;
       };
 
@@ -17,14 +22,6 @@ type PdfResponseMeta = {
 };
 
 type ShareNavigator = Pick<Partial<Navigator>, 'share' | 'canShare'>;
-
-/** Nombre del archivo PDF de la cotización, igual al que envía el servidor. */
-export function quotationPdfFilename(quotation: {
-    id: number;
-    quotation_number: number | null;
-}): string {
-    return `COT. ${quotation.quotation_number ?? quotation.id}.pdf`;
-}
 
 /** Título corto para la hoja de compartir del sistema. */
 export function quotationPdfTitle(quotation: {
@@ -49,15 +46,30 @@ export function isPdfContentType(contentType: string | null): boolean {
 export function validatePdfResponse(
     response: PdfResponseMeta,
 ): PdfResponseValidation {
-    if (
-        response.redirected ||
-        response.status === 401 ||
-        response.status === 419
-    ) {
+    if (response.status === 401 || response.status === 419) {
         return {
             valid: false,
             reason: 'session_expired',
             requiresReload: true,
+        };
+    }
+
+    // `fetch` siguió una redirección: al inicio de sesión, a verificar el correo o a otra página. No se sabe cuál;
+    // recargar deja que el sistema lleve a donde corresponda.
+    if (response.redirected) {
+        return {
+            valid: false,
+            reason: 'redirected',
+            requiresReload: true,
+        };
+    }
+
+    // Sin permiso o la cotización ya no existe: reintentar no lo arregla.
+    if (response.status === 403 || response.status === 404) {
+        return {
+            valid: false,
+            reason: 'unavailable',
+            requiresReload: false,
         };
     }
 
@@ -111,11 +123,39 @@ export function resolvePdfShareAction(options: {
         return 'aborted';
     }
 
+    // Otra hoja de compartir sigue «abierta» para el navegador: en algunos Android nunca avisa que se cerró y cada
+    // intento siguiente falla así hasta recargar. Descargar en silencio en cada toque confunde: se avisa.
+    if (name === 'InvalidStateError') {
+        return 'share_stuck';
+    }
+
     if (name === 'NotAllowedError' && !options.fromReadyFile) {
         return 'needs_gesture';
     }
 
     return 'download';
+}
+
+/** Si el navegador puede compartir estos archivos con la hoja de compartir del sistema. Una sola comprobación. */
+export function canShareFiles(
+    files: File[],
+    nav: ShareNavigator | undefined = typeof navigator !== 'undefined'
+        ? navigator
+        : undefined,
+): boolean {
+    if (
+        !nav ||
+        typeof nav.share !== 'function' ||
+        typeof nav.canShare !== 'function'
+    ) {
+        return false;
+    }
+
+    try {
+        return nav.canShare({ files });
+    } catch {
+        return false;
+    }
 }
 
 /** Comprueba si el navegador soporta compartir un archivo PDF sin descargarlo antes. */
@@ -124,22 +164,12 @@ export function canBrowserSharePdf(
         ? navigator
         : undefined,
 ): boolean {
-    if (
-        !nav ||
-        typeof nav.share !== 'function' ||
-        typeof nav.canShare !== 'function' ||
-        typeof File === 'undefined'
-    ) {
+    if (typeof File === 'undefined') {
         return false;
     }
 
-    try {
-        const probe = new File([''], 'probe.pdf', {
-            type: 'application/pdf',
-        });
-
-        return nav.canShare({ files: [probe] });
-    } catch {
-        return false;
-    }
+    return canShareFiles(
+        [new File([''], 'probe.pdf', { type: 'application/pdf' })],
+        nav,
+    );
 }

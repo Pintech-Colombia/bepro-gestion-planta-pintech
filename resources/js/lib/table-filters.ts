@@ -6,6 +6,12 @@
 export type FilterValue = string | null | undefined;
 export type FilterValues = Record<string, FilterValue>;
 
+/**
+ * Lo que reciben las funciones que cuentan filtros activos. Los filtros llegan del servidor como texto
+ * (`$request->validated()`), pero un `prepareForValidation` puede convertir uno a número o booleano: también cuentan.
+ */
+type AnyFilterValues = Readonly<Record<string, unknown>>;
+
 export type FilterField =
     | {
           type: 'text';
@@ -28,14 +34,15 @@ export type FilterField =
       };
 
 function normalizeFilterValue(
-    value: FilterValue,
+    value: unknown,
     treatAllSentinel: boolean,
 ): string {
-    if (typeof value !== 'string') {
+    // `false` es «sin filtro» (p. ej. `include_inactive: false`), igual que vacío.
+    if (value === null || value === undefined || value === false) {
         return '';
     }
 
-    const trimmed = value.trim();
+    const trimmed = String(value).trim();
 
     if (trimmed === '' || (treatAllSentinel && trimmed === '__all__')) {
         return '';
@@ -47,8 +54,8 @@ function normalizeFilterValue(
 /** Indica si un campo de filtro tiene un valor distinto de su valor por defecto. */
 export function isFilterFieldActive(
     field: FilterField,
-    filters: FilterValues | null | undefined,
-    defaultFilters?: FilterValues,
+    filters: AnyFilterValues | null | undefined,
+    defaultFilters?: AnyFilterValues,
 ): boolean {
     if (field.type === 'date-range') {
         const defaultFrom = normalizeFilterValue(
@@ -84,8 +91,8 @@ export function isFilterFieldActive(
 /** Cuenta cuántos campos de filtro están activos (un rango de fechas cuenta como uno solo). */
 export function countActiveFilters(
     fields: readonly FilterField[],
-    filters: FilterValues | null | undefined,
-    defaultFilters?: FilterValues,
+    filters: AnyFilterValues | null | undefined,
+    defaultFilters?: AnyFilterValues,
 ): number {
     return fields.filter((field) =>
         isFilterFieldActive(field, filters, defaultFilters),
@@ -98,8 +105,8 @@ export function countActiveFilters(
  * `defaultFilters` (ignorando vacíos, solo espacios y el centinela `__all__`).
  */
 export function hasActiveFilters(
-    filters: FilterValues | null | undefined,
-    defaultFilters?: FilterValues,
+    filters: AnyFilterValues | null | undefined,
+    defaultFilters?: AnyFilterValues,
     fields?: readonly FilterField[],
 ): boolean {
     if (fields) {

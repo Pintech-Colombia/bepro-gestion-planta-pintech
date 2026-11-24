@@ -184,4 +184,13 @@ class Quotation extends Model
             'variant_ids' => $items->pluck('product_variant_id')->filter()->map(fn ($id): int => (int) $id)->unique()->values()->all(),
         ];
     }
+
+    /**
+     * Nombre del archivo PDF: «COT. 57.pdf». Una sola fuente para la descarga del servidor y el archivo que comparte el
+     * celular (llega a la pantalla como `pdf_filename`).
+     */
+    public function pdfFilename(): string
+    {
+        return 'COT. '.($this->quotation_number ?? $this->id).'.pdf';
+    }
 }

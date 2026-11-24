@@ -233,11 +233,26 @@
     [data-slot='plant-date-input'],
     [data-slot='alert-dialog-action'],
     [data-slot='alert-dialog-cancel'],
-    [data-touch-target] {
+    [data-touch-target]:not([data-touch-target='hit']) {
         min-height: 44px;
     }
 
     [data-touch-target='icon'] {
         min-width: 44px;
+    }
+
+    /*
+     * Botones pequeños posicionados encima de otra cosa (la «X» de cerrar de un diálogo, de un aviso, de limpiar una
+     * fecha): agrandarlos movería lo que tienen alrededor. Se agranda solo la zona que se toca, con un seudoelemento
+     * invisible de 44×44 como mínimo centrado en el botón. El botón tiene que estar posicionado (`absolute`/`relative`).
+     */
+    [data-touch-target='hit']::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: max(100%, 44px);
+        height: max(100%, 44px);
+        transform: translate(-50%, -50%);
     }
 }

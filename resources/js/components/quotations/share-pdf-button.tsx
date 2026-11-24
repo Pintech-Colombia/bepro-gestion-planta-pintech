@@ -7,26 +7,30 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import {
     canBrowserSharePdf,
-    quotationPdfFilename,
+    canShareFiles,
     quotationPdfTitle,
     resolvePdfShareAction,
     validatePdfResponse,
 } from '@/lib/pdf-share';
+import type { PdfResponseValidation } from '@/lib/pdf-share';
 import { exportPdf as quotationsExportPdf } from '@/routes/quotations';
 
 export type SharePdfErrorState = {
     message: string;
-    retry: () => void;
+    /** Sin `retry`, reintentar no lo arreglaría (sin permiso, la cotización ya no existe): solo se muestra el aviso. */
+    retry?: () => void;
 };
 
-type SharePdfButtonProps = {
+type PdfButtonProps = {
     quotationId: number;
     quotationNumber: number | null;
+    /** El nombre del archivo, tal como lo arma el servidor (`Quotation::pdfFilename()`). */
+    filename: string;
     variant?: ComponentProps<typeof Button>['variant'];
     className?: string;
     /**
-     * Si la pantalla pasa este callback, pinta `<RetryableError>` fuera de la barra de botones (p. ej. bajo
-     * `<PageHeader>`); si no, este componente lo muestra debajo del botón.
+     * Si la pantalla pasa este callback, pinta `<RetryableError>` donde le convenga (bajo `<PageHeader>` o en la barra
+     * fija); si no, este componente lo muestra debajo del botón.
      */
     onErrorChange?: (error: SharePdfErrorState | null) => void;
 };
@@ -59,6 +63,7 @@ export function useCanSharePdf(): boolean {
 function triggerPdfDownload(file: File): void {
     const objectUrl = URL.createObjectURL(file);
     const link = document.createElement('a');
+
     link.href = objectUrl;
     link.download = file.name;
     document.body.appendChild(link);
@@ -71,20 +76,160 @@ function triggerPdfDownload(file: File): void {
     }, 60_000);
 }
 
-function canShareFile(file: File): boolean {
-    if (
-        typeof navigator === 'undefined' ||
-        typeof navigator.share !== 'function' ||
-        typeof navigator.canShare !== 'function'
-    ) {
-        return false;
+type PdfFetchFailure =
+    Extract<PdfResponseValidation, { valid: false }>['reason'] | 'network';
+
+/** El mensaje de cada falla al pedir el PDF, en un solo lugar para «Compartir» y «Ver». */
+function pdfFailureMessage(reason: PdfFetchFailure): string {
+    switch (reason) {
+        case 'session_expired':
+            return 'Tu sesión venció. Recarga la página e inicia sesión otra vez.';
+        case 'redirected':
+        case 'invalid_content_type':
+            return 'No se pudo obtener el PDF. Recarga la página para volver a intentarlo.';
+        case 'unavailable':
+            return 'No tienes acceso a esta cotización o ya no existe.';
+        case 'http_error':
+            return 'No se pudo preparar el PDF de la cotización. Inténtalo de nuevo.';
+        case 'network':
+            return 'No se pudo descargar el PDF. Revisa tu conexión e inténtalo de nuevo.';
+    }
+}
+
+type PdfFetchResult =
+    | { ok: true; file: File }
+    | { ok: false; reason: PdfFetchFailure; requiresReload: boolean }
+    | { ok: false; reason: 'aborted' };
+
+/**
+ * Pide el PDF fresco al servidor (`?download=1`, sin caché) y comprueba que lo que llegó sea de verdad un PDF: con la
+ * sesión vencida, `fetch` sigue en silencio la redirección al login y devolvería su HTML.
+ */
+async function fetchQuotationPdf(
+    quotationId: number,
+    filename: string,
+    signal: AbortSignal,
+): Promise<PdfFetchResult> {
+    try {
+        const response = await fetch(
+            quotationsExportPdf(quotationId, { query: { download: 1 } }).url,
+            {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                signal,
+                headers: { Accept: 'application/pdf' },
+            },
+        );
+
+        const validation = validatePdfResponse({
+            ok: response.ok,
+            redirected: response.redirected,
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+        });
+
+        if (!validation.valid) {
+            return {
+                ok: false,
+                reason: validation.reason,
+                requiresReload: validation.requiresReload,
+            };
+        }
+
+        const blob = await response.blob();
+
+        return {
+            ok: true,
+            file: new File([blob], filename, { type: 'application/pdf' }),
+        };
+    } catch (error) {
+        if (
+            signal.aborted ||
+            (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+            return { ok: false, reason: 'aborted' };
+        }
+
+        return { ok: false, reason: 'network', requiresReload: false };
+    }
+}
+
+/** El aviso de una falla: recargar, reintentar o, si no tiene arreglo (sin acceso), solo el mensaje. */
+function failureState(
+    reason: PdfFetchFailure,
+    requiresReload: boolean,
+    retry: () => void,
+): SharePdfErrorState {
+    return {
+        message: pdfFailureMessage(reason),
+        retry:
+            reason === 'unavailable'
+                ? undefined
+                : requiresReload
+                  ? () => window.location.reload()
+                  : retry,
+    };
+}
+
+function useReportError(
+    onErrorChange: PdfButtonProps['onErrorChange'],
+): [SharePdfErrorState | null, (error: SharePdfErrorState | null) => void] {
+    const [localError, setLocalError] = useState<SharePdfErrorState | null>(
+        null,
+    );
+
+    const report = (error: SharePdfErrorState | null) => {
+        if (onErrorChange) {
+            onErrorChange(error);
+        } else {
+            setLocalError(error);
+        }
+    };
+
+    return [localError, report];
+}
+
+function useAbortOnUnmount() {
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        return () => {
+            abortControllerRef.current?.abort();
+        };
+    }, []);
+
+    const start = () => {
+        abortControllerRef.current?.abort();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        return controller;
+    };
+
+    const isCurrent = (controller: AbortController) =>
+        abortControllerRef.current === controller;
+
+    return { start, isCurrent };
+}
+
+function withLocalError(
+    button: React.ReactNode,
+    localError: SharePdfErrorState | null,
+    hasCallback: boolean,
+) {
+    if (hasCallback || !localError) {
+        return button;
     }
 
-    try {
-        return navigator.canShare({ files: [file] });
-    } catch {
-        return false;
-    }
+    return (
+        <div className="space-y-3">
+            {button}
+            <RetryableError
+                message={localError.message}
+                onRetry={localError.retry}
+            />
+        </div>
+    );
 }
 
 /**
@@ -96,58 +241,49 @@ function canShareFile(file: File): boolean {
 export function SharePdfButton({
     quotationId,
     quotationNumber,
+    filename,
     variant = 'default',
     className,
     onErrorChange,
-}: SharePdfButtonProps) {
+}: PdfButtonProps) {
     const [isPreparing, setIsPreparing] = useState(false);
     const [readyFile, setReadyFile] = useState<File | null>(null);
-    const [localError, setLocalError] = useState<SharePdfErrorState | null>(
-        null,
-    );
-    const abortControllerRef = useRef<AbortController | null>(null);
-
-    useEffect(() => {
-        return () => {
-            abortControllerRef.current?.abort();
-        };
-    }, []);
-
-    const reportError = (error: SharePdfErrorState | null) => {
-        if (onErrorChange) {
-            onErrorChange(error);
-        } else {
-            setLocalError(error);
-        }
-    };
+    const [localError, reportError] = useReportError(onErrorChange);
+    const { start, isCurrent } = useAbortOnUnmount();
 
     const shareTitle = quotationPdfTitle({
         id: quotationId,
         quotation_number: quotationNumber,
     });
-    const pdfFilename = quotationPdfFilename({
-        id: quotationId,
-        quotation_number: quotationNumber,
-    });
 
-    const sharePreparedFile = async (file: File): Promise<void> => {
-        reportError(null);
-
+    const share = async (file: File, fromReadyFile: boolean): Promise<void> => {
         try {
-            // Se llama sin `await` previo para conservar el gesto táctil en Safari de iOS.
-            await navigator.share({
-                files: [file],
-                title: shareTitle,
-            });
+            await navigator.share({ files: [file], title: shareTitle });
             setReadyFile(null);
         } catch (error) {
             const outcome = resolvePdfShareAction({
                 canShare: true,
                 error,
-                fromReadyFile: true,
+                fromReadyFile,
             });
 
+            if (outcome === 'needs_gesture') {
+                setReadyFile(file);
+
+                return;
+            }
+
             setReadyFile(null);
+
+            if (outcome === 'share_stuck') {
+                reportError({
+                    message:
+                        'El teléfono no volvió a abrir el menú de compartir. Recarga la página e intenta de nuevo.',
+                    retry: () => window.location.reload(),
+                });
+
+                return;
+            }
 
             if (outcome === 'download') {
                 triggerPdfDownload(file);
@@ -158,107 +294,50 @@ export function SharePdfButton({
     const fetchAndSharePdf = async (): Promise<void> => {
         reportError(null);
         setIsPreparing(true);
+        const controller = start();
 
-        abortControllerRef.current?.abort();
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
+        const result = await fetchQuotationPdf(
+            quotationId,
+            filename,
+            controller.signal,
+        );
 
-        try {
-            const response = await fetch(
-                quotationsExportPdf(quotationId, {
-                    query: { download: 1 },
-                }).url,
-                {
-                    credentials: 'same-origin',
-                    signal: controller.signal,
-                },
-            );
-
-            const validation = validatePdfResponse({
-                ok: response.ok,
-                redirected: response.redirected,
-                status: response.status,
-                contentType: response.headers.get('content-type'),
-            });
-
-            if (!validation.valid) {
-                if (validation.requiresReload) {
-                    reportError({
-                        message:
-                            'Tu sesión venció o no se pudo validar el archivo PDF. Recarga la página para volver a intentarlo.',
-                        retry: () => window.location.reload(),
-                    });
-                } else {
-                    reportError({
-                        message:
-                            'No se pudo preparar el PDF de la cotización. Inténtalo de nuevo.',
-                        retry: () => {
-                            void fetchAndSharePdf();
-                        },
-                    });
-                }
-
-                return;
-            }
-
-            const blob = await response.blob();
-            const file = new File([blob], pdfFilename, {
-                type: 'application/pdf',
-            });
-
-            const canShare = canShareFile(file);
-            const initialAction = resolvePdfShareAction({ canShare });
-
-            if (initialAction === 'download') {
-                triggerPdfDownload(file);
-
-                return;
-            }
-
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: shareTitle,
-                });
-            } catch (error) {
-                const outcome = resolvePdfShareAction({
-                    canShare: true,
-                    error,
-                    fromReadyFile: false,
-                });
-
-                if (outcome === 'needs_gesture') {
-                    setReadyFile(file);
-                } else if (outcome === 'download') {
-                    triggerPdfDownload(file);
-                }
-            }
-        } catch (error) {
-            if (
-                controller.signal.aborted ||
-                (error instanceof DOMException && error.name === 'AbortError')
-            ) {
-                return;
-            }
-
-            reportError({
-                message:
-                    'No se pudo descargar el PDF. Revisa tu conexión e inténtalo de nuevo.',
-                retry: () => {
-                    void fetchAndSharePdf();
-                },
-            });
-        } finally {
-            if (abortControllerRef.current === controller) {
-                abortControllerRef.current = null;
-                setIsPreparing(false);
-            }
+        // El «Preparando…» termina en cuanto el archivo está listo (o falló), antes de abrir la hoja de compartir: en
+        // algunos Android esa hoja nunca avisa que se cerró y el botón quedaría bloqueado.
+        if (isCurrent(controller)) {
+            setIsPreparing(false);
         }
+
+        if (!result.ok) {
+            if (result.reason !== 'aborted') {
+                reportError(
+                    failureState(result.reason, result.requiresReload, () => {
+                        void fetchAndSharePdf();
+                    }),
+                );
+            }
+
+            return;
+        }
+
+        const initialAction = resolvePdfShareAction({
+            canShare: canShareFiles([result.file]),
+        });
+
+        if (initialAction === 'download') {
+            triggerPdfDownload(result.file);
+
+            return;
+        }
+
+        await share(result.file, false);
     };
 
     const handleClick = () => {
         if (readyFile) {
-            void sharePreparedFile(readyFile);
+            reportError(null);
+            // Sin `await` previo: conserva el gesto táctil en Safari de iOS.
+            void share(readyFile, true);
 
             return;
         }
@@ -272,7 +351,7 @@ export function SharePdfButton({
           ? 'Compartir ahora'
           : 'Compartir PDF';
 
-    const button = (
+    return withLocalError(
         <Button
             type="button"
             variant={variant}
@@ -282,20 +361,91 @@ export function SharePdfButton({
         >
             {isPreparing ? <Spinner /> : <FileText className="size-4" />}
             {label}
-        </Button>
+        </Button>,
+        localError,
+        Boolean(onErrorChange),
     );
+}
 
-    if (onErrorChange || !localError) {
-        return button;
-    }
-
+/** Si el navegador muestra PDF por sí mismo (Safari de iOS sí; Chrome de Android no: los descarga siempre). */
+function browserShowsPdf(): boolean {
     return (
-        <div className="space-y-3">
-            {button}
-            <RetryableError
-                message={localError.message}
-                onRetry={localError.retry}
-            />
-        </div>
+        typeof navigator !== 'undefined' && navigator.pdfViewerEnabled === true
+    );
+}
+
+/**
+ * «Ver PDF» en el celular: pide el PDF fresco (sin caché). Si el navegador sabe mostrar PDF (iPhone), lo abre en una
+ * pestaña nueva como documento temporal (`blob:`): se ve sin descargarlo y esa pestaña no tiene un enlace que sirva a
+ * otra persona. La pestaña se abre en el mismo toque (si no, Safari la bloquea) y se llena cuando llega el PDF. Si no
+ * sabe mostrarlo (Chrome de Android, que descarga todo PDF) o no deja abrir la pestaña, lo descarga con su nombre
+ * («COT. N.pdf») y el teléfono lo abre en su visor.
+ */
+export function ViewPdfButton({
+    quotationId,
+    filename,
+    variant = 'outline',
+    className,
+    onErrorChange,
+}: Omit<PdfButtonProps, 'quotationNumber'>) {
+    const [isPreparing, setIsPreparing] = useState(false);
+    const [localError, reportError] = useReportError(onErrorChange);
+    const { start, isCurrent } = useAbortOnUnmount();
+
+    const openPdf = async (): Promise<void> => {
+        reportError(null);
+        setIsPreparing(true);
+        const controller = start();
+        // En el mismo toque: abrirla después del `await` la dejaría bloqueada como ventana emergente.
+        const tab = browserShowsPdf() ? window.open('', '_blank') : null;
+
+        const result = await fetchQuotationPdf(
+            quotationId,
+            filename,
+            controller.signal,
+        );
+
+        if (isCurrent(controller)) {
+            setIsPreparing(false);
+        }
+
+        if (!result.ok) {
+            tab?.close();
+
+            if (result.reason !== 'aborted') {
+                reportError(
+                    failureState(result.reason, result.requiresReload, () => {
+                        void openPdf();
+                    }),
+                );
+            }
+
+            return;
+        }
+
+        if (!tab) {
+            triggerPdfDownload(result.file);
+
+            return;
+        }
+
+        // No se libera con un temporizador: si el teléfono recarga esa pestaña más tarde, quedaría en blanco. El navegador
+        // lo libera al cerrar o recargar la página que lo creó.
+        tab.location.href = URL.createObjectURL(result.file);
+    };
+
+    return withLocalError(
+        <Button
+            type="button"
+            variant={variant}
+            className={className}
+            disabled={isPreparing}
+            onClick={() => void openPdf()}
+        >
+            {isPreparing ? <Spinner /> : <FileText className="size-4" />}
+            {isPreparing ? 'Abriendo PDF…' : 'Ver PDF'}
+        </Button>,
+        localError,
+        Boolean(onErrorChange),
     );
 }
