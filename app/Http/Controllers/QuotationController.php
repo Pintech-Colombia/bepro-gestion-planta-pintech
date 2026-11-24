@@ -131,7 +131,7 @@ class QuotationController extends Controller
                 'viewSalesOrder' => $salesOrder !== null && ($request->user()?->can('view', $salesOrder) ?? false),
             ],
             'salesOrderId' => $quotation->convert_to_order_id,
-            'statusOptions' => EnumOptions::for($quotation->status->nextTransitions()),
+            'statusTransitions' => EnumOptions::for($quotation->status->nextTransitions()),
             'priorityOptions' => EnumOptions::for(SalesOrderPriority::cases()),
             'returnTo' => $this->resolveReturnTo($request),
         ]);

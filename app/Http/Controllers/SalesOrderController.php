@@ -177,10 +177,8 @@ class SalesOrderController extends Controller
 
         return Inertia::render('SalesOrders/Show', [
             'order' => $this->buildOrderData($salesOrder, $canViewQuotation),
-            'statusTransitions' => array_map(
-                fn (SalesOrderStatus $status) => ['value' => $status->value, 'label' => $status->label()],
-                $statusTransitions
-            ),
+            // Con `tone`: la pantalla confirma en rojo la que anula el pedido (Cancelado).
+            'statusTransitions' => EnumOptions::for($statusTransitions),
             'priorityOptions' => EnumOptions::for(SalesOrderPriority::cases()),
             'returnTo' => $this->resolveReturnTo($request),
             'can' => [

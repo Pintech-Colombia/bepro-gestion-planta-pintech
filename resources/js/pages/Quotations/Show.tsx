@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
-import { FormError } from '@/components/form-field';
+import { FormActions } from '@/components/form-actions';
+import { FormError, FormField } from '@/components/form-field';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { MobileActionBar } from '@/components/mobile-action-bar';
@@ -15,30 +16,26 @@ import {
     useCanSharePdf,
 } from '@/components/quotations/share-pdf-button';
 import type { SharePdfErrorState } from '@/components/quotations/share-pdf-button';
+import { RecordLink } from '@/components/record-link';
 import { RetryableError } from '@/components/retryable-error';
+import type { RowAction } from '@/components/row-actions';
 import { StatusBadge } from '@/components/status-badge';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { StatusTransitions } from '@/components/status-transitions';
+import type {
+    StatusTransition,
+    TransitionCopy,
+} from '@/components/status-transitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
+    DialogBody,
     DialogContent,
     DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -51,6 +48,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
 import { quotationPdfFilename } from '@/lib/pdf-share';
 import { quotationName } from '@/lib/quotation-name';
+import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import { cn } from '@/lib/utils';
 import {
     convertToOrder as quotationsConvertToOrder,
@@ -113,11 +111,6 @@ type QuotationDetail = {
     creator: { name: string; email: string } | null;
 };
 
-type StatusOption = {
-    value: string;
-    label: string;
-};
-
 type Props = {
     quotation: QuotationDetail;
     can: {
@@ -128,22 +121,68 @@ type Props = {
         viewSalesOrder: boolean;
     };
     salesOrderId: number | null;
-    statusOptions: StatusOption[];
+    /** Estados a los que se puede pasar desde el actual (`QuotationStatus::nextTransitions()`). */
+    statusTransitions: StatusTransition[];
     priorityOptions: { value: string; label: string }[];
     returnTo?: string | null;
 };
+
+/** Textos de cada cambio de estado de la cotización. El de «Enviado» depende de desde dónde se llega. */
+function quotationTransitionCopy(currentStatus: string) {
+    return (value: string): TransitionCopy | undefined => {
+        switch (value) {
+            case 'sent':
+                return currentStatus === 'accepted'
+                    ? {
+                          label: 'Volver a enviada',
+                          title: '¿Volver la cotización a enviada?',
+                          description:
+                              'Úsalo si el cliente se retractó antes de convertirla en pedido.',
+                      }
+                    : {
+                          label: 'Marcar como enviada',
+                          title: '¿Marcar la cotización como enviada?',
+                          description:
+                              'Indica que ya se la mandaste al cliente. Desde ahí deja de poder editarse.',
+                      };
+            case 'accepted':
+                return {
+                    label: 'Aceptada por el cliente',
+                    title: '¿El cliente aceptó la cotización?',
+                    description:
+                        'Queda aceptada y lista para convertirla en pedido.',
+                    confirmLabel: 'Marcar como aceptada',
+                };
+            case 'rejected':
+                return {
+                    label: 'Rechazada',
+                    title: '¿El cliente rechazó la cotización?',
+                    description:
+                        'Queda rechazada. Si hace falta, se puede volver a borrador para corregirla y enviarla otra vez.',
+                    confirmLabel: 'Marcar como rechazada',
+                };
+            case 'draft':
+                return {
+                    label: 'Volver a borrador',
+                    title: '¿Volver la cotización a borrador?',
+                    description:
+                        'Se puede editar otra vez. Después hay que marcarla de nuevo como enviada.',
+                };
+            default:
+                return undefined;
+        }
+    };
+}
 
 export default function QuotationsShow({
     quotation,
     can,
     salesOrderId,
-    statusOptions,
+    statusTransitions,
     priorityOptions,
     returnTo,
 }: Props) {
-    const { data, setData, patch, processing, errors } = useForm({
-        status: quotation.status,
-    });
+    const { errors } = usePage().props;
 
     const [convertDialogOpen, setConvertDialogOpen] = useState(false);
     // El diálogo se abre desde dos botones (encabezado en escritorio, barra fija en el celular) sin `DialogTrigger`:
@@ -177,6 +216,16 @@ export default function QuotationsShow({
     // bajo el encabezado.
     const pdfShareErrorInBar = isMobile && mobilePrimaryAction === 'share';
 
+    const editUrl = returnTo
+        ? withReturnTo(quotationsEdit(quotation.id).url, returnTo)
+        : quotationsEdit(quotation.id).url;
+    const showTransitions = can.updateStatus && statusTransitions.length > 0;
+    // En el celular, «Editar» va en el menú «⋯» de los cambios de estado cuando lo hay; si no, queda como botón.
+    const editInMobileMenu = can.update && showTransitions;
+    const mobileExtraActions: RowAction[] = editInMobileMenu
+        ? [{ label: 'Editar', href: editUrl }]
+        : [];
+
     const handlePdfShareError = (state: SharePdfErrorState | null) => {
         setPdfShareError(
             state
@@ -204,18 +253,18 @@ export default function QuotationsShow({
         setConvertDialogOpen(open);
     };
 
-    const handleStatusUpdate = () => {
-        patch(quotationsUpdateStatus(quotation.id).url, {
-            preserveScroll: true,
-        });
-    };
-
-    const handleConvertToOrder = () => {
+    const handleConvertToOrder = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
         convertForm.post(quotationsConvertToOrder(quotation.id).url, {
             preserveScroll: true,
             onSuccess: () => setConvertDialogOpen(false),
         });
     };
+
+    const variantDetails = (item: QuotationItem) =>
+        [item.product_variant.presentation_label, item.type_label, item.color]
+            .filter((part): part is string => Boolean(part))
+            .join(' · ');
 
     return (
         <>
@@ -237,15 +286,6 @@ export default function QuotationsShow({
                     }
                     actions={
                         <>
-                            {salesOrderId && can.viewSalesOrder && (
-                                <Button variant="outline" asChild>
-                                    <Link
-                                        href={salesOrdersShow(salesOrderId).url}
-                                    >
-                                        Pedido #{salesOrderId}
-                                    </Link>
-                                </Button>
-                            )}
                             {can.exportPdf && (
                                 <>
                                     {((isMobile &&
@@ -305,24 +345,28 @@ export default function QuotationsShow({
                                             ? 'outline'
                                             : 'default'
                                     }
+                                    className={
+                                        editInMobileMenu
+                                            ? 'hidden md:inline-flex'
+                                            : undefined
+                                    }
                                     asChild
                                 >
-                                    <Link
-                                        href={
-                                            returnTo
-                                                ? withReturnTo(
-                                                      quotationsEdit(
-                                                          quotation.id,
-                                                      ).url,
-                                                      returnTo,
-                                                  )
-                                                : quotationsEdit(quotation.id)
-                                                      .url
-                                        }
-                                    >
-                                        Editar
-                                    </Link>
+                                    <Link href={editUrl}>Editar</Link>
                                 </Button>
+                            )}
+                            {showTransitions && (
+                                <StatusTransitions
+                                    transitions={statusTransitions}
+                                    copy={quotationTransitionCopy(
+                                        quotation.status,
+                                    )}
+                                    url={
+                                        quotationsUpdateStatus(quotation.id).url
+                                    }
+                                    itemLabel={`la cotización ${quotation.quotation_number ?? quotation.id}`}
+                                    mobileExtraActions={mobileExtraActions}
+                                />
                             )}
                             {can.convertToOrder && (
                                 <Button
@@ -352,136 +396,137 @@ export default function QuotationsShow({
                                 convertOpenerRef.current?.focus();
                             }}
                         >
-                            <DialogHeader>
-                                <DialogTitle>
-                                    Convertir cotización en pedido
-                                </DialogTitle>
-                                <DialogDescription>
-                                    Se creará un pedido con los productos de
-                                    esta cotización.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="priority">Prioridad</Label>
-                                    <Select
-                                        value={convertForm.data.priority}
-                                        onValueChange={(value) =>
-                                            convertForm.setData(
-                                                'priority',
-                                                value,
-                                            )
+                            <form
+                                noValidate
+                                onSubmit={handleConvertToOrder}
+                                className="flex min-h-0 flex-col gap-4"
+                            >
+                                <DialogHeader>
+                                    <DialogTitle>
+                                        Convertir cotización en pedido
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        Se creará un pedido con los productos de
+                                        esta cotización.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogBody className="space-y-4">
+                                    <FormField
+                                        id="priority"
+                                        label="Prioridad"
+                                        required
+                                        error={convertForm.errors.priority}
+                                    >
+                                        {(control) => (
+                                            <Select
+                                                value={
+                                                    convertForm.data.priority
+                                                }
+                                                onValueChange={(value) =>
+                                                    convertForm.setData(
+                                                        'priority',
+                                                        value,
+                                                    )
+                                                }
+                                            >
+                                                <SelectTrigger {...control}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {priorityOptions.map(
+                                                        (option) => (
+                                                            <SelectItem
+                                                                key={
+                                                                    option.value
+                                                                }
+                                                                value={
+                                                                    option.value
+                                                                }
+                                                            >
+                                                                {option.label}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </FormField>
+                                    <FormField
+                                        id="required_date"
+                                        label="Fecha requerida"
+                                        required
+                                        error={convertForm.errors.required_date}
+                                    >
+                                        <PlantDateInput
+                                            notPast
+                                            value={
+                                                convertForm.data.required_date
+                                            }
+                                            onChange={(value) =>
+                                                convertForm.setData(
+                                                    'required_date',
+                                                    value,
+                                                )
+                                            }
+                                        />
+                                    </FormField>
+                                    <FormField
+                                        id="shipping_address"
+                                        label="Dirección de envío"
+                                        required
+                                        error={
+                                            convertForm.errors.shipping_address
+                                        }
+                                        help={
+                                            quotation.client.shipping_address
+                                                ? 'Dirección registrada del cliente. Cámbiala si este pedido va a otro lugar.'
+                                                : 'Este cliente no tiene dirección registrada: escribe a dónde va este pedido.'
                                         }
                                     >
-                                        <SelectTrigger id="priority">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {priorityOptions.map((option) => (
-                                                <SelectItem
-                                                    key={option.value}
-                                                    value={option.value}
-                                                >
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {convertForm.errors.priority && (
-                                        <p className="text-sm text-destructive">
-                                            {convertForm.errors.priority}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="required_date">
-                                        Fecha requerida
-                                    </Label>
-                                    <PlantDateInput
-                                        id="required_date"
-                                        notPast
-                                        value={convertForm.data.required_date}
-                                        onChange={(value) =>
-                                            convertForm.setData(
-                                                'required_date',
-                                                value,
-                                            )
-                                        }
-                                    />
-                                    {convertForm.errors.required_date && (
-                                        <p className="text-sm text-destructive">
-                                            {convertForm.errors.required_date}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="shipping_address">
-                                        Dirección de envío *
-                                    </Label>
-                                    <Textarea
-                                        id="shipping_address"
-                                        rows={2}
-                                        maxLength={255}
-                                        value={
-                                            convertForm.data.shipping_address
-                                        }
-                                        onChange={(e) =>
-                                            convertForm.setData(
-                                                'shipping_address',
-                                                e.target.value,
-                                            )
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        {quotation.client.shipping_address
-                                            ? 'Dirección registrada del cliente. Cámbiala si este pedido va a otro lugar.'
-                                            : 'Este cliente no tiene dirección registrada: escribe a dónde va este pedido.'}
-                                    </p>
-                                    {convertForm.errors.shipping_address && (
-                                        <p className="text-sm text-destructive">
-                                            {
-                                                convertForm.errors
+                                        <Textarea
+                                            rows={2}
+                                            maxLength={
+                                                SHIPPING_ADDRESS_MAX_LENGTH
+                                            }
+                                            value={
+                                                convertForm.data
                                                     .shipping_address
                                             }
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="notes">Notas</Label>
-                                    <Textarea
+                                            onChange={(e) =>
+                                                convertForm.setData(
+                                                    'shipping_address',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    </FormField>
+                                    <FormField
                                         id="notes"
-                                        rows={3}
-                                        value={convertForm.data.notes}
-                                        onChange={(e) =>
-                                            convertForm.setData(
-                                                'notes',
-                                                e.target.value,
-                                            )
+                                        label="Notas"
+                                        error={convertForm.errors.notes}
+                                    >
+                                        <Textarea
+                                            rows={3}
+                                            value={convertForm.data.notes}
+                                            onChange={(e) =>
+                                                convertForm.setData(
+                                                    'notes',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    </FormField>
+                                </DialogBody>
+                                <DialogFooter>
+                                    <FormActions
+                                        submitLabel="Convertir en pedido"
+                                        processing={convertForm.processing}
+                                        onCancel={() =>
+                                            handleConvertDialogOpenChange(false)
                                         }
                                     />
-                                    {convertForm.errors.notes && (
-                                        <p className="text-sm text-destructive">
-                                            {convertForm.errors.notes}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setConvertDialogOpen(false)}
-                                    disabled={convertForm.processing}
-                                >
-                                    Cancelar
-                                </Button>
-                                <Button
-                                    onClick={handleConvertToOrder}
-                                    disabled={convertForm.processing}
-                                >
-                                    Confirmar conversión
-                                </Button>
-                            </DialogFooter>
+                                </DialogFooter>
+                            </form>
                         </DialogContent>
                     </Dialog>
                 )}
@@ -493,190 +538,9 @@ export default function QuotationsShow({
                     />
                 )}
 
-                {can.updateStatus && statusOptions.length > 0 && (
-                    <Card>
-                        <CardContent className="space-y-2">
-                            <div className="flex flex-wrap items-end gap-3">
-                                <div className="space-y-1">
-                                    <label className="text-sm font-medium">
-                                        Cambiar estado
-                                    </label>
-                                    <select
-                                        value={data.status}
-                                        onChange={(e) =>
-                                            setData('status', e.target.value)
-                                        }
-                                        className="h-10 rounded-md border border-input bg-background px-3 text-base md:text-sm"
-                                    >
-                                        <option value={quotation.status}>
-                                            {quotation.status_label}
-                                        </option>
-                                        {statusOptions.map((option) => (
-                                            <option
-                                                key={option.value}
-                                                value={option.value}
-                                            >
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            disabled={
-                                                processing ||
-                                                data.status === quotation.status
-                                            }
-                                        >
-                                            Actualizar estado
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>
-                                                ¿Cambiar estado de la
-                                                cotización?
-                                            </AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                El estado pasará de{' '}
-                                                <span className="font-semibold">
-                                                    {quotation.status_label}
-                                                </span>{' '}
-                                                a{' '}
-                                                <span className="font-semibold">
-                                                    {
-                                                        statusOptions.find(
-                                                            (o) =>
-                                                                o.value ===
-                                                                data.status,
-                                                        )?.label
-                                                    }
-                                                </span>
-                                                .
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>
-                                                Cancelar
-                                            </AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={handleStatusUpdate}
-                                            >
-                                                Confirmar cambio
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </div>
-                            <FormError id="status" message={errors.status} />
-                        </CardContent>
-                    </Card>
-                )}
+                <FormError id="status" message={errors.status} />
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Cliente</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <DetailList columns={1}>
-                                <DetailItem
-                                    label="Razón social"
-                                    value={quotation.client.business_name}
-                                />
-                                <DetailItem
-                                    label="NIT"
-                                    value={quotation.client.nit}
-                                />
-                                <DetailItem
-                                    label="Contacto"
-                                    value={quotation.client.contact_name}
-                                />
-                                <DetailItem
-                                    label="Teléfono"
-                                    value={quotation.client.phone}
-                                />
-                            </DetailList>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Condiciones</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <DetailList>
-                                <DetailItem
-                                    label="Fecha de cotización"
-                                    value={
-                                        <FormattedDate
-                                            value={quotation.quotation_date}
-                                            format="short"
-                                        />
-                                    }
-                                />
-                                <DetailItem
-                                    label="Validez"
-                                    value={
-                                        quotation.validity_days_label ??
-                                        (quotation.validity_days
-                                            ? `${quotation.validity_days} días`
-                                            : null)
-                                    }
-                                />
-                                <DetailItem
-                                    label="Forma de pago"
-                                    value={
-                                        quotation.payment_method_label ??
-                                        quotation.payment_method
-                                    }
-                                />
-                                <DetailItem
-                                    label="Entrega"
-                                    value={quotation.delivery_time}
-                                />
-                                <DetailItem
-                                    label="Tecnología"
-                                    value={quotation.technology}
-                                />
-                                <DetailItem
-                                    label="Línea"
-                                    value={quotation.line}
-                                />
-                                <DetailItem
-                                    label="Área"
-                                    value={quotation.area}
-                                />
-                                <DetailItem
-                                    label="Espesor (mils)"
-                                    value={quotation.thickness_mils}
-                                />
-                                <DetailItem
-                                    label="Método de aplicación"
-                                    value={quotation.application_method}
-                                />
-                                <DetailItem
-                                    label="Creada"
-                                    value={
-                                        <>
-                                            <FormattedDate
-                                                value={quotation.created_at}
-                                                format="datetime"
-                                            />
-                                            {quotation.creator
-                                                ? ` por ${quotation.creator.name}`
-                                                : ''}
-                                        </>
-                                    }
-                                />
-                            </DetailList>
-                        </CardContent>
-                    </Card>
-                </div>
-
+                {/* Lo primero es lo que se cotiza y cuánto suma; los datos del cliente y las condiciones van después. */}
                 <DetailTable
                     rows={quotation.items}
                     rowKey={(item) => item.id}
@@ -689,28 +553,10 @@ export default function QuotationsShow({
                                 <>
                                     <div>{item.product.name}</div>
                                     <div className="text-xs font-normal text-muted-foreground">
-                                        {
-                                            item.product_variant
-                                                .presentation_label
-                                        }
+                                        {variantDetails(item)}
                                     </div>
                                 </>
                             ),
-                        },
-                        {
-                            key: 'type',
-                            header: 'Tipo',
-                            cell: (item) => item.type_label,
-                        },
-                        {
-                            key: 'color',
-                            header: 'Color',
-                            cell: (item) => item.color,
-                        },
-                        {
-                            key: 'description',
-                            header: 'Descripción',
-                            cell: (item) => item.description,
                         },
                         {
                             key: 'quantity',
@@ -719,28 +565,6 @@ export default function QuotationsShow({
                                 <FormattedNumber
                                     value={item.quantity}
                                     kind="units"
-                                />
-                            ),
-                            align: 'right',
-                        },
-                        {
-                            key: 'list_unit_price',
-                            header: 'Precio lista',
-                            cell: (item) => (
-                                <FormattedNumber
-                                    value={item.list_unit_price}
-                                    kind="clientPrice"
-                                />
-                            ),
-                            align: 'right',
-                        },
-                        {
-                            key: 'price_adjustment_pct',
-                            header: 'Ajuste %',
-                            cell: (item) => (
-                                <FormattedNumber
-                                    value={item.price_adjustment_pct}
-                                    kind="percent"
                                 />
                             ),
                             align: 'right',
@@ -766,6 +590,33 @@ export default function QuotationsShow({
                                 />
                             ),
                             align: 'right',
+                        },
+                        {
+                            key: 'price_adjustment_pct',
+                            header: 'Ajuste %',
+                            cell: (item) => (
+                                <FormattedNumber
+                                    value={item.price_adjustment_pct}
+                                    kind="percent"
+                                />
+                            ),
+                            align: 'right',
+                        },
+                        {
+                            key: 'list_unit_price',
+                            header: 'Precio lista',
+                            cell: (item) => (
+                                <FormattedNumber
+                                    value={item.list_unit_price}
+                                    kind="clientPrice"
+                                />
+                            ),
+                            align: 'right',
+                        },
+                        {
+                            key: 'description',
+                            header: 'Descripción',
+                            cell: (item) => item.description,
                         },
                     ]}
                     empty="Esta cotización no tiene productos."
@@ -805,6 +656,97 @@ export default function QuotationsShow({
                     </CardContent>
                 </Card>
 
+                <div className="grid gap-6 lg:grid-cols-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Cliente</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <DetailList columns={1}>
+                                <DetailItem
+                                    label="Razón social"
+                                    value={quotation.client.business_name}
+                                />
+                                <DetailItem
+                                    label="NIT"
+                                    value={quotation.client.nit}
+                                />
+                                <DetailItem
+                                    label="Contacto"
+                                    value={quotation.client.contact_name}
+                                />
+                                <DetailItem
+                                    label="Teléfono"
+                                    value={quotation.client.phone}
+                                />
+                            </DetailList>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Condiciones comerciales</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <DetailList columns={1}>
+                                <DetailItem
+                                    label="Fecha de cotización"
+                                    value={
+                                        <FormattedDate
+                                            value={quotation.quotation_date}
+                                            format="short"
+                                        />
+                                    }
+                                />
+                                <DetailItem
+                                    label="Validez"
+                                    value={
+                                        quotation.validity_days_label ??
+                                        (quotation.validity_days
+                                            ? `${quotation.validity_days} días`
+                                            : null)
+                                    }
+                                />
+                                <DetailItem
+                                    label="Forma de pago"
+                                    value={
+                                        quotation.payment_method_label ??
+                                        quotation.payment_method
+                                    }
+                                />
+                                <DetailItem
+                                    label="Tiempo de entrega"
+                                    value={quotation.delivery_time}
+                                />
+                            </DetailList>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Datos técnicos</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DetailList columns={3}>
+                            <DetailItem
+                                label="Tecnología"
+                                value={quotation.technology}
+                            />
+                            <DetailItem label="Línea" value={quotation.line} />
+                            <DetailItem label="Área" value={quotation.area} />
+                            <DetailItem
+                                label="Espesor (mils)"
+                                value={quotation.thickness_mils}
+                            />
+                            <DetailItem
+                                label="Método de aplicación"
+                                value={quotation.application_method}
+                            />
+                        </DetailList>
+                    </CardContent>
+                </Card>
+
                 {quotation.notes && (
                     <Card>
                         <CardHeader>
@@ -817,6 +759,44 @@ export default function QuotationsShow({
                         </CardContent>
                     </Card>
                 )}
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Trazabilidad</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DetailList columns={3}>
+                            <DetailItem
+                                label="Creada por"
+                                value={quotation.creator?.name}
+                            />
+                            <DetailItem
+                                label="Fecha de creación"
+                                value={
+                                    <FormattedDate
+                                        value={quotation.created_at}
+                                        format="datetime"
+                                    />
+                                }
+                            />
+                            {salesOrderId && can.viewSalesOrder && (
+                                <DetailItem
+                                    label="Pedido generado"
+                                    value={
+                                        <RecordLink
+                                            href={
+                                                salesOrdersShow(salesOrderId)
+                                                    .url
+                                            }
+                                        >
+                                            Pedido #{salesOrderId}
+                                        </RecordLink>
+                                    }
+                                />
+                            )}
+                        </DetailList>
+                    </CardContent>
+                </Card>
             </div>
 
             {mobilePrimaryAction && (

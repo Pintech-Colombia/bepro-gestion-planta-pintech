@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { clearListErrors } from '@/lib/form-errors';
 import { UNITS_MAX_DIGITS } from '@/lib/number-types';
 import { newRowKey } from '@/lib/row-key';
+import { SHIPPING_ADDRESS_MAX_LENGTH } from '@/lib/shipping-address';
 import {
     create as salesOrdersCreate,
     index as salesOrdersIndex,
@@ -346,7 +347,7 @@ export default function SalesOrdersCreate({
                                 }
                             >
                                 <Textarea
-                                    maxLength={255}
+                                    maxLength={SHIPPING_ADDRESS_MAX_LENGTH}
                                     value={data.shipping_address}
                                     onChange={(e) =>
                                         setData(
