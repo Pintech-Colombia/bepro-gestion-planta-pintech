@@ -51,6 +51,29 @@ export const FALLBACK_SELECTORS = [FIELD_MESSAGE_SELECTOR, '[role="alert"]'];
 const OPEN_DIALOG_SELECTOR =
     '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
+/** Escondido (un grupo plegado, el otro tamaño de una vista): ni enfocarlo ni llevarlo a la vista sirve. */
+function isHidden(element: HTMLElement): boolean {
+    return (
+        typeof element.getClientRects === 'function' &&
+        element.getClientRects().length === 0
+    );
+}
+
+/** El primer elemento visible que coincide con el selector (con un solo candidato si no hay `querySelectorAll`). */
+function firstVisible(scope: ParentNode, selector: string): HTMLElement | null {
+    const candidates =
+        typeof scope.querySelectorAll === 'function'
+            ? Array.from(scope.querySelectorAll<HTMLElement>(selector))
+            : [scope.querySelector<HTMLElement>(selector)];
+
+    return (
+        candidates.find(
+            (element): element is HTMLElement =>
+                element !== null && !isHidden(element),
+        ) ?? null
+    );
+}
+
 export function focusFirstError(
     errors: ErrorBag,
     root: Document = document,
@@ -66,6 +89,11 @@ export function focusFirstError(
                 continue;
             }
 
+            // Quien pliega campos los abre cuando tienen error, así que esto es solo un respaldo.
+            if (isHidden(element)) {
+                continue;
+            }
+
             element.scrollIntoView({ block: 'center', behavior: 'smooth' });
             element.focus({ preventScroll: true });
 
@@ -74,7 +102,7 @@ export function focusFirstError(
     }
 
     const message = FALLBACK_SELECTORS.map((selector) =>
-        scope.querySelector<HTMLElement>(selector),
+        firstVisible(scope, selector),
     ).find((element) => element !== null);
 
     if (!message) {

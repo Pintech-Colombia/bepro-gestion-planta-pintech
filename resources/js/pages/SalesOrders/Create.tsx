@@ -1,7 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
 
 import { store as salesOrderStore } from '@/actions/App/Http/Controllers/SalesOrderController';
+import { EmptyState } from '@/components/empty-state';
 import { FormActions } from '@/components/form-actions';
 import { FormError, FormField } from '@/components/form-field';
 import { FormLineItem } from '@/components/form-line-item';
@@ -355,7 +355,7 @@ export default function SalesOrdersCreate({
                                             e.target.value,
                                         )
                                     }
-                                    placeholder="Calle, número, colonia, ciudad, etc."
+                                    placeholder="Calle, número, barrio, ciudad"
                                 />
                             </FormField>
 
@@ -384,7 +384,6 @@ export default function SalesOrdersCreate({
                                 size="sm"
                                 onClick={addItem}
                             >
-                                <Plus className="mr-1 h-4 w-4" />
                                 Agregar producto
                             </Button>
                         </CardHeader>
@@ -392,10 +391,9 @@ export default function SalesOrdersCreate({
                             <FormError id="items" message={errors.items} />
 
                             {data.items.length === 0 ? (
-                                <div className="rounded border border-dashed border-border py-8 text-center text-muted-foreground">
-                                    No hay productos agregados. Haz clic en
-                                    &quot;Agregar producto&quot;.
-                                </div>
+                                <EmptyState>
+                                    Agrega al menos un producto al pedido.
+                                </EmptyState>
                             ) : (
                                 <div className="space-y-3">
                                     {data.items.map((item, index) => {
