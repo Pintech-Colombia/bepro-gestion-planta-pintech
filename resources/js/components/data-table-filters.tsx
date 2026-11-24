@@ -159,7 +159,7 @@ export function DataTableFilters({
                             key={field.name}
                             className="relative min-w-0 flex-1 md:min-w-56"
                         >
-                            <Search className="absolute top-2.5 left-3 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 aria-label={field.label}
                                 placeholder={field.placeholder ?? field.label}

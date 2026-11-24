@@ -34,7 +34,12 @@ const PageArrow: FC<PageArrowProps> = ({ url, label, icon: Icon }) => {
 
     if (!url) {
         return (
-            <span aria-disabled="true" className={classes} title={label}>
+            <span
+                aria-disabled="true"
+                className={classes}
+                title={label}
+                data-touch-target="icon"
+            >
                 <Icon className="size-4" />
                 <span className="sr-only">{label}</span>
             </span>
@@ -48,6 +53,7 @@ const PageArrow: FC<PageArrowProps> = ({ url, label, icon: Icon }) => {
             preserveState
             className={classes}
             title={label}
+            data-touch-target="icon"
         >
             <Icon className="size-4" />
             <span className="sr-only">{label}</span>
@@ -138,6 +144,7 @@ const Pagination: FC<PaginationProps> = ({ paginator, noun, className }) => {
                                                 : undefined
                                         }
                                         className={classes}
+                                        data-touch-target="default"
                                     >
                                         <span
                                             dangerouslySetInnerHTML={{
@@ -155,6 +162,7 @@ const Pagination: FC<PaginationProps> = ({ paginator, noun, className }) => {
                                     preserveScroll
                                     preserveState
                                     className={classes}
+                                    data-touch-target="default"
                                 >
                                     <span
                                         dangerouslySetInnerHTML={{

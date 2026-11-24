@@ -668,6 +668,53 @@ describe('contrato de DESIGN.md', () => {
         expect(layout).not.toMatch(/maximum-scale|user-scalable\s*=\s*["']?no/);
     });
 
+    it('los controles miden 44 px donde se tocan con el dedo', () => {
+        // Una regla de app.css, fuera de @layer (les gana a `h-8`, `h-9`, `size-8`), da 44 px de alto a campos, selectores
+        // y botones, y 44×44 a los de ícono, donde el puntero principal es el dedo. Dentro de una capa perdería contra las
+        // utilidades sin que nada falle: por eso se comprueba aquí.
+        const css = readFileSync(join(root, 'resources/css/app.css'), 'utf8');
+        const rule = /@media \(pointer: coarse\)\s*\{/.exec(css);
+
+        expect(
+            rule,
+            'regla de 44 px para pantallas táctiles en app.css',
+        ).not.toBeNull();
+
+        const before = css.slice(0, rule?.index ?? 0);
+        const depth =
+            (before.match(/\{/g) ?? []).length -
+            (before.match(/\}/g) ?? []).length;
+
+        expect(depth, 'la regla de 44 px no puede ir dentro de @layer').toBe(0);
+
+        const block = css.slice(rule?.index ?? 0);
+
+        for (const selector of [
+            "[data-slot='input']",
+            "[data-slot='select-trigger']",
+            "[data-slot='combobox-trigger']",
+            "[data-slot='plant-date-input']",
+            '[data-touch-target]',
+        ]) {
+            expect(block, `la regla de 44 px cubre ${selector}`).toContain(
+                selector,
+            );
+        }
+
+        expect(block).toMatch(/min-height:\s*44px/);
+        expect(block).toMatch(
+            /\[data-touch-target='icon'\]\s*\{\s*min-width:\s*44px/,
+        );
+
+        // `<Button>` pone la marca después de `{...props}`: un activador de Radix con `asChild` reemplaza su `data-slot`.
+        const button = readFileSync(
+            join(root, 'resources/js/components/ui/button.tsx'),
+            'utf8',
+        );
+
+        expect(button).toMatch(/\{\.\.\.props\}[\s\S]*data-touch-target=/);
+    });
+
     it('deja los avisos de flash al layout, sin repetirlos en pages/', () => {
         // Los pintan <FlashMessages /> (layout de la app) y <AuthFlashError /> (pantallas de acceso): ninguna página
         // lee `flash`, ni con punto (`flash.error`) ni desestructurando (`const { flash } = usePage()`).
