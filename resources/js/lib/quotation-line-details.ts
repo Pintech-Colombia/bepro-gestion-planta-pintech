@@ -1,4 +1,5 @@
 import { formatKind } from '@/lib/formatters';
+import { parseDecimal } from '@/lib/numeric-input';
 
 /**
  * Los campos secundarios de una línea de cotización: en el celular van plegados en «Más detalles» (DESIGN.md §8, «Line
@@ -43,12 +44,11 @@ export function quotationLineSummary(details: {
         parts.push(details.color.trim());
     }
 
-    const adjustment =
-        details.adjustment === null || details.adjustment === undefined
-            ? ''
-            : String(details.adjustment).trim();
+    // El campo guarda lo que se escribe, con coma decimal («-7,5»); el servidor lo devuelve con punto («-7.5»).
+    // `parseDecimal` entiende los dos.
+    const adjustment = parseDecimal(details.adjustment ?? null);
 
-    if (adjustment !== '' && Number(adjustment) !== 0) {
+    if (adjustment !== null && adjustment !== 0) {
         parts.push(`Ajuste ${formatKind(adjustment, 'percent')}`);
     }
 

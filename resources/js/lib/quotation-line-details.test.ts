@@ -37,6 +37,15 @@ describe('quotationLineSummary: lo que dice «Más detalles» cerrado', () => {
         expect(quotationLineSummary({ adjustment: '7.5' })).toBe('Ajuste 7,5%');
         expect(quotationLineSummary({ adjustment: 12 })).toBe('Ajuste 12%');
     });
+
+    it('entiende el ajuste como lo guarda el campo, con coma decimal', () => {
+        // `DecimalInput` guarda lo escrito («-7,5»); un descuento con decimales nunca queda escondido.
+        expect(quotationLineSummary({ adjustment: '-7,5' })).toBe(
+            'Ajuste -7,5%',
+        );
+        expect(quotationLineSummary({ adjustment: '0,0' })).toBe('');
+        expect(quotationLineSummary({ adjustment: '-' })).toBe('');
+    });
 });
 
 describe('lineHasSecondaryError: si «Más detalles» se abre por un error', () => {

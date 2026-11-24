@@ -108,6 +108,32 @@ describe('focusFirstError: el respaldo cuando ningún campo coincide', () => {
         expect(field.focus).toHaveBeenCalled();
     });
 
+    it('salta un mensaje escondido (dentro de un grupo plegado) y usa el siguiente visible', () => {
+        const hidden = {
+            matches: () => true,
+            scrollIntoView: vi.fn(),
+            getClientRects: () => [],
+            parentElement: { querySelector: () => null },
+        };
+        const field = { hasAttribute: () => false, focus: vi.fn() };
+        const visible = {
+            matches: () => true,
+            scrollIntoView: vi.fn(),
+            getClientRects: () => [{}],
+            parentElement: { querySelector: () => field },
+        };
+        const root = {
+            querySelector: () => null,
+            querySelectorAll: (candidate: string) =>
+                candidate === FIELD_MESSAGE_SELECTOR ? [hidden, visible] : [],
+        } as unknown as Document;
+
+        expect(focusFirstError({ status: 'Error' }, root)).toBe(true);
+        expect(hidden.scrollIntoView).not.toHaveBeenCalled();
+        expect(visible.scrollIntoView).toHaveBeenCalled();
+        expect(field.focus).toHaveBeenCalled();
+    });
+
     it('con un aviso de la página, lo lleva a la vista sin enfocar ningún campo', () => {
         const { field, message, root } = pageWith('[role="alert"]');
 

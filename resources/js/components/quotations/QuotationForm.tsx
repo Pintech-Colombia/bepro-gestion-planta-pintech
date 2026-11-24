@@ -24,6 +24,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { useQuotationPricingPreview } from '@/hooks/use-quotation-pricing-preview';
 import { clearListErrors } from '@/lib/form-errors';
@@ -39,6 +40,7 @@ import {
 } from '@/lib/quotation-pricing-rows';
 import type { QuotationPricingRow } from '@/lib/quotation-pricing-rows';
 import { newRowKey } from '@/lib/row-key';
+import { cn } from '@/lib/utils';
 
 export type ClientOption = {
     id: number;
@@ -300,9 +302,29 @@ export default function QuotationForm({
         clearErrors(...(cleared as Array<keyof typeof errors>));
     };
 
-    // «Más detalles» de cada línea en el celular: abierto a mano (por `row_key`). Con un error en un campo secundario
-    // se abre en el mismo render (`lineHasSecondaryError`), así el foco del 422 encuentra el campo a la vista.
+    // «Más detalles» de cada línea en el celular, abierto o cerrado (por `row_key`).
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+
+    // Una línea con error en un campo secundario se abre en el mismo render (así el foco del 422 encuentra el campo a
+    // la vista) y queda abierta: al escribir se borra el error, y si la apertura dependiera de él, el grupo se plegaría
+    // con el campo enfocado adentro (en el celular se cerraría el teclado). Ajuste durante el render, no en un efecto.
+    const linesToOpen = data.items
+        .filter(
+            (item, index) =>
+                !openDetails[item.row_key] &&
+                lineHasSecondaryError((field) => itemError(item, index, field)),
+        )
+        .map((item) => item.row_key);
+
+    if (linesToOpen.length > 0) {
+        setOpenDetails((current) => ({
+            ...current,
+            ...Object.fromEntries(linesToOpen.map((key) => [key, true])),
+        }));
+    }
+
+    // Los totales están al día solo si la vista previa corresponde a las filas tal como están.
+    const totalsPending = previewLoading || previewStale !== null;
 
     const typeLabelFor = (value: string) =>
         itemTypeOptions.find((option) => option.value === value)?.label ?? null;
@@ -317,6 +339,8 @@ export default function QuotationForm({
                 onSubmit={handleSubmit}
                 className="space-y-6"
             >
+                {/* Error sin campo: la cotización dejó de ser borrador mientras se editaba (`QuotationService`). */}
+                <FormError id="status" message={fieldErrors.status} />
                 <Card>
                     <CardHeader>
                         <CardTitle>Cliente</CardTitle>
@@ -326,7 +350,12 @@ export default function QuotationForm({
                             id="client_id"
                             label="Cliente"
                             required
-                            error={errors.client_id}
+                            // La razón social y el NIT ya no tienen campo propio: su error se muestra aquí.
+                            error={
+                                errors.client_id ??
+                                errors.client_business_name ??
+                                errors.client_nit
+                            }
                             help={
                                 data.client_nit
                                     ? `NIT ${data.client_nit}`
@@ -447,10 +476,7 @@ export default function QuotationForm({
                                             ? String(Number(line?.unit_price))
                                             : undefined;
                                     const detailsOpen =
-                                        (openDetails[item.row_key] ?? false) ||
-                                        lineHasSecondaryError((field) =>
-                                            itemError(item, index, field),
-                                        );
+                                        openDetails[item.row_key] ?? false;
 
                                     return (
                                         <FormLineItem
@@ -1025,7 +1051,11 @@ export default function QuotationForm({
                         <FormattedNumber
                             value={preview?.totals.total ?? 0}
                             kind="clientPrice"
-                            className="text-base font-semibold"
+                            // Atenuado mientras se recalcula o si la vista previa falló, como el subtotal de cada línea.
+                            className={cn(
+                                'text-base font-semibold',
+                                totalsPending && 'opacity-50',
+                            )}
                         />
                     </div>
                 }
@@ -1035,6 +1065,7 @@ export default function QuotationForm({
                     form="quotation-form"
                     disabled={processing}
                 >
+                    {processing && <Spinner />}
                     {submitLabel}
                 </Button>
             </MobileActionBar>
