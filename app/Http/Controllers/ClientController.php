@@ -11,6 +11,7 @@ use App\Http\Requests\Clients\IndexClientRequest;
 use App\Http\Requests\Clients\StoreClientRequest;
 use App\Http\Requests\Clients\UpdateClientRequest;
 use App\Models\Client;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -57,6 +58,23 @@ class ClientController extends Controller
         Inertia::flash('success', 'Cliente creado con éxito.');
 
         return redirect()->route('clients.index');
+    }
+
+    /**
+     * Cliente nuevo sin salir de un formulario (la cotización): las mismas reglas, el mismo permiso y la misma auditoría
+     * que `store`, pero responde con el cliente creado en JSON para que el formulario lo agregue a su lista y lo
+     * seleccione. Responde solo los datos que usa el formulario.
+     */
+    public function quickStore(StoreClientRequest $request): JsonResponse
+    {
+        $this->authorize('create', Client::class);
+
+        $client = Client::create($request->validated());
+
+        return response()->json(
+            $client->only(['id', 'business_name', 'nit', 'contact_name', 'phone', 'shipping_address']),
+            201,
+        );
     }
 
     public function edit(Request $request, Client $client): Response

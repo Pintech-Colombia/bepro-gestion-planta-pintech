@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
+import { QuickClientDialog } from '@/components/clients/quick-client-dialog';
 import { DecimalInput } from '@/components/decimal-input';
 import { EmptyState } from '@/components/empty-state';
 import { FormActions } from '@/components/form-actions';
@@ -104,6 +105,8 @@ type Props = {
     title: string;
     backUrl: string;
     submitLabel: string;
+    /** Muestra «Nuevo cliente» (permiso `clients.create`). */
+    canCreateClient?: boolean;
 };
 
 export function buildEmptyItem(): ItemRow {
@@ -135,6 +138,7 @@ export default function QuotationForm({
     title,
     backUrl,
     submitLabel,
+    canCreateClient = false,
 }: Props) {
     const {
         data,
@@ -149,7 +153,18 @@ export default function QuotationForm({
     // Los errores de las filas llegan como «items.0.quantity», que el tipo de useForm no enumera.
     const fieldErrors = errors as Record<string, string | undefined>;
 
-    const clientOptions = clients.map((client) => ({
+    // Los clientes creados con «Nuevo cliente» se suman a los que mandó el servidor, sin recargar la página. Si el
+    // servidor vuelve a mandar la lista (una recarga de props), ya los trae: se descartan por id para no repetirlos.
+    const [createdClients, setCreatedClients] = useState<ClientOption[]>([]);
+    // En orden alfabético, como los manda el servidor: el cliente nuevo queda donde se espera encontrarlo.
+    const allClients = [
+        ...clients,
+        ...createdClients.filter(
+            (created) => !clients.some((client) => client.id === created.id),
+        ),
+    ].sort((a, b) => a.business_name.localeCompare(b.business_name, 'es'));
+
+    const clientOptions = allClients.map((client) => ({
         id: String(client.id),
         label: `${client.business_name}${client.contact_name ? ` — ${client.contact_name}` : ''}`,
     }));
@@ -342,8 +357,33 @@ export default function QuotationForm({
                 {/* Error sin campo: la cotización dejó de ser borrador mientras se editaba (`QuotationService`). */}
                 <FormError id="status" message={fieldErrors.status} />
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex-row items-center justify-between gap-3">
                         <CardTitle>Cliente</CardTitle>
+                        {canCreateClient && (
+                            <QuickClientDialog
+                                onCreated={(client) => {
+                                    setCreatedClients((current) => [
+                                        ...current,
+                                        client,
+                                    ]);
+                                    setData((current) => ({
+                                        ...current,
+                                        client_id: String(client.id),
+                                        client_business_name:
+                                            client.business_name,
+                                        client_nit: client.nit ?? '',
+                                        client_contact_name:
+                                            client.contact_name ?? '',
+                                        client_phone: client.phone ?? '',
+                                    }));
+                                    clearErrors(
+                                        'client_id',
+                                        'client_business_name',
+                                        'client_nit',
+                                    );
+                                }}
+                            />
+                        )}
                     </CardHeader>
                     <CardContent className="grid gap-4 md:grid-cols-2">
                         <FormField
@@ -367,7 +407,7 @@ export default function QuotationForm({
                                 options={clientOptions}
                                 value={data.client_id}
                                 onChange={(value) => {
-                                    const client = clients.find(
+                                    const client = allClients.find(
                                         (entry) => String(entry.id) === value,
                                     );
 

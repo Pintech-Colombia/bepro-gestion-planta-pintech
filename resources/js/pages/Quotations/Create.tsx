@@ -20,6 +20,7 @@ type Props = {
     validityDaysOptions: { value: string; label: string }[];
     paymentMethodOptions: { value: string; label: string }[];
     itemTypeOptions: { value: string; label: string }[];
+    can: { createClient: boolean };
 };
 
 export default function QuotationsCreate({
@@ -28,6 +29,7 @@ export default function QuotationsCreate({
     validityDaysOptions,
     paymentMethodOptions,
     itemTypeOptions,
+    can,
 }: Props) {
     const { plantToday: today } = usePage().props;
 
@@ -40,6 +42,7 @@ export default function QuotationsCreate({
                 validityDaysOptions={validityDaysOptions}
                 paymentMethodOptions={paymentMethodOptions}
                 itemTypeOptions={itemTypeOptions}
+                canCreateClient={can.createClient}
                 initialData={{
                     client_id: '',
                     client_business_name: '',

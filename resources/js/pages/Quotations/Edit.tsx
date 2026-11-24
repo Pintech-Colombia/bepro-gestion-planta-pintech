@@ -58,6 +58,7 @@ type Props = {
     validityDaysOptions: { value: string; label: string }[];
     paymentMethodOptions: { value: string; label: string }[];
     itemTypeOptions: { value: string; label: string }[];
+    can: { createClient: boolean };
     returnTo?: string | null;
 };
 
@@ -107,6 +108,7 @@ export default function QuotationsEdit({
     validityDaysOptions,
     paymentMethodOptions,
     itemTypeOptions,
+    can,
     returnTo,
 }: Props) {
     const showHref = returnTo
@@ -122,6 +124,7 @@ export default function QuotationsEdit({
                 validityDaysOptions={validityDaysOptions}
                 paymentMethodOptions={paymentMethodOptions}
                 itemTypeOptions={itemTypeOptions}
+                canCreateClient={can.createClient}
                 initialData={mapQuotationToForm(quotation)}
                 submitUrl={quotationUpdate(quotation.id).url}
                 previewUrl={quotationEditPreviewPricing(quotation.id).url}

@@ -152,6 +152,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('clients', [ClientController::class, 'store'])
         ->middleware('can:'.Permission::ClientsCreate->value)
         ->name('clients.store');
+    // Cliente nuevo desde un formulario (la cotización): responde JSON con el cliente creado.
+    Route::post('clients/quick', [ClientController::class, 'quickStore'])
+        ->middleware('can:'.Permission::ClientsCreate->value)
+        ->name('clients.quick-store');
     Route::get('clients/{client}/edit', [ClientController::class, 'edit'])
         ->middleware('can:'.Permission::ClientsEdit->value)
         ->name('clients.edit');
