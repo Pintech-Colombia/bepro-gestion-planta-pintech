@@ -7,15 +7,16 @@ namespace App\Http\Controllers\Admin;
 use App\Filters\AuditLogFilter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IndexAuditLogRequest;
+use App\Services\Audit\AuditLogPresenter;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Activitylog\Models\Activity;
 
 class AuditLogController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    public function __construct(private readonly AuditLogPresenter $presenter) {}
+
     public function index(IndexAuditLogRequest $request): Response
     {
         // `latest('id')` desempata: sin él la paginación puede repetir o saltarse registros.
@@ -27,27 +28,9 @@ class AuditLogController extends Controller
             ->onEachSide(1)
             ->withQueryString();
 
-        // Transformar a camelCase para cumplir con estándares de TS del proyecto
-        $logs->getCollection()->transform(function ($log) {
-            return [
-                'id' => $log->id,
-                'logName' => $log->log_name,
-                'description' => $log->description,
-                'event' => $log->event,
-                'subjectType' => $log->subject_type,
-                'subjectId' => $log->subject_id,
-                'causerType' => $log->causer_type,
-                'causerId' => $log->causer_id,
-                'causer' => $log->causer ? [
-                    'id' => $log->causer->id,
-                    'name' => $log->causer->name,
-                    'email' => $log->causer->email,
-                ] : null,
-                'properties' => $log->properties,
-                'createdAt' => $log->created_at->toIso8601String(),
-            ];
-        });
+        $logs->setCollection($this->presenter->present($logs->getCollection()));
 
+        // Por la etiqueta sin tildes: por bytes, «Órdenes de producción» quedaría al final de la lista.
         $logNames = Activity::select('log_name')->distinct()->whereNotNull('log_name')->pluck('log_name');
         $events = Activity::select('event')->distinct()->whereNotNull('event')->pluck('event');
 
@@ -55,8 +38,14 @@ class AuditLogController extends Controller
             'logs' => $logs,
             'filters' => $request->validated(),
             'options' => [
-                'logNames' => $logNames,
-                'events' => $events,
+                'logNames' => $logNames
+                    ->map(fn (string $name): array => ['value' => $name, 'label' => AuditLogPresenter::moduleLabel($name)])
+                    ->sortBy(fn (array $option): string => Str::lower(Str::ascii($option['label'])))
+                    ->values(),
+                'events' => $events
+                    ->map(fn (string $event): array => ['value' => $event, 'label' => AuditLogPresenter::eventLabel($event)])
+                    ->sortBy(fn (array $option): string => Str::lower(Str::ascii($option['label'])))
+                    ->values(),
             ],
         ]);
     }

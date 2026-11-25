@@ -4,26 +4,17 @@ declare(strict_types=1);
 
 use App\Models\Alert;
 use App\Models\ProductionCost;
-use App\Models\ProductionOrderDetail;
-use App\Models\ProductionOrderLineAdjustment;
-use App\Models\ProductionOrderPackagingPlan;
-use App\Models\QrCode;
 use App\Models\QuotationItem;
-use App\Models\RemnantConsumption;
 use App\Models\ShrinkWrapItem;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-/** Modelos que hoy no registran auditoría, con lo que guardan. Agregar uno exige justificarlo aquí. */
+/** Modelos que no registran auditoría, con la razón. Agregar uno exige justificarlo aquí. */
 const AUDIT_EXEMPT_MODELS = [
-    Alert::class => 'Alerta generada por el sistema',
-    ProductionCost::class => 'Costo calculado de una OP',
-    ProductionOrderDetail::class => 'Línea de una OP',
-    ProductionOrderLineAdjustment::class => 'Ajuste de una línea de OP',
-    ProductionOrderPackagingPlan::class => 'Plan de envasado de una OP',
-    QrCode::class => 'Código QR de una OP',
-    QuotationItem::class => 'Línea de una cotización',
-    RemnantConsumption::class => 'Consumo de un saldo en una OP',
-    ShrinkWrapItem::class => 'Gasto de un termoencogido',
+    Alert::class => 'La crea el sistema; la fila misma guarda quién la resolvió y cuándo',
+    ProductionCost::class => 'Lo calcula el sistema (recálculo o al completar la OP); ninguna persona lo escribe',
+    ShrinkWrapItem::class => 'Sale de la receta del tipo al registrar el termoencogido, que ya se audita; no se edita',
+    // Pendiente: QuotationService borra e inserta las líneas en bloque, sin eventos. Pasa a sincronizar línea por línea.
+    QuotationItem::class => 'Línea de una cotización (se audita al sincronizar línea por línea)',
 ];
 
 test('todo modelo que no esté exento usa LogsActivity', function () {

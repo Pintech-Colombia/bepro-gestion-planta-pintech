@@ -96,13 +96,13 @@ class ProductionOrderBatchConsumption extends Model
     protected function auditIdentifier(): Attribute
     {
         return Attribute::get(function (): string {
-            $this->loadMissing(['productionOrder:id,order_number', 'batch:id,production_order_id', 'batch.productionOrder:id,lot_number']);
+            $lotNumber = ProductionOrder::query()
+                ->whereKey(FinishedProductBatch::query()->whereKey($this->finished_product_batch_id)->select('production_order_id'))
+                ->value('lot_number');
 
             return implode(' · ', [
-                $this->productionOrder->order_number ?? "OP #{$this->production_order_id}",
-                $this->batch?->productionOrder !== null
-                    ? "lote {$this->batch->productionOrder->lot_number}"
-                    : "lote #{$this->finished_product_batch_id}",
+                $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}",
+                $lotNumber !== null ? "lote {$lotNumber}" : "lote #{$this->finished_product_batch_id}",
             ]);
         });
     }

@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAuditDescription;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -33,11 +37,42 @@ use Illuminate\Support\Carbon;
 ])]
 class ProductionOrderLineAdjustment extends Model
 {
+    use HasAuditDescription, LogsActivity;
+
+    /** Un ajuste no se edita: se agrega o se quita. */
+    protected static $recordEvents = ['created', 'deleted'];
+
+    protected string $auditLabel = 'Ajuste de línea de OP';
+
+    protected string $auditIdentifierAttribute = 'audit_identifier';
+
+    /** Mismo log que la orden: el ajuste se lee junto con ella. Quién lo hizo ya es el causante del registro. */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('ordenes_produccion')
+            ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            ->logOnly(['raw_material_id', 'quantity', 'reason', 'notes'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     protected function casts(): array
     {
         return [
             'quantity' => 'decimal:4',
         ];
+    }
+
+    /** «OP-2026-0045 · S - 12»: buscar el número de la OP trae la orden y sus ajustes. */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(function (): string {
+            return implode(' · ', [
+                $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}",
+                $this->auditRelatedValue('rawMaterial', 'code') ?? "MP #{$this->raw_material_id}",
+            ]);
+        });
     }
 
     public function productionOrder(): BelongsTo

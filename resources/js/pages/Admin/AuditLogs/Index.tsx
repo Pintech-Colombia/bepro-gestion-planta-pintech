@@ -1,16 +1,28 @@
 import { Head } from '@inertiajs/react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { ArrowRight } from 'lucide-react';
+import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import AuditLogController from '@/actions/App/Http/Controllers/Admin/AuditLogController';
 
-import { CountPopover } from '@/components/count-popover';
 import { DataListing } from '@/components/data-listing';
 import type { DataListingColumn } from '@/components/data-listing';
 import { DataTableFilters } from '@/components/data-table-filters';
+import { DetailItem, DetailList } from '@/components/detail-list';
+import { EmptyCell } from '@/components/empty-cell';
+import { FormattedDate } from '@/components/formatted-date';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
+import { Button } from '@/components/ui/button';
+import {
+    Sheet,
+    SheetBody,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import { useFilters } from '@/hooks/use-filters';
+import { hasActiveFilters } from '@/lib/table-filters';
 import { pillClasses, toneClasses } from '@/lib/tones';
 import type { Tone } from '@/types/enums';
 import type { Paginated } from '@/types/ui';
@@ -26,6 +38,9 @@ const eventTones: Record<string, Tone> = {
     deleted: 'danger',
     failed_login: 'warning',
     role_changed: 'info',
+    role_created: 'success',
+    role_updated: 'info',
+    role_deleted: 'danger',
 };
 
 type Causer = {
@@ -34,19 +49,32 @@ type Causer = {
     email: string;
 };
 
+/**
+ * Un cambio ya en español y formateado en el servidor (`AuditLogPresenter`). `changed` tiene antes y después; `set`,
+ * solo el valor nuevo (al crear, o un dato de un registro manual); `unset`, solo el anterior (al eliminar).
+ */
+type AuditChange = {
+    field: string;
+    label: string;
+    before: string | null;
+    after: string | null;
+    kind: 'changed' | 'set' | 'unset';
+};
+
 type ActivityLog = {
     id: number;
-    logName: string;
     description: string;
     event: string;
-    subjectType: string;
-    subjectId: number;
-    causerType: string | null;
-    causerId: number | null;
+    eventLabel: string;
+    module: string;
     causer: Causer | null;
-    properties: Record<string, any>;
+    /** `changes`: lo que cambió en un registro; `properties`: los datos de un registro manual (sesión, roles). */
+    detailType: 'changes' | 'properties';
+    changes: AuditChange[];
     createdAt: string;
 };
+
+type Option = { value: string; label: string };
 
 type Props = {
     logs: Paginated<ActivityLog>;
@@ -58,10 +86,157 @@ type Props = {
         date_to?: string;
     };
     options: {
-        logNames: string[];
-        events: string[];
+        logNames: Option[];
+        events: Option[];
     };
 };
+
+function EventPill({ log }: { log: ActivityLog }) {
+    return (
+        <span
+            className={`${pillClasses} ${toneClasses[eventTones[log.event] ?? 'neutral']}`}
+        >
+            {log.eventLabel}
+        </span>
+    );
+}
+
+function detailButtonLabel(log: ActivityLog): string {
+    const count = log.changes.length;
+
+    if (log.detailType === 'properties') {
+        return `${count} ${count === 1 ? 'dato' : 'datos'} · Ver`;
+    }
+
+    return `${count} ${count === 1 ? 'cambio' : 'cambios'} · Ver`;
+}
+
+function ChangeValue({
+    value,
+    muted = false,
+}: {
+    value: string | null;
+    muted?: boolean;
+}) {
+    if (value === null) {
+        return <EmptyCell />;
+    }
+
+    return (
+        <span
+            className={
+                muted
+                    ? 'break-words text-muted-foreground'
+                    : 'break-words text-foreground'
+            }
+        >
+            {value}
+        </span>
+    );
+}
+
+/** Cada cambio en dos líneas: el campo y, debajo, «antes → después». */
+function ChangeList({ changes }: { changes: AuditChange[] }) {
+    return (
+        <ul className="divide-y divide-border">
+            {changes.map((change) => (
+                <li key={change.field} className="py-3 text-sm">
+                    <div className="text-xs font-medium text-muted-foreground">
+                        {change.label}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {change.kind === 'changed' && (
+                            <>
+                                <ChangeValue value={change.before} muted />
+                                <ArrowRight
+                                    className="size-3.5 shrink-0 text-muted-foreground"
+                                    aria-label="pasó a"
+                                />
+                                <ChangeValue value={change.after} />
+                            </>
+                        )}
+                        {change.kind === 'set' && (
+                            <ChangeValue value={change.after} />
+                        )}
+                        {change.kind === 'unset' && (
+                            <ChangeValue value={change.before} muted />
+                        )}
+                    </div>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+/** El registro queda montado mientras el panel se cierra: si se quitara al cerrar, se vaciaría en plena animación. */
+function AuditLogDetailSheet({
+    log,
+    open,
+    onOpenChange,
+}: {
+    log: ActivityLog | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent className="sm:max-w-lg">
+                {log && (
+                    <>
+                        <SheetHeader>
+                            <SheetTitle>Detalle del registro</SheetTitle>
+                            <SheetDescription>
+                                {log.description}
+                            </SheetDescription>
+                        </SheetHeader>
+                        <SheetBody className="space-y-6 pb-6">
+                            <DetailList columns={2}>
+                                <DetailItem
+                                    label="Quién"
+                                    value={
+                                        log.causer ? (
+                                            <>
+                                                <div>{log.causer.name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {log.causer.email}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            'Sistema / Anónimo'
+                                        )
+                                    }
+                                />
+                                <DetailItem
+                                    label="Cuándo"
+                                    value={
+                                        <FormattedDate
+                                            value={log.createdAt}
+                                            format="datetime"
+                                        />
+                                    }
+                                />
+                                <DetailItem label="Módulo" value={log.module} />
+                                <DetailItem
+                                    label="Evento"
+                                    value={<EventPill log={log} />}
+                                />
+                            </DetailList>
+
+                            <section className="space-y-1">
+                                <h3 className="text-sm font-semibold">
+                                    {log.detailType === 'properties'
+                                        ? 'Datos registrados'
+                                        : 'Cambios'}
+                                </h3>
+                                <ChangeList changes={log.changes} />
+                            </section>
+                        </SheetBody>
+                    </>
+                )}
+            </SheetContent>
+        </Sheet>
+    );
+}
 
 export default function AuditLogsIndex({ logs, filters, options }: Props) {
     const {
@@ -80,162 +255,12 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
         },
     });
 
-    const getEventLabel = (event: string) => {
-        switch (event) {
-            case 'created':
-                return 'Creado';
-            case 'updated':
-                return 'Actualizado';
-            case 'deleted':
-                return 'Eliminado';
-            case 'failed_login':
-                return 'Inicio de sesión fallido';
-            case 'role_changed':
-                return 'Rol cambiado';
-            default:
-                return event || 'default';
-        }
-    };
+    const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
+    const [detailOpen, setDetailOpen] = useState(false);
 
-    const formatProperties = (properties: Record<string, any>) => {
-        if (!properties || Object.keys(properties).length === 0) {
-            return null;
-        }
-
-        const attributes = properties.attributes;
-        const old = properties.old;
-
-        if (!attributes && !old) {
-            // Not standard Spatie format, fallback to JSON
-            const jsonStr = JSON.stringify(properties);
-
-            if (jsonStr.length > 50) {
-                return (
-                    <div className="group relative cursor-help">
-                        <span className="inline-block max-w-[150px] truncate text-muted-foreground">
-                            {jsonStr}
-                        </span>
-                        <div className="absolute bottom-full left-0 z-10 mb-1 hidden max-w-sm rounded-md border bg-popover p-2 text-xs whitespace-pre-wrap text-popover-foreground shadow-md group-hover:block">
-                            {JSON.stringify(properties, null, 2)}
-                        </div>
-                    </div>
-                );
-            }
-
-            return <span className="text-muted-foreground">{jsonStr}</span>;
-        }
-
-        // Solo las claves que cambiaron: las que tienen el mismo valor antes y después no se listan ni se cuentan.
-        // Se compara por valor (JSON), no por referencia: un campo objeto igual antes y después no cambió.
-        const keys = (
-            attributes ? Object.keys(attributes) : Object.keys(old || {})
-        ).filter(
-            (key) =>
-                !(
-                    old &&
-                    attributes &&
-                    key in old &&
-                    key in attributes &&
-                    JSON.stringify(old[key]) === JSON.stringify(attributes[key])
-                ),
-        );
-
-        if (keys.length === 0) {
-            return null;
-        }
-
-        const formatVal = (val: any) => {
-            if (val === null) {
-                return (
-                    <span className="text-muted-foreground italic">null</span>
-                );
-            }
-
-            if (typeof val === 'boolean') {
-                return val ? 'Sí' : 'No';
-            }
-
-            if (typeof val === 'object') {
-                const jsonStr = JSON.stringify(val);
-
-                if (jsonStr.length > 30) {
-                    return (
-                        <span
-                            className="cursor-help font-mono text-xs text-muted-foreground"
-                            title={jsonStr}
-                        >
-                            [Objeto]
-                        </span>
-                    );
-                }
-
-                return (
-                    <span className="font-mono text-xs text-muted-foreground">
-                        {jsonStr}
-                    </span>
-                );
-            }
-
-            return String(val);
-        };
-
-        const renderChangeList = () => (
-            <ul className="space-y-1.5 text-xs">
-                {keys.map((key) => {
-                    const newVal = attributes ? attributes[key] : undefined;
-                    const oldVal = old ? old[key] : undefined;
-                    const hasOld = old && key in old;
-                    const hasNew = attributes && key in attributes;
-
-                    return (
-                        <li
-                            key={key}
-                            className="flex flex-col gap-0.5 md:flex-row md:items-start md:gap-1.5"
-                        >
-                            <span className="shrink-0 font-semibold text-foreground/80 md:w-1/3">
-                                {key}:
-                            </span>
-                            <div className="flex flex-wrap items-center gap-1.5 md:w-2/3">
-                                {hasOld && hasNew ? (
-                                    <>
-                                        <span className="break-all text-destructive/80 line-through">
-                                            {formatVal(oldVal)}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                            ➔
-                                        </span>
-                                        <span className="font-medium break-all text-success-text">
-                                            {formatVal(newVal)}
-                                        </span>
-                                    </>
-                                ) : hasNew ? (
-                                    <span className="break-all text-muted-foreground">
-                                        {formatVal(newVal)}
-                                    </span>
-                                ) : (
-                                    <span className="break-all text-destructive/80 line-through">
-                                        {formatVal(oldVal)}
-                                    </span>
-                                )}
-                            </div>
-                        </li>
-                    );
-                })}
-            </ul>
-        );
-
-        if (keys.length > 2) {
-            return (
-                <CountPopover
-                    label={`${keys.length} atributos modificados`}
-                    contentLabel="Atributos modificados"
-                >
-                    {renderChangeList()}
-                </CountPopover>
-            );
-        }
-
-        return renderChangeList();
+    const openDetail = (log: ActivityLog) => {
+        setSelectedLog(log);
+        setDetailOpen(true);
     };
 
     const filterFields: ComponentProps<typeof DataTableFilters>['fields'] = [
@@ -243,25 +268,19 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
             type: 'text',
             name: 'search',
             label: 'Buscar',
-            placeholder: 'Usuario, descripción...',
+            placeholder: 'Usuario, descripción, número de OP...',
         },
         {
             type: 'select',
             name: 'log_name',
             label: 'Módulo',
-            options: options.logNames.map((name) => ({
-                value: name,
-                label: name,
-            })),
+            options: options.logNames,
         },
         {
             type: 'select',
             name: 'event',
             label: 'Evento',
-            options: options.events.map((ev) => ({
-                value: ev,
-                label: getEventLabel(ev),
-            })),
+            options: options.events,
         },
         {
             type: 'date-range',
@@ -271,15 +290,14 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
         },
     ];
 
-    // Sin detalle ni acciones: la fecha identifica el evento.
+    // Sin página de detalle: la fecha identifica el evento y el botón de Detalles abre el panel con todo.
     const columns: DataListingColumn<ActivityLog>[] = [
         {
             key: 'created_at',
             header: 'Fecha',
-            cell: (log) =>
-                format(new Date(log.createdAt), 'dd MMM yyyy, HH:mm', {
-                    locale: es,
-                }),
+            cell: (log) => (
+                <FormattedDate value={log.createdAt} format="datetime" />
+            ),
             mobile: 'title',
             className: 'whitespace-nowrap',
         },
@@ -304,23 +322,14 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
         {
             key: 'log_name',
             header: 'Módulo',
-            cell: (log) => (
-                <span className="rounded bg-secondary px-2 py-1 text-xs tracking-wider text-secondary-foreground uppercase">
-                    {log.logName}
-                </span>
-            ),
+            cell: (log) => log.module,
             mobile: 'meta',
+            className: 'whitespace-nowrap',
         },
         {
             key: 'event',
             header: 'Evento',
-            cell: (log) => (
-                <span
-                    className={`${pillClasses} ${toneClasses[eventTones[log.event] ?? 'neutral']}`}
-                >
-                    {getEventLabel(log.event)}
-                </span>
-            ),
+            cell: (log) => <EventPill log={log} />,
             mobile: 'status',
             align: 'center',
         },
@@ -333,11 +342,21 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
             className: 'min-w-64 whitespace-normal',
         },
         {
-            key: 'properties',
+            key: 'changes',
             header: 'Detalles',
-            cell: (log) => formatProperties(log.properties),
+            cell: (log) =>
+                log.changes.length > 0 ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openDetail(log)}
+                    >
+                        {detailButtonLabel(log)}
+                    </Button>
+                ) : null,
             mobile: 'meta',
-            className: 'max-w-xs font-mono text-xs text-muted-foreground',
+            className: 'whitespace-nowrap',
         },
     ];
 
@@ -351,7 +370,6 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
                     description="Auditoría de eventos, cambios de sistema y accesos."
                 />
 
-                {/* Filters */}
                 <DataTableFilters
                     fields={filterFields}
                     filters={filterState}
@@ -364,11 +382,19 @@ export default function AuditLogsIndex({ logs, filters, options }: Props) {
                     rows={logs.data}
                     rowKey={(log) => log.id}
                     columns={columns}
-                    empty="No hay registros que coincidan con los filtros."
+                    empty="No hay registros de auditoría."
+                    hasFilters={hasActiveFilters(filterState)}
+                    onClearFilters={clearFilters}
                 />
 
                 <Pagination paginator={logs} />
             </div>
+
+            <AuditLogDetailSheet
+                log={selectedLog}
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+            />
         </>
     );
 }

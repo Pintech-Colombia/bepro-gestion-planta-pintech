@@ -5,16 +5,20 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\ProductionOrderStatus;
+use App\Models\Concerns\HasAuditDescription;
 use App\Support\QrHost;
 use Database\Factories\QrCodeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -42,7 +46,27 @@ use Illuminate\Support\Carbon;
 class QrCode extends Model
 {
     /** @use HasFactory<QrCodeFactory> */
-    use HasFactory;
+    use HasAuditDescription, HasFactory, LogsActivity;
+
+    /**
+     * Solo activar o desactivar desde Códigos QR: el QR nace solo con la estampita o el certificado, y su token no se
+     * regenera. Desactivarlo al cancelar la orden va en bloque y queda en la cancelación de la OP.
+     */
+    protected static $recordEvents = ['updated'];
+
+    protected string $auditLabel = 'Código QR';
+
+    protected string $auditIdentifierAttribute = 'audit_identifier';
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('codigos_qr')
+            ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            ->logOnly(['is_active'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
     /** Largo del token: 36¹² ≈ 62 bits, inadivinable con el límite de peticiones de la página pública. */
     public const TOKEN_LENGTH = 12;
@@ -99,6 +123,14 @@ class QrCode extends Model
     public function landingUrl(): string
     {
         return self::landingUrlFor($this->token);
+    }
+
+    /** «OP-2026-0045»: el QR es el del lote de esa orden. */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(function (): string {
+            return $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}";
+        });
     }
 
     public function product(): BelongsTo
