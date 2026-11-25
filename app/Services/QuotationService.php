@@ -122,7 +122,8 @@ class QuotationService
     /**
      * Las líneas de la cotización editada, una por una por el modelo para que se auditen: las que siguen se actualizan,
      * las nuevas se crean y las que se quitaron se borran. El formulario no envía el id de cada línea, así que se
-     * emparejan por presentación (`LinePairing`), prefiriendo las idénticas; quitar una del medio no cambia las demás.
+     * emparejan por presentación (`LinePairing`), desempatando por color y luego por la línea idéntica: con dos líneas de
+     * la misma presentación en distinto color, la que sigue es la del mismo color. Quitar una del medio no cambia las demás.
      *
      * @param  list<array<string, mixed>>  $preparedItems
      */
@@ -132,6 +133,7 @@ class QuotationService
         $existing = $quotation->items()->with(['product', 'productVariant'])->orderBy('sort_order')->orderBy('id')->get()->values();
         $signature = fn (array $item): array => [
             (string) $item['product_variant_id'],
+            (string) ($item['color'] ?? ''),
             implode('|', [
                 $item['product_variant_id'],
                 $item['type'] ?? '',
@@ -163,8 +165,21 @@ class QuotationService
             }
         });
 
+        // Las presentaciones de las líneas nuevas, con su producto, en una consulta: la auditoría de cada una las nombra y,
+        // sin esto, las consultaría línea por línea con la cotización bloqueada.
+        $newVariantIds = collect($preparedItems)->reject(fn (array $item, int $index): bool => isset($pairs[$index]))->pluck('product_variant_id');
+        $newVariants = $newVariantIds->isEmpty()
+            ? collect()
+            : ProductVariant::query()->with('product')->whereKey($newVariantIds->unique()->all())->get()->keyBy('id');
+
         foreach ($preparedItems as $index => $item) {
-            $line = isset($pairs[$index]) ? $existing[$pairs[$index]] : new QuotationItem(['quotation_id' => $quotation->id]);
+            $line = isset($pairs[$index]) ? $existing[$pairs[$index]] : null;
+
+            if ($line === null) {
+                $variant = $newVariants->get((int) $item['product_variant_id']);
+                $line = new QuotationItem(['quotation_id' => $quotation->id]);
+                $line->setRelation('productVariant', $variant)->setRelation('product', $variant?->product);
+            }
 
             $line->fill($this->itemAttributes($item, $index))->setRelation('quotation', $quotation)->save();
         }

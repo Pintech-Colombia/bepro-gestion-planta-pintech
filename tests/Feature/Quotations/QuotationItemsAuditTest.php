@@ -12,6 +12,7 @@ use App\Services\QuotationService;
 use App\Support\LinePairing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 
 uses(RefreshDatabase::class);
@@ -110,4 +111,72 @@ test('el emparejado sigue la secuencia común y prefiere las líneas idénticas'
     expect(LinePairing::pair($old, $new))->toBe([0 => 1, 1 => 2])
         ->and(LinePairing::pair([], [['a', 'a|1']]))->toBe([])
         ->and(LinePairing::pair([['a', 'a|1']], [['b', 'b|1']]))->toBe([]);
+});
+
+test('con dos líneas de la misma presentación en distinto color, sigue la del mismo color', function (): void {
+    $service = app(QuotationService::class);
+    $quotation = $service->create(quotationData($this->client, [
+        quotationLine($this->blanco, 1, 'ROJO'),
+        quotationLine($this->blanco, 1, 'AZUL'),
+    ]), $this->user);
+    $azulId = $quotation->items->firstWhere('color', 'AZUL')->id;
+
+    // Se quita la roja y se cambia la cantidad de la azul.
+    $service->update($quotation, quotationData($this->client, [quotationLine($this->blanco, 2, 'AZUL')]));
+
+    $logs = quotationItemLogs();
+    $number = $quotation->quotation_number;
+
+    expect($quotation->fresh()->items->sole()->id)->toBe($azulId)
+        ->and($logs->pluck('event')->all())->toBe(['deleted', 'updated'])
+        ->and($logs[0]->description)->toBe("Línea de cotización \"{$number} · ESMALTE BLANCO · GALÓN · ROJO\" eliminada")
+        ->and($logs[1]->properties['attributes'])->toBe(['quantity' => 2]);
+});
+
+test('al cambiar el color, la línea se nombra con el color que tenía', function (): void {
+    $service = app(QuotationService::class);
+    $quotation = $service->create(quotationData($this->client, [quotationLine($this->blanco, 1, 'ROJO')]), $this->user);
+
+    $service->update($quotation, quotationData($this->client, [quotationLine($this->blanco, 1, 'AZUL')]));
+
+    $log = quotationItemLogs()->sole();
+
+    expect($log->description)->toBe("Línea de cotización \"{$quotation->quotation_number} · ESMALTE BLANCO · GALÓN · ROJO\" actualizada")
+        ->and($log->properties['old'])->toBe(['color' => 'ROJO'])
+        ->and($log->properties['attributes'])->toBe(['color' => 'AZUL']);
+});
+
+test('las líneas nuevas de una edición no consultan su producto ni su presentación una por una', function (): void {
+    $service = app(QuotationService::class);
+    $quotation = $service->create(quotationData($this->client, [quotationLine($this->blanco, 1)]), $this->user);
+
+    DB::enableQueryLog();
+    $service->update($quotation, quotationData($this->client, [
+        quotationLine($this->blanco, 1),
+        quotationLine($this->negro, 1),
+        quotationLine($this->rojo, 1),
+    ]));
+
+    // Sin la precarga, el identificador de cada línea nueva leería su presentación y su producto por separado.
+    $perLineReads = collect(DB::getQueryLog())->filter(
+        fn (array $query): bool => (bool) preg_match('/^select "(presentation_label|name)" from "(product_variants|products)"/', $query['query']),
+    );
+
+    expect($perLineReads)->toBeEmpty()
+        ->and(quotationItemLogs()->where('event', 'created')->pluck('description')->all())->toBe([
+            "Línea de cotización \"{$quotation->quotation_number} · ESMALTE NEGRO · CUÑETE\" creada",
+            "Línea de cotización \"{$quotation->quotation_number} · ESMALTE ROJO · GALÓN\" creada",
+        ]);
+});
+
+test('el emparejado rechaza llaves que no son una lista desde 0', function (): void {
+    expect(fn () => LinePairing::pair([1 => ['a', 'a|1']], [['a', 'a|1']]))->toThrow(InvalidArgumentException::class);
+});
+
+test('un desempate más importante gana a los que siguen', function (): void {
+    // Misma clave en las dos viejas: la nueva coincide en color con la segunda y en la línea entera con ninguna.
+    $old = [['v', 'ROJO', 'v|ROJO|1'], ['v', 'AZUL', 'v|AZUL|1']];
+    $new = [['v', 'AZUL', 'v|AZUL|2']];
+
+    expect(LinePairing::pair($old, $new))->toBe([0 => 1]);
 });
