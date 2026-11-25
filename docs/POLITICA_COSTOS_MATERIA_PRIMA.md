@@ -185,7 +185,9 @@ sacar el precio. Su `current_price` se escribe a mano en el formulario de la mat
 Con un PR que cambie el valor en `config/production.php` (por ejemplo a `'weighted_average'`): queda revisado y en el
 historial, y llega a staging y a producción con el despliegue, que vuelve a armar la caché de configuración. Los precios
 de referencia se recalculan a medida que cada materia prima tiene movimientos (entradas, salidas, OP completadas,
-termoencogido): no hay un comando que las recalcule todas de una vez.
+termoencogido) o cuando empieza a controlar inventario. No hay un comando que las recalcule todas de una vez: hasta
+que cada una tenga su próximo movimiento, convivirán precios calculados con la política anterior y con la nueva.
+Un valor que no sea uno de los tres permitidos hace fallar la prueba de configuración y el recálculo.
 
 ## Recomendacion operativa
 Si deseas modo conservador (criterio de gerencia actual), mantener `conservative_max`.

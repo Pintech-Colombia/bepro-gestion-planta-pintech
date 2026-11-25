@@ -160,6 +160,20 @@ it('allows comercial to create a quotation using sales list price', function () 
     expect((float) $item->subtotal)->toEqual(round($expectedListPrice) * 3);
 });
 
+it('numbers the quotation from the configured start even when lower numbers exist', function (int $existing, int $expected) {
+    config(['quotation.start_number' => 100]);
+    Quotation::factory()->create(['quotation_number' => $existing, 'created_by' => $this->comercialUser->id]);
+
+    $this->actingAs($this->comercialUser)
+        ->post(route('quotations.store'), quotationPayload($this->client->id, $this->product->id, $this->variant->id))
+        ->assertRedirect();
+
+    expect(Quotation::query()->max('quotation_number'))->toBe($expected);
+})->with([
+    'existentes por debajo del inicial: salta al inicial' => [5, 100],
+    'existentes por encima del inicial: sigue la serie' => [150, 151],
+]);
+
 it('applies negative price adjustment percentage on quotation items', function () {
     $this->actingAs($this->comercialUser)
         ->post(route('quotations.store'), quotationPayload(
