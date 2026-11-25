@@ -92,12 +92,23 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->session()->get('login.id'));
         });
 
+        // Tres límites a la vez; frena el primero que se agote. Cada uno con su prefijo para que los contadores no se
+        // mezclen. La IP es la real del visitante (CF-Connecting-IP, ver bootstrap/app.php).
         RateLimiter::for('login', function (Request $request) {
             // El limitador corre antes de validar: un arreglo en el correo (petición armada a mano) no es texto.
             $username = $request->input(Fortify::username());
-            $throttleKey = Str::transliterate(Str::lower(is_string($username) ? $username : '').'|'.$request->ip());
+            $email = Str::transliterate(Str::lower(is_string($username) ? $username : ''));
+            $ip = (string) $request->ip();
 
-            return Limit::perMinute(5)->by($throttleKey);
+            return [
+                // Muchos intentos sobre una cuenta desde un mismo equipo.
+                Limit::perMinute(5)->by('email-ip:'.$email.'|'.$ip),
+                // Una IP que prueba muchos correos (rociado de contraseñas). La planta sale por una sola IP y sus
+                // usuarios no llegan a 20 ingresos por minuto.
+                Limit::perMinute(20)->by('ip:'.$ip),
+                // Una cuenta atacada desde muchas IP. Quien lo use para bloquear a otro solo lo frena un minuto.
+                Limit::perMinute(10)->by('email:'.$email),
+            ];
         });
     }
 
