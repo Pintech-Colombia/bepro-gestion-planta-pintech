@@ -95,6 +95,10 @@ class FortifyServiceProvider extends ServiceProvider
 
         // Tres límites a la vez; frena el primero que se agote. Cada uno con su prefijo para que los contadores no se
         // mezclen. La IP es la real del visitante (CF-Connecting-IP, ver bootstrap/app.php).
+        // El límite corre ANTES que `guest`, aunque `route:list` muestre lo contrario (ese es el orden declarado):
+        // Laravel sube ThrottleRequests por prioridad. Así que un envío del login con la sesión ya abierta también
+        // cuenta; es raro y se aceptó. Orden real: app('router')->gatherRouteMiddleware() sobre `login.store`, con el
+        // kernel HTTP cargado.
         RateLimiter::for('login', function (Request $request) {
             // El limitador corre antes de validar: un arreglo en el correo (petición armada a mano) no es texto.
             $username = $request->input(Fortify::username());
