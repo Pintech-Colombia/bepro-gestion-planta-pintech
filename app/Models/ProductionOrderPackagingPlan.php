@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\WholeUnits;
+use App\Models\Concerns\HasAuditDescription;
 use Database\Factories\ProductionOrderPackagingPlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -44,7 +48,11 @@ use Illuminate\Support\Carbon;
 class ProductionOrderPackagingPlan extends Model
 {
     /** @use HasFactory<ProductionOrderPackagingPlanFactory> */
-    use HasFactory;
+    use HasAuditDescription, HasFactory, LogsActivity;
+
+    protected string $auditLabel = 'Plan de envasado de OP';
+
+    protected string $auditIdentifierAttribute = 'audit_identifier';
 
     /**
      * Una presentación va una sola vez por orden: cada una deja un lote de PT, que se identifica por el número de lote de
@@ -54,6 +62,28 @@ class ProductionOrderPackagingPlan extends Model
 
     protected $table = 'production_order_packaging_plan';
 
+    /**
+     * Mismo log que la orden: el plan se lee junto con ella. Solo lo que escribe una persona; el envase consumido lo
+     * guarda el sistema al completar.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('ordenes_produccion')
+            ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            ->logOnly([
+                'product_variant_id',
+                'planned_units',
+                'actual_units',
+                'new_containers_used',
+                'label_raw_material_id',
+                'labels_used',
+                'notes',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     protected function casts(): array
     {
         return [
@@ -62,6 +92,17 @@ class ProductionOrderPackagingPlan extends Model
             'new_containers_used' => WholeUnits::class,
             'labels_used' => WholeUnits::class,
         ];
+    }
+
+    /** «OP-2026-0045 · GALÓN»: buscar el número de la OP trae la orden y su envasado. */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(function (): string {
+            return implode(' · ', [
+                $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}",
+                $this->auditRelatedValue('productVariant', 'presentation_label') ?? "Presentación #{$this->product_variant_id}",
+            ]);
+        });
     }
 
     public function productionOrder(): BelongsTo

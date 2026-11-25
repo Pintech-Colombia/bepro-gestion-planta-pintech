@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAuditDescription;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * Un saldo de PT que usa una OP. Es una línea planeada hasta que la OP se completa: ahí se descuenta del saldo
@@ -47,6 +51,26 @@ use Illuminate\Support\Carbon;
 ])]
 class RemnantConsumption extends Model
 {
+    use HasAuditDescription, LogsActivity;
+
+    protected string $auditLabel = 'Saldo usado en OP';
+
+    protected string $auditIdentifierAttribute = 'audit_identifier';
+
+    /**
+     * Mismo log que la orden: la fuente se lee junto con ella. Solo lo que escribe una persona: los kilos (al completar
+     * se ajustan a lo que de verdad salió del saldo) y las notas; galones y costo los calcula el sistema.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('ordenes_produccion')
+            ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
+            ->logOnly(['remnant_id', 'quantity_kg', 'notes'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     protected function casts(): array
     {
         return [
@@ -77,6 +101,24 @@ class RemnantConsumption extends Model
     public function isApplied(): bool
     {
         return $this->applied_at !== null;
+    }
+
+    /** «OP-2026-0045 · saldo de OP-2026-0030»: el saldo es el que dejó otra orden. */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(function (): string {
+            $sourceOrderNumber = ProductionOrder::query()
+                ->whereKey(ProductionRemnant::query()->whereKey($this->remnant_id)->select('source_order_id'))
+                ->value('order_number');
+
+            return implode(' · ', [
+                // La columna admite nulo, aunque planear un saldo siempre la llena.
+                $this->target_order_id !== null
+                    ? ($this->auditRelatedValue('targetOrder', 'order_number') ?? "OP #{$this->target_order_id}")
+                    : 'sin OP',
+                $sourceOrderNumber !== null ? "saldo de {$sourceOrderNumber}" : "saldo #{$this->remnant_id}",
+            ]);
+        });
     }
 
     public function remnant(): BelongsTo

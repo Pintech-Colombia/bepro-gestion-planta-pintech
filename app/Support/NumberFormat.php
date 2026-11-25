@@ -59,6 +59,18 @@ final class NumberFormat
         return self::formatRaw($value, scale: $decimals, trimTrailingZeros: false, emptyValue: $emptyValue);
     }
 
+    /**
+     * Un decimal sin tipo conocido (la auditoría solo sabe la escala de la columna): hasta `$maxDecimals` decimales, sin
+     * ceros finales («1.250,5»).
+     */
+    public static function decimal(
+        string|int|float|null $value,
+        int $maxDecimals,
+        string $emptyValue = self::DEFAULT_EMPTY
+    ): string {
+        return self::formatRaw($value, scale: $maxDecimals, trimTrailingZeros: true, emptyValue: $emptyValue);
+    }
+
     private static function formatRaw(
         string|int|float|null $value,
         int $scale,

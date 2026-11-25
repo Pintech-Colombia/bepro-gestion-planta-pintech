@@ -61,13 +61,11 @@ class ProductionOrderConsumptionReason extends Model
     protected function auditIdentifier(): Attribute
     {
         return Attribute::get(function (): string {
-            $this->loadMissing(['productionOrder:id,order_number', 'rawMaterial:id,code', 'product:id,name']);
-
             return implode(' · ', [
-                $this->productionOrder->order_number ?? "OP #{$this->production_order_id}",
+                $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}",
                 $this->product_id !== null
-                    ? ($this->product->name ?? "PT #{$this->product_id}")
-                    : ($this->rawMaterial->code ?? "MP #{$this->raw_material_id}"),
+                    ? ($this->auditRelatedValue('product', 'name') ?? "PT #{$this->product_id}")
+                    : ($this->auditRelatedValue('rawMaterial', 'code') ?? "MP #{$this->raw_material_id}"),
             ]);
         });
     }

@@ -62,6 +62,9 @@ class SaveProductionOrderOperationalDataAction
         ]);
 
         $order->loadMissing(['details', 'packagingPlans']);
+        // La auditoría de cada línea nombra la OP: sin esto la consultaría una vez por línea.
+        $order->details->each->setRelation('productionOrder', $order);
+        $order->packagingPlans->each->setRelation('productionOrder', $order);
         $detailsById = $order->details->keyBy('id');
         $packagingPlansById = $order->packagingPlans->keyBy('id');
 

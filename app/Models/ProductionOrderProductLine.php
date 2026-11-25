@@ -76,11 +76,9 @@ class ProductionOrderProductLine extends Model
     protected function auditIdentifier(): Attribute
     {
         return Attribute::get(function (): string {
-            $this->loadMissing(['productionOrder:id,order_number', 'product:id,name']);
-
             return implode(' · ', [
-                $this->productionOrder->order_number ?? "OP #{$this->production_order_id}",
-                $this->product->name ?? "Producto #{$this->product_id}",
+                $this->auditRelatedValue('productionOrder', 'order_number') ?? "OP #{$this->production_order_id}",
+                $this->auditRelatedValue('product', 'name') ?? "Producto #{$this->product_id}",
             ]);
         });
     }

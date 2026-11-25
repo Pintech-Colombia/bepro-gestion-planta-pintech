@@ -108,6 +108,10 @@ class CompleteProductionOrderAction
             $lockedOrder->update($updateData);
 
             $lockedOrder->loadMissing(['details.rawMaterial:id,code', 'packagingPlans.productVariant', 'lineAdjustments', 'remnantConsumptions', 'batchConsumptions']);
+            // La auditoría de cada línea nombra la OP: sin esto la consultaría una vez por línea, con la orden bloqueada.
+            $lockedOrder->details->each->setRelation('productionOrder', $lockedOrder);
+            $lockedOrder->packagingPlans->each->setRelation('productionOrder', $lockedOrder);
+            $lockedOrder->remnantConsumptions->each->setRelation('targetOrder', $lockedOrder);
             // ensureMatches garantizó una cantidad real por cada línea: se recorren las de la orden, no las enviadas.
             $actualQuantities = collect($data['ingredients'])->mapWithKeys(fn (array $row) => [(int) $row['id'] => (string) $row['actual_quantity']]);
             $totalBulkCost = '0';

@@ -59,6 +59,29 @@ trait HasAuditDescription
     }
 
     /**
+     * El atributo que nombra al registro en la auditoría. La pantalla lo usa también para mostrar los IDs que apuntan a
+     * él («materia prima: S - 12» en vez de «raw_material_id: 7»).
+     */
+    public function auditIdentifierKey(): ?string
+    {
+        return property_exists($this, 'auditIdentifierAttribute') ? $this->auditIdentifierAttribute : null;
+    }
+
+    /**
+     * Un dato de una relación para el identificador de la auditoría. Usa la relación si ya está cargada y, si no, la
+     * consulta sin cargarla: un `loadMissing('relacion:id,columna')` dejaría la relación a medias en el modelo, y el
+     * código que sigue después del guardado leería nulos en las demás columnas.
+     */
+    protected function auditRelatedValue(string $relation, string $column): mixed
+    {
+        if ($this->relationLoaded($relation)) {
+            return $this->getRelation($relation)?->getAttribute($column);
+        }
+
+        return $this->{$relation}()->value($column);
+    }
+
+    /**
      * Resolve the identifier value for the audit description.
      */
     private function resolveAuditIdentifier(): ?string
