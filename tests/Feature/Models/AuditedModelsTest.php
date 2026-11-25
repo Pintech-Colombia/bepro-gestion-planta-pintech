@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Models\Alert;
 use App\Models\ProductionCost;
-use App\Models\QuotationItem;
 use App\Models\ShrinkWrapItem;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -13,8 +12,6 @@ const AUDIT_EXEMPT_MODELS = [
     Alert::class => 'La crea el sistema; la fila misma guarda quién la resolvió y cuándo',
     ProductionCost::class => 'Lo calcula el sistema (recálculo o al completar la OP); ninguna persona lo escribe',
     ShrinkWrapItem::class => 'Sale de la receta del tipo al registrar el termoencogido, que ya se audita; no se edita',
-    // Pendiente: QuotationService borra e inserta las líneas en bloque, sin eventos. Pasa a sincronizar línea por línea.
-    QuotationItem::class => 'Línea de una cotización (se audita al sincronizar línea por línea)',
 ];
 
 test('todo modelo que no esté exento usa LogsActivity', function () {
