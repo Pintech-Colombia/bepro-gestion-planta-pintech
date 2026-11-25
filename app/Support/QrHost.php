@@ -68,7 +68,7 @@ final class QrHost
 
         if (filter_var($url, FILTER_VALIDATE_URL) === false
             || ! in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)) {
-            throw new \RuntimeException('QR_PORTFOLIO_URL tiene que ser una dirección completa, p. ej. https://beprocoatings.com.');
+            throw new \RuntimeException('qr.portfolio_url (config/qr.php) tiene que ser una dirección completa, p. ej. https://beprocoatings.com.');
         }
 
         return $url;

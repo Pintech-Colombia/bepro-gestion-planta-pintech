@@ -14,10 +14,11 @@ configurada. Una sin control de inventario (agua, etiquetas) tiene precio manual
 - `config/production.php` (la política)
 
 ## Políticas disponibles
-Se define en `config/production.php`:
+Se define en `config/production.php`, fija en el código e igual en todos los entornos (es una regla del negocio, no
+del servidor):
 
 ```php
-'raw_material_reference_price_policy' => env('RAW_MATERIAL_REFERENCE_PRICE_POLICY', 'conservative_max')
+'raw_material_reference_price_policy' => 'conservative_max',
 ```
 
 Valores permitidos: `conservative_max` (la que se usa), `weighted_average` y `last_lot`.
@@ -181,17 +182,12 @@ sacar el precio. Su `current_price` se escribe a mano en el formulario de la mat
   desde ese momento el precio sale de sus lotes (si ya tiene, se recalcula al activarlo).
 
 ## Como cambiar la politica mas adelante
-1. Definir variable en `.env`:
-
-```env
-RAW_MATERIAL_REFERENCE_PRICE_POLICY=weighted_average
-```
-
-2. Limpiar cache de config:
-
-```bash
-php artisan config:clear
-```
+Con un PR que cambie el valor en `config/production.php` (por ejemplo a `'weighted_average'`): queda revisado y en el
+historial, y llega a staging y a producción con el despliegue, que vuelve a armar la caché de configuración. Los precios
+de referencia se recalculan a medida que cada materia prima tiene movimientos (entradas, salidas, OP completadas,
+termoencogido) o cuando empieza a controlar inventario. No hay un comando que las recalcule todas de una vez: hasta
+que cada una tenga su próximo movimiento, convivirán precios calculados con la política anterior y con la nueva.
+Un valor que no sea uno de los tres permitidos hace fallar la prueba de configuración y el recálculo.
 
 ## Recomendacion operativa
 Si deseas modo conservador (criterio de gerencia actual), mantener `conservative_max`.

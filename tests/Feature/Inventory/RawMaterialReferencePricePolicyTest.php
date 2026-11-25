@@ -265,3 +265,10 @@ test('cambiar el precio de referencia solo deja en la auditoría el precio actua
         ->and($activity->properties['attributes']['current_price'])->toBe('5000.0000')
         ->and($activity->properties['old'])->toBe(['current_price' => '3000.0000']);
 });
+
+test('an unknown policy fails instead of falling back to another one', function () {
+    // Con guion en vez de guion bajo: antes caía en silencio en conservative_max y devolvía el precio actual.
+    config(['production.raw_material_reference_price_policy' => 'weighted-average']);
+
+    app(RawMaterialReferencePriceService::class)->calculateReferencePrice((int) $this->rawMaterial->id, '3000');
+})->throws(InvalidArgumentException::class, 'weighted-average');

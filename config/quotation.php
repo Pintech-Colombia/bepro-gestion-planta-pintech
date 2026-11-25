@@ -36,6 +36,9 @@ return [
         'Para maximizar el desempeño y la durabilidad del sistema recomendado, se sugiere mantener acompañamiento permanente con el asesor comercial y el equipo técnico de Bepro Coatings durante las etapas de aplicación y puesta en servicio.',
     ],
 
-    'start_number' => (int) env('QUOTATION_START_NUMBER', 1),
+    // Número de la primera cotización en una base nueva; las siguientes continúan desde la última. Regla del negocio:
+    // fija en el código, igual en todos los entornos. Antes de producción se fija el que siga a la última cotización
+    // que usó la planta (checklist de preproducción).
+    'start_number' => 1,
 
 ];

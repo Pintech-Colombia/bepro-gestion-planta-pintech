@@ -163,7 +163,7 @@ it('never falls back to the erp error page on the qr host when its own page fail
     $response->assertNotFound()->assertHeader('X-Robots-Tag', 'noindex, nofollow');
     expect($response->getContent())->not->toContain('ErrorPage')
         ->and($response->getContent())->not->toContain('Public/QrLanding/Unavailable');
-    Exceptions::assertReported(fn (RuntimeException $e): bool => str_contains($e->getMessage(), 'QR_PORTFOLIO_URL'));
+    Exceptions::assertReported(fn (RuntimeException $e): bool => str_contains($e->getMessage(), 'qr.portfolio_url'));
 });
 
 it('limits the qr host to 60 requests per minute per ip', function () {
@@ -194,7 +194,7 @@ it('refuses a portfolio url that is not a full address', function (string $url) 
 
     QrHost::portfolioUrl();
 })->with(['empty' => '', 'without scheme' => 'beprocoatings.com', 'other scheme' => 'ftp://beprocoatings.com'])
-    ->throws(RuntimeException::class, 'QR_PORTFOLIO_URL');
+    ->throws(RuntimeException::class, 'qr.portfolio_url');
 
 it('refuses to build a printed url to localhost on a server', function () {
     $qrCode = QrCode::factory()->create();

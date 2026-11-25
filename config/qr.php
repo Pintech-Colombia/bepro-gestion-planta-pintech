@@ -27,6 +27,8 @@ return [
     |
     */
 
-    'portfolio_url' => env('QR_PORTFOLIO_URL', 'https://beprocoatings.com'),
+    // Fija en el código, igual en todos los entornos (el dominio del QR sí cambia por entorno). QrHost::portfolioUrl()
+    // la valida al arrancar.
+    'portfolio_url' => 'https://beprocoatings.com',
 
 ];

@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 class RawMaterialReferencePriceService
 {
+    /** Políticas de precio de referencia (docs/POLITICA_COSTOS_MATERIA_PRIMA.md). La que se usa está en config/production.php. */
+    public const POLICIES = ['conservative_max', 'weighted_average', 'last_lot'];
+
     public function __construct(
         private readonly DecimalCalculator $calculator
     ) {}
@@ -82,7 +85,12 @@ class RawMaterialReferencePriceService
         $referencePrice = match ($policy) {
             'last_lot' => $this->firstAvailableNumericValue([$latestLotPrice, $weightedAveragePrice, $currentPrice]),
             'weighted_average' => $this->firstAvailableNumericValue([$weightedAveragePrice, $latestLotPrice, $currentPrice]),
-            default => $this->firstAvailableNumericValue([$highestAvailableLotPrice, $currentPrice, $latestLotPrice]),
+            'conservative_max' => $this->firstAvailableNumericValue([$highestAvailableLotPrice, $currentPrice, $latestLotPrice]),
+            // Un valor mal escrito no cae en silencio en otra política: el recálculo falla y queda en failed_jobs.
+            default => throw new \InvalidArgumentException(
+                "La política de precio de referencia «{$policy}» no existe (config/production.php). Válidas: "
+                    .implode(', ', self::POLICIES).'.'
+            ),
         };
 
         return $referencePrice !== null ? $this->calculator->round($referencePrice, 4) : null;

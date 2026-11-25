@@ -431,11 +431,12 @@ class QuotationService
             DB::statement('SELECT pg_advisory_xact_lock(801339)');
         }
 
+        $startNumber = (int) config('quotation.start_number', 1);
         $lastNumber = Quotation::query()->max('quotation_number');
 
-        return $lastNumber !== null
-            ? (int) $lastNumber + 1
-            : (int) config('quotation.start_number', 1);
+        // Igual que el lote de la OP: subir el número inicial surte efecto aunque ya existan cotizaciones (por ejemplo,
+        // de prueba), y bajarlo nunca repite un número.
+        return $lastNumber === null ? $startNumber : max((int) $lastNumber + 1, $startNumber);
     }
 
     /**
