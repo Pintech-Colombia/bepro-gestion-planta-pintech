@@ -10,9 +10,11 @@ use App\Enums\SalesOrderStatus;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Quotation;
+use App\Models\QuotationItem;
 use App\Models\SalesOrder;
 use App\Models\User;
 use App\Services\SalesOrders\SalesOrderNotifier;
+use App\Support\LinePairing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -59,20 +61,9 @@ class QuotationService
                 'created_by' => $user->id,
             ]);
 
+            // La cotización ya deja su entrada al crearse: sus líneas solo se auditan cuando cambian después.
             foreach ($preparedItems as $index => $item) {
-                $quotation->items()->create([
-                    'product_id' => $item['product_id'],
-                    'product_variant_id' => $item['product_variant_id'],
-                    'type' => $item['type'] ?? null,
-                    'description' => $item['description'],
-                    'color' => $item['color'],
-                    'quantity' => $item['quantity'],
-                    'list_unit_price' => $item['list_unit_price'],
-                    'price_adjustment_pct' => $item['price_adjustment_pct'],
-                    'unit_price' => $item['unit_price'],
-                    'subtotal' => $item['subtotal'],
-                    'sort_order' => $index + 1,
-                ]);
+                $quotation->items()->make($this->itemAttributes($item, $index))->disableLogging()->save();
             }
 
             return $quotation->load(['client', 'creator', 'items.product', 'items.productVariant']);
@@ -122,34 +113,97 @@ class QuotationService
                 'total' => $totals['total'],
             ]);
 
-            $quotation->items()->delete();
-
-            $itemsToInsert = [];
-            $now = now();
-
-            foreach ($preparedItems as $index => $item) {
-                $itemsToInsert[] = [
-                    'quotation_id' => $quotation->id,
-                    'product_id' => $item['product_id'],
-                    'product_variant_id' => $item['product_variant_id'],
-                    'type' => $item['type'] ?? null,
-                    'description' => $item['description'],
-                    'color' => $item['color'],
-                    'quantity' => $item['quantity'],
-                    'list_unit_price' => $item['list_unit_price'],
-                    'price_adjustment_pct' => $item['price_adjustment_pct'],
-                    'unit_price' => $item['unit_price'],
-                    'subtotal' => $item['subtotal'],
-                    'sort_order' => $index + 1,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            $quotation->items()->insert($itemsToInsert);
+            $this->syncItems($quotation, $preparedItems);
 
             return $quotation->fresh(['client', 'creator', 'items.product', 'items.productVariant']);
         });
+    }
+
+    /**
+     * Las líneas de la cotización editada, una por una por el modelo para que se auditen: las que siguen se actualizan,
+     * las nuevas se crean y las que se quitaron se borran. El formulario no envía el id de cada línea, así que se
+     * emparejan por presentación (`LinePairing`), desempatando por color y luego por la línea idéntica: con dos líneas de
+     * la misma presentación en distinto color, la que sigue es la del mismo color. Quitar una del medio no cambia las demás.
+     *
+     * @param  list<array<string, mixed>>  $preparedItems
+     */
+    private function syncItems(Quotation $quotation, array $preparedItems): void
+    {
+        // Producto y presentación enteros: el identificador de la auditoría los usa al actualizar o borrar cada línea.
+        $existing = $quotation->items()->with(['product', 'productVariant'])->orderBy('sort_order')->orderBy('id')->get()->values();
+        $signature = fn (array $item): array => [
+            (string) $item['product_variant_id'],
+            (string) ($item['color'] ?? ''),
+            implode('|', [
+                $item['product_variant_id'],
+                $item['type'] ?? '',
+                $item['description'] ?? '',
+                $item['color'] ?? '',
+                $this->calculator->round((string) $item['quantity'], 0),
+                $this->calculator->round((string) $item['price_adjustment_pct'], 2),
+                $this->calculator->round((string) $item['unit_price'], 4),
+            ]),
+        ];
+
+        $pairs = LinePairing::pair(
+            $existing->map(fn (QuotationItem $line): array => $signature([
+                'product_variant_id' => $line->product_variant_id,
+                'type' => $line->type?->value,
+                'description' => $line->description,
+                'color' => $line->color,
+                'quantity' => $line->quantity,
+                'price_adjustment_pct' => $line->price_adjustment_pct,
+                'unit_price' => $line->unit_price,
+            ]))->all(),
+            array_map($signature, $preparedItems),
+        );
+        $pairedExisting = array_flip($pairs);
+
+        $existing->each(function (QuotationItem $line, int $index) use ($pairedExisting, $quotation): void {
+            if (! isset($pairedExisting[$index])) {
+                $line->setRelation('quotation', $quotation)->delete();
+            }
+        });
+
+        // Las presentaciones de las líneas nuevas, con su producto, en una consulta: la auditoría de cada una las nombra y,
+        // sin esto, las consultaría línea por línea con la cotización bloqueada.
+        $newVariantIds = collect($preparedItems)->reject(fn (array $item, int $index): bool => isset($pairs[$index]))->pluck('product_variant_id');
+        $newVariants = $newVariantIds->isEmpty()
+            ? collect()
+            : ProductVariant::query()->with('product')->whereKey($newVariantIds->unique()->all())->get()->keyBy('id');
+
+        foreach ($preparedItems as $index => $item) {
+            $line = isset($pairs[$index]) ? $existing[$pairs[$index]] : null;
+
+            if ($line === null) {
+                $variant = $newVariants->get((int) $item['product_variant_id']);
+                $line = new QuotationItem(['quotation_id' => $quotation->id]);
+                $line->setRelation('productVariant', $variant)->setRelation('product', $variant?->product);
+            }
+
+            $line->fill($this->itemAttributes($item, $index))->setRelation('quotation', $quotation)->save();
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $item  una línea de `prepareItems`
+     * @return array<string, mixed>
+     */
+    private function itemAttributes(array $item, int $index): array
+    {
+        return [
+            'product_id' => $item['product_id'],
+            'product_variant_id' => $item['product_variant_id'],
+            'type' => $item['type'] ?? null,
+            'description' => $item['description'],
+            'color' => $item['color'],
+            'quantity' => $item['quantity'],
+            'list_unit_price' => $item['list_unit_price'],
+            'price_adjustment_pct' => $item['price_adjustment_pct'],
+            'unit_price' => $item['unit_price'],
+            'subtotal' => $item['subtotal'],
+            'sort_order' => $index + 1,
+        ];
     }
 
     public function updateStatus(Quotation $quotation, QuotationStatus $status): Quotation
