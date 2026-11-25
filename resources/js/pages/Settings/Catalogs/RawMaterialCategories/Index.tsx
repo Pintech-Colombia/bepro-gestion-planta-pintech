@@ -78,19 +78,12 @@ export default function RawMaterialCategoriesIndex({
     };
 
     const columns: DataListingColumn<CategoryRow>[] = [
-        {
-            key: 'code',
-            header: 'Código',
-            cell: (category) => category.code,
-            mobile: 'title',
-            className: 'font-mono',
-            cardClassName: 'font-mono',
-        },
+        // Familia y nombre la identifican: el nombre solo es único dentro de su familia.
         {
             key: 'name',
             header: 'Nombre',
             cell: (category) => category.name,
-            mobile: 'subtitle',
+            mobile: 'title',
         },
         {
             key: 'family',
@@ -99,7 +92,7 @@ export default function RawMaterialCategoriesIndex({
                 category.family_name ?? (
                     <span className="text-muted-foreground">Sin familia</span>
                 ),
-            mobile: 'meta',
+            mobile: 'subtitle',
         },
         {
             key: 'type',
@@ -157,7 +150,7 @@ export default function RawMaterialCategoriesIndex({
                             type: 'text',
                             name: 'search',
                             label: 'Buscar',
-                            placeholder: 'Buscar por código o nombre...',
+                            placeholder: 'Buscar por nombre...',
                         },
                         {
                             type: 'select',
@@ -195,7 +188,7 @@ export default function RawMaterialCategoriesIndex({
                             ? categoriesEdit(category.id).url
                             : undefined
                     }
-                    rowLabel={(category) => category.code}
+                    rowLabel={(category) => category.name}
                     columns={columns}
                     // El código ya abre la edición: el menú no la repite (DESIGN.md §9).
                     actions={(category) => [

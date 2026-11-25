@@ -10,7 +10,7 @@ class RawMaterialCategoryFilter extends QueryFilter
 
     protected function search(string $value): void
     {
-        $this->applySearch(['code', 'name'], $value);
+        $this->applySearch(['name'], $value);
     }
 
     protected function status(string $value): void

@@ -55,7 +55,6 @@ export type RawMaterialFamilyFormData = {
 
 export type RawMaterialCategoryRow = {
     id: number;
-    code: string;
     name: string;
     family_id: number | null;
     family_name: string | null;
@@ -66,7 +65,6 @@ export type RawMaterialCategoryRow = {
 };
 
 export type RawMaterialCategoryFormData = {
-    code: string;
     name: string;
     description: string;
     family_id: string;

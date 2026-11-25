@@ -27,9 +27,11 @@ class RawMaterialSeeder extends Seeder
         $unitUnit = UnitOfMeasure::where('code', 'u')->first();
 
         // Get category IDs
-        $catQuimicos = RawMaterialCategory::where('code', 'QUIMICOS')->first();
-        $catEnvMetal = RawMaterialCategory::where('code', 'ENV-METAL')->first();
-        $catEnvPlast = RawMaterialCategory::where('code', 'ENV-PLAST')->first();
+        // Por nombre (las categorías ya no tienen código), las de RawMaterialCategorySeeder.
+        $category = fn (string $name): ?RawMaterialCategory => RawMaterialCategory::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        $catQuimicos = $category('Químicos y Reactivos');
+        $catEnvMetal = $category('Envases Metálicos');
+        $catEnvPlast = $category('Envases Plásticos');
 
         // --- 1. QUÍMICOS Y MATERIAS PRIMAS BASE ---
         $quimicos = [

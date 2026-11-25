@@ -10,6 +10,7 @@ use App\Models\Concerns\HasAuditDescription;
 use App\Models\Concerns\SelectableWhenActive;
 use Database\Factories\RawMaterialCategoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,7 +22,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
- * @property string $code
+ * @property string|null $code obsoleto: ya no se usa ni se escribe (se borra en una migración posterior)
  * @property string $name
  * @property string|null $description
  * @property int|null $family_id
@@ -34,7 +35,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read int|null $raw_materials_count
  */
 #[Fillable([
-    'code',
     'name',
     'description',
     'family_id',
@@ -48,7 +48,7 @@ class RawMaterialCategory extends Model
 
     protected string $auditLabel = 'Categoría de materia prima';
 
-    protected string $auditIdentifierAttribute = 'code';
+    protected string $auditIdentifierAttribute = 'audit_identifier';
 
     protected bool $auditFeminine = true;
 
@@ -57,7 +57,7 @@ class RawMaterialCategory extends Model
         return LogOptions::defaults()
             ->useLogName('categorias_materia_prima')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['code', 'name', 'description', 'family_id', 'type', 'is_active'])
+            ->logOnly(['name', 'description', 'family_id', 'type', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -65,11 +65,21 @@ class RawMaterialCategory extends Model
     protected function casts(): array
     {
         return [
-            'code' => TextFormat::Code->cast(),
             'name' => TextFormat::Name->cast(),
             'type' => RawMaterialType::class,
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * «RESINA · EPOXI»: la categoría se identifica por familia y nombre (el nombre solo es único dentro de su familia).
+     * La familia se lee sin dejar la relación cargada a medias (`auditRelatedValue`).
+     */
+    protected function auditIdentifier(): Attribute
+    {
+        return Attribute::get(fn (): string => collect([$this->auditRelatedValue('family', 'name'), $this->name])
+            ->filter(fn (?string $part): bool => $part !== null && $part !== '')
+            ->implode(' · '));
     }
 
     public function family(): BelongsTo

@@ -99,8 +99,9 @@ test('volver a sembrar no deshace lo editado desde la aplicación', function () 
     $unit = UnitOfMeasure::query()->where('code', 'gl')->sole();
     $unit->update(['name' => 'Galón USA', 'to_liter_conversion' => '3.7900']);
 
-    $category = RawMaterialCategory::query()->where('code', 'ETIQUETAS')->sole();
+    $category = RawMaterialCategory::query()->where('name', 'Etiquetas')->sole();
     $category->update(['name' => 'Rótulos', 'type' => RawMaterialType::SecondaryPackaging, 'is_active' => false]);
+    $categories = RawMaterialCategory::query()->count();
 
     $material = RawMaterial::query()->where('code', 'ENV-P-GL')->sole();
     $material->update(['current_price' => '1234.5', 'minimum_stock' => '7', 'is_active' => false]);
@@ -124,6 +125,8 @@ test('volver a sembrar no deshace lo editado desde la aplicación', function () 
     expect($unit->fresh())
         ->name->toBe('Galón USA')
         ->to_liter_conversion->toBe('3.790000')
+        // No vuelve a crear «Etiquetas»: la renombrada sigue siendo la misma categoría.
+        ->and(RawMaterialCategory::query()->count())->toBe($categories)
         ->and($category->fresh())
         ->name->toBe('Rótulos')
         ->type->toBe(RawMaterialType::SecondaryPackaging)
@@ -141,16 +144,16 @@ test('volver a sembrar no deshace lo editado desde la aplicación', function () 
         ->and($formula->details()->count())->toBe($lines);
 });
 
-test('volver a sembrar no choca con una categoría a la que le cambiaron el código o las mayúsculas', function () {
+test('volver a sembrar no choca con una categoría a la que le cambiaron las mayúsculas', function () {
     $this->seed(DatabaseSeeder::class);
-    RawMaterialCategory::query()->where('code', 'ETIQUETAS')->sole()->update(['code' => 'ETIQ']);
+    RawMaterialCategory::query()->where('name', 'Etiquetas')->sole()->update(['name' => 'ETIQUETAS']);
     ProductCategory::query()->where('name', 'Masillas y Empastes')->sole()->update(['name' => 'MASILLAS Y EMPASTES']);
     $counts = [RawMaterialCategory::query()->count(), ProductCategory::query()->count()];
 
     $this->seed(DatabaseSeeder::class);
 
     expect([RawMaterialCategory::query()->count(), ProductCategory::query()->count()])->toBe($counts)
-        ->and(RawMaterialCategory::query()->where('name', 'Etiquetas')->sole()->code)->toBe('ETIQ');
+        ->and(RawMaterialCategory::query()->where('name', 'ETIQUETAS')->exists())->toBeTrue();
 });
 
 test('volver a sembrar no recrea una familia de materia prima renombrada', function () {
@@ -163,7 +166,7 @@ test('volver a sembrar no recrea una familia de materia prima renombrada', funct
 
     expect(RawMaterialFamily::query()->count())->toBe($count)
         ->and(RawMaterialFamily::query()->where('name', 'Químicos')->exists())->toBeFalse()
-        ->and(RawMaterialCategory::query()->where('code', 'QUIMICOS')->sole()->family_id)->toBe($family->id);
+        ->and(RawMaterialCategory::query()->where('name', 'Químicos y Reactivos')->sole()->family_id)->toBe($family->id);
 });
 
 test('volver a sembrar completa una fórmula que quedó sin líneas', function () {

@@ -41,7 +41,6 @@ beforeEach(function () {
     ]);
 
     $this->rawMaterialCategory = RawMaterialCategory::create([
-        'code' => 'RM-FORM-UPD',
         'name' => 'Materia Prima Fórmulas',
         'is_active' => true,
     ]);

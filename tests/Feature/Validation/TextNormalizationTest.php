@@ -33,7 +33,7 @@ beforeEach(function (): void {
     $this->admin->assignRole(SystemRole::SuperAdmin->value);
 
     $this->uom = UnitOfMeasure::factory()->create();
-    $this->rawMaterialCategory = RawMaterialCategory::factory()->create(['code' => 'RES', 'name' => 'Resinas']);
+    $this->rawMaterialCategory = RawMaterialCategory::factory()->create(['name' => 'Resinas']);
     $this->productCategory = ProductCategory::factory()->create(['name' => 'Esmaltes Base']);
     $this->rawMaterial = RawMaterial::factory()->create(['code' => 'MP-100', 'category_id' => $this->rawMaterialCategory->id, 'unit_of_measure_id' => $this->uom->id]);
     $this->product = Product::factory()->create(['name' => 'BP Esmalte Base', 'category_id' => $this->productCategory->id, 'unit_of_measure_id' => $this->uom->id]);
@@ -70,7 +70,7 @@ function textNormalizationCreate(string $module, array $overrides = []): array
         'product-category' => [route('catalogs.product-categories.store'), ['name' => 'Lacas']],
         'raw-material-category' => [route('catalogs.raw-material-categories.store'), [
             // En la familia de «Resinas»: el nombre de la categoría solo es único dentro de su familia.
-            'code' => 'SOL', 'name' => 'Solventes', 'type' => 'chemical', 'family_id' => $test->rawMaterialCategory->family_id,
+            'name' => 'Solventes', 'type' => 'chemical', 'family_id' => $test->rawMaterialCategory->family_id,
         ]],
         'shrink-wrap-type' => [route('catalogs.shrink-wrap-types.store'), [
             'name' => 'Cuñete x2', 'items' => [['raw_material_id' => $test->bag->id, 'quantity' => '1']],
@@ -102,7 +102,6 @@ test('rechaza el duplicado que solo cambia en mayúsculas, espacios o tildes', f
     'bodega con espacios dobles (BOD-02)' => ['warehouse', 'name', 'Planta  Cali'],
     'categoría de producto en mayúsculas' => ['product-category', 'name', 'ESMALTES BASE'],
     'categoría de producto con espacios dobles (CAT-01)' => ['product-category', 'name', 'Esmaltes  Base'],
-    'categoría de MP: código en minúsculas' => ['raw-material-category', 'code', 'res'],
     'categoría de MP: nombre con espacios dobles' => ['raw-material-category', 'name', 'resinas  '],
     'tipo de termoencogido con espacios dobles' => ['shrink-wrap-type', 'name', 'galón  x4'],
     'proveedor en mayúsculas' => ['supplier', 'name', 'RESINAS DEL VALLE'],
@@ -128,7 +127,6 @@ test('guarda el valor normalizado', function (string $module, string $field, str
     'nombre de producto con tilde partida' => ['product', 'name', "bp primer epo\u{0301}xico", 'BP PRIMER EPÓXICO', Product::class],
     'bodega conserva sus mayúsculas' => ['warehouse', 'name', '  Bodega   Neiva ', 'Bodega Neiva', Warehouse::class],
     'categoría de producto' => ['product-category', 'name', 'Pinturas  de Caucho', 'Pinturas de Caucho', ProductCategory::class],
-    'código de categoría de MP (P8-7)' => ['raw-material-category', 'code', 'env  metal', 'ENV METAL', RawMaterialCategory::class],
     'tipo de termoencogido' => ['shrink-wrap-type', 'name', 'Cuñete  x2', 'Cuñete x2', ShrinkWrapType::class],
     'proveedor conserva sus mayúsculas' => ['supplier', 'name', '  Pinturas   ACME ', 'Pinturas ACME', Supplier::class],
     'NIT de proveedor como texto' => ['supplier', 'nit', '901.674.872-1', '901.674.872-1', Supplier::class],
@@ -150,7 +148,6 @@ test('rechaza los caracteres que no admite el formato, con el mensaje en españo
     'código de MP con emoji (RM-03)' => ['raw-material', 'code', 'RM/😀'],
     'código de MP con barra invertida' => ['raw-material', 'code', 'RM\\100'],
     'código de presentación con comillas' => ['variant', 'code', 'ENV/1 "4"'],
-    'código de categoría de MP con comillas' => ['raw-material-category', 'code', 'RES"'],
     'nombre de producto con barra invertida (PRD-05)' => ['product', 'name', 'EXTRA\\FINO'],
     'nombre de producto con emoji (PRD-05)' => ['product', 'name', 'Esmalte 😀'],
 ]);

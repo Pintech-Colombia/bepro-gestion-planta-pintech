@@ -31,36 +31,21 @@ export function RawMaterialCategoryFields({
 
     return (
         <div className="grid gap-5">
-            <div className="grid gap-5 sm:grid-cols-2">
-                <FormField
-                    id="code"
-                    label="Código"
-                    help="Identificador corto; se guarda en mayúsculas."
-                    error={form.errors.code}
-                >
-                    <Input
-                        value={form.data.code}
-                        onChange={(event) =>
-                            form.setData('code', event.target.value)
-                        }
-                        maxLength={50}
-                        className="uppercase"
-                        placeholder="RESINAS"
-                        autoComplete="off"
-                    />
-                </FormField>
-
-                <FormField id="name" label="Nombre" error={form.errors.name}>
-                    <Input
-                        value={form.data.name}
-                        onChange={(event) =>
-                            form.setData('name', event.target.value)
-                        }
-                        maxLength={100}
-                        placeholder="Resinas"
-                    />
-                </FormField>
-            </div>
+            <FormField
+                id="name"
+                label="Nombre"
+                help="Único dentro de su familia: «BASE AGUA» puede estar en Resina y en Solvente."
+                error={form.errors.name}
+            >
+                <Input
+                    value={form.data.name}
+                    onChange={(event) =>
+                        form.setData('name', event.target.value)
+                    }
+                    maxLength={100}
+                    placeholder="EPOXI"
+                />
+            </FormField>
 
             <FormField
                 id="family_id"

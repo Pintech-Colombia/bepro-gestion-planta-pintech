@@ -31,8 +31,8 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
  * Carga inicial de datos reales desde la plantilla canónica (un .xlsx con una hoja por entidad), que arma el script de
  * limpieza a partir del Excel de la jefa. Crea familias, categorías, proveedores, materias primas y sus lotes iniciales.
  *
- * Lo que ya existe no se toca ni se duplica (familia, categoría y proveedor por nombre sin mayúsculas; categoría también
- * por código; MP por código), y una MP que ya tenía lotes no recibe más: se puede volver a correr. Los lotes entran
+ * Lo que ya existe no se toca ni se duplica (familia y proveedor por nombre sin mayúsculas; categoría por familia y
+ * nombre; MP por código), y una MP que ya tenía lotes no recibe más: se puede volver a correr. Los lotes entran
  * como entradas reales por InventoryService (número MP-AAAA-NNNN, movimiento, precio de referencia y alertas).
  *
  * No abre la transacción: quien lo llama la abre y decide si confirma o, con errores o en simulación, deshace.
@@ -42,10 +42,11 @@ final class BaseDataImporter
     /** Hojas y columnas de la plantilla, en este orden: cada hoja usa lo que crean las anteriores. */
     public const SHEETS = [
         'Familias' => ['nombre', 'descripcion'],
-        'Categorias' => ['codigo', 'nombre', 'familia', 'tipo'],
+        // Una categoría se identifica por su familia y su nombre (el nombre solo es único dentro de la familia).
+        'Categorias' => ['nombre', 'familia', 'tipo'],
         'Proveedores' => ['nombre', 'notas'],
-        // `categoria` es el código de la categoría.
-        'Materias primas' => ['codigo', 'categoria', 'unidad', 'stock_minimo', 'dias_alerta', 'controla_inventario', 'precio_manual', 'sustancia_controlada'],
+        // `familia` y `categoria`: la categoría de la MP, por los nombres de las dos.
+        'Materias primas' => ['codigo', 'familia', 'categoria', 'unidad', 'stock_minimo', 'dias_alerta', 'controla_inventario', 'precio_manual', 'sustancia_controlada'],
         'Lotes iniciales' => ['codigo_mp', 'cantidad', 'precio', 'fecha_entrada', 'vencimiento', 'proveedor'],
     ];
 
@@ -199,26 +200,16 @@ final class BaseDataImporter
      */
     private function importCategory(int $row, array $data): void
     {
-        $data['codigo'] = TextFormat::Code->normalize($data['codigo']);
         $data['nombre'] = TextFormat::Name->normalize($data['nombre']);
         $family = $this->findByName(RawMaterialFamily::query(), TextFormat::Name->normalize($data['familia']));
 
-        // El código es único en toda la tabla; el nombre, solo dentro de su familia («BASE AGUA» en Resina y en Solvente).
-        $exists = RawMaterialCategory::query()
-            ->where('code', $data['codigo'])
-            ->when($family !== null, fn (Builder $query) => $query->orWhere(fn (Builder $query) => $query
-                ->where('family_id', $family->id)
-                ->whereRaw('LOWER(name) = ?', [mb_strtolower($data['nombre'])])))
-            ->exists();
-
-        if ($exists) {
+        if ($family !== null && $this->findCategory($family, $data['nombre']) !== null) {
             $this->counts['Categorias']['existing']++;
 
             return;
         }
 
         if (! $this->valid('Categorias', $row, $data, [
-            'codigo' => ['bail', 'required', 'string', 'max:50', ...TextFormat::Code->rules()],
             'nombre' => ['required', 'string', 'max:100'],
             'familia' => ['required', $this->mustExist($family, 'La familia no existe en la hoja Familias ni en el sistema.')],
             'tipo' => ['required', Rule::enum(RawMaterialType::class)],
@@ -227,7 +218,6 @@ final class BaseDataImporter
         }
 
         RawMaterialCategory::create([
-            'code' => $data['codigo'],
             'name' => $data['nombre'],
             'family_id' => $family?->id,
             'type' => $data['tipo'],
@@ -279,14 +269,16 @@ final class BaseDataImporter
             return;
         }
 
-        // Por código: el nombre de la categoría solo es único dentro de su familia.
-        $category = RawMaterialCategory::query()->where('code', TextFormat::Code->normalize($data['categoria']))->first();
+        // Por familia y nombre: el nombre de la categoría solo es único dentro de su familia.
+        $family = $this->findByName(RawMaterialFamily::query(), TextFormat::Name->normalize($data['familia']));
+        $category = $family !== null ? $this->findCategory($family, TextFormat::Name->normalize($data['categoria'])) : null;
         $unit = UnitOfMeasure::query()->where('code', TextFormat::UnitCode->normalize($data['unidad']))->first();
         $tracksInventory = mb_strtoupper($data['controla_inventario']) !== 'NO';
 
         if (! $this->valid('Materias primas', $row, $data, [
             'codigo' => ['bail', 'required', 'string', 'max:50', ...TextFormat::Code->rules()],
-            'categoria' => ['required', $this->mustExist($category, 'No hay una categoría con ese código en la hoja Categorias ni en el sistema.')],
+            'familia' => ['required', $this->mustExist($family, 'La familia no existe en la hoja Familias ni en el sistema.')],
+            'categoria' => ['required', $this->mustExist($category, 'No hay una categoría con ese nombre en esa familia, ni en la hoja Categorias ni en el sistema.')],
             'unidad' => ['required', $this->mustExist($unit, 'La unidad no existe en el sistema.')],
             'stock_minimo' => ['bail', 'required', ...NumberType::Quantity->rules(), 'min:0'],
             'dias_alerta' => ['bail', 'required', 'integer', 'min:0', 'max:'.RawMaterial::MAX_EXPIRY_ALERT_DAYS],
@@ -399,6 +391,11 @@ final class BaseDataImporter
                 $fail("Trae «{$value}» con formato de porcentaje: escribe el número sin % (10 para 10 %) en una celda de formato General.");
             }
         };
+    }
+
+    private function findCategory(RawMaterialFamily $family, string $name): ?RawMaterialCategory
+    {
+        return $this->findByName(RawMaterialCategory::query()->where('family_id', $family->id), $name);
     }
 
     private function mustExist(?Model $model, string $message, bool $optional = false): \Closure

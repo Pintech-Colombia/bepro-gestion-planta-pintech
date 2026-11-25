@@ -28,7 +28,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $unit = UnitOfMeasure::factory()->create(['code' => 'kg', 'name' => 'Kilo', 'symbol' => 'kg']);
-    $rmCat = RawMaterialCategory::factory()->create(['code' => 'RMC', 'name' => 'RM Cat', 'is_active' => true]);
+    $rmCat = RawMaterialCategory::factory()->create(['name' => 'RM Cat', 'is_active' => true]);
     $pCat = ProductCategory::factory()->create(['name' => 'Prod Cat']);
 
     $product = Product::factory()->create([

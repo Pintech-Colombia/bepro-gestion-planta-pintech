@@ -50,7 +50,7 @@ beforeEach(function () {
     $this->gram = UnitOfMeasure::create(['code' => 'g', 'name' => 'Gramo', 'symbol' => 'g', 'to_kg_conversion' => '0.001']);
     $this->liter = UnitOfMeasure::create(['code' => 'l', 'name' => 'Litro', 'symbol' => 'l', 'to_liter_conversion' => 1]);
 
-    $category = RawMaterialCategory::create(['code' => 'RM-PT', 'name' => 'Químicos', 'is_active' => true]);
+    $category = RawMaterialCategory::create(['name' => 'Químicos', 'is_active' => true]);
     $material = fn (string $code, string $price) => RawMaterial::create([
         'code' => $code,
         'category_id' => $category->id,

@@ -61,7 +61,6 @@ beforeEach(function (): void {
     ]);
 
     $rawMaterialCategory = RawMaterialCategory::create([
-        'code' => 'RMC',
         'name' => 'MP Cat',
         'is_active' => true,
     ]);

@@ -35,7 +35,6 @@ beforeEach(function (): void {
     ]);
 
     $this->category = RawMaterialCategory::create([
-        'code' => 'CAT-ALERT',
         'name' => 'Categoría alertas',
         'is_active' => true,
     ]);

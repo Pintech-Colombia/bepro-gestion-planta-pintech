@@ -24,7 +24,6 @@ describe('Raw Material Store Validation', function (): void {
             'symbol' => 'kg',
         ]);
         $this->category = RawMaterialCategory::create([
-            'code' => 'TEST-CAT',
             'name' => 'Categoría Test',
             'is_active' => true,
         ]);

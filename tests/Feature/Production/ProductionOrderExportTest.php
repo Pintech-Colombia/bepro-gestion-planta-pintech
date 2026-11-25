@@ -38,7 +38,6 @@ function createExportTestDependencies(): array
 {
     $category = ProductCategory::create(['name' => 'Pinturas Export']);
     $rmCategory = RawMaterialCategory::create([
-        'code' => 'RM-EXP-CAT',
         'name' => 'MP Export Test',
         'is_active' => true,
     ]);

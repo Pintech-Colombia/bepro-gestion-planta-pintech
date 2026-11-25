@@ -10,6 +10,7 @@ use App\Models\ProductVariant;
 use App\Models\Quotation;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\SalesOrder;
 use App\Models\User;
 use App\Services\Audit\AuditLogPresenter;
@@ -44,8 +45,8 @@ function changesByField(array $presented): array
 }
 
 test('muestra cada campo en español, con su valor formateado según el cast y los IDs con su nombre', function (): void {
-    $before = RawMaterialCategory::factory()->create(['code' => 'RES-01']);
-    $after = RawMaterialCategory::factory()->create(['code' => 'SOL-02']);
+    $before = RawMaterialCategory::factory()->create(['name' => 'EPOXI', 'family_id' => RawMaterialFamily::factory()->create(['name' => 'RESINA'])->id]);
+    $after = RawMaterialCategory::factory()->create(['name' => 'BASE AGUA', 'family_id' => RawMaterialFamily::factory()->create(['name' => 'SOLVENTE'])->id]);
 
     $presented = presentLog([
         'subject_type' => RawMaterial::class,
@@ -63,7 +64,7 @@ test('muestra cada campo en español, con su valor formateado según el cast y l
         ->and($presented['eventLabel'])->toBe('Actualizado')
         // El código no cambió: no se lista.
         ->and($changes)->toHaveKeys(['category_id', 'current_price', 'is_active'])->not->toHaveKey('code')
-        ->and($changes['category_id'])->toMatchArray(['label' => 'Categoría', 'before' => 'RES-01', 'after' => 'SOL-02', 'kind' => 'changed'])
+        ->and($changes['category_id'])->toMatchArray(['label' => 'Categoría', 'before' => 'RESINA · EPOXI', 'after' => 'SOLVENTE · BASE AGUA', 'kind' => 'changed'])
         ->and($changes['current_price'])->toMatchArray(['label' => 'Precio actual', 'before' => '1.250,5', 'after' => '1.300'])
         ->and($changes['is_active'])->toMatchArray(['label' => 'Activo', 'before' => 'Sí', 'after' => 'No']);
 });

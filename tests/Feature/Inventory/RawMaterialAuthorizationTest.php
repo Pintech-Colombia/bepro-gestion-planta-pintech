@@ -27,7 +27,6 @@ describe('Raw Material Authorization', function () {
             'symbol' => 'kg',
         ]);
         $this->category = RawMaterialCategory::create([
-            'code' => 'AUTH-CAT',
             'name' => 'Categoría Auth',
             'is_active' => true,
         ]);

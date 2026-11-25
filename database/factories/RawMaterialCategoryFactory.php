@@ -18,11 +18,8 @@ class RawMaterialCategoryFactory extends Factory
 
     public function definition(): array
     {
-        $code = strtoupper($this->faker->unique()->bothify('CAT-###'));
-
         return [
-            'code' => $code,
-            'name' => 'Categoria '.$code,
+            'name' => 'Categoria '.strtoupper($this->faker->unique()->bothify('CAT-###')),
             'description' => $this->faker->optional()->sentence(),
             'family_id' => RawMaterialFamily::factory(),
             'type' => RawMaterialType::Chemical,
