@@ -11,6 +11,7 @@ use App\Http\Requests\Catalogs\IndexRawMaterialFamilyRequest;
 use App\Http\Requests\Catalogs\StoreRawMaterialFamilyRequest;
 use App\Http\Requests\Catalogs\UpdateRawMaterialFamilyRequest;
 use App\Models\RawMaterialFamily;
+use App\Services\Production\ProductionOrderConsumptionCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -23,6 +24,7 @@ class RawMaterialFamilyController extends Controller
 {
     public function __construct(
         private readonly DeleteUnusedRecordAction $deleteUnused,
+        private readonly ProductionOrderConsumptionCheck $consumptionCheck,
     ) {}
 
     public function index(IndexRawMaterialFamilyRequest $request): Response
@@ -44,6 +46,7 @@ class RawMaterialFamilyController extends Controller
 
         return Inertia::render('Settings/Catalogs/RawMaterialFamilies/Index', [
             'families' => $families,
+            'generalTolerance' => $this->consumptionCheck->currentTolerancePercentage(),
             'filters' => $request->validated(),
             'can' => [
                 'create' => Gate::allows('create', RawMaterialFamily::class),
@@ -55,7 +58,9 @@ class RawMaterialFamilyController extends Controller
     {
         $this->authorize('create', RawMaterialFamily::class);
 
-        return Inertia::render('Settings/Catalogs/RawMaterialFamilies/Create');
+        return Inertia::render('Settings/Catalogs/RawMaterialFamilies/Create', [
+            'generalTolerance' => $this->consumptionCheck->currentTolerancePercentage(),
+        ]);
     }
 
     public function store(StoreRawMaterialFamilyRequest $request): RedirectResponse
@@ -78,6 +83,7 @@ class RawMaterialFamilyController extends Controller
 
         return Inertia::render('Settings/Catalogs/RawMaterialFamilies/Edit', [
             'family' => $this->familyData($rawMaterialFamily),
+            'generalTolerance' => $this->consumptionCheck->currentTolerancePercentage(),
         ]);
     }
 
@@ -121,6 +127,7 @@ class RawMaterialFamilyController extends Controller
             'id' => $family->id,
             'name' => $family->name,
             'description' => $family->description,
+            'consumption_tolerance_percentage' => $family->consumption_tolerance_percentage,
             'is_active' => $family->is_active,
             'categories_count' => (int) $family->categories_count,
         ];

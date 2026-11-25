@@ -48,6 +48,14 @@ final class BaseDataImporter
         'Lotes iniciales' => ['codigo_mp', 'cantidad', 'precio', 'fecha_entrada', 'vencimiento', 'proveedor'],
     ];
 
+    /**
+     * Columnas que pueden faltar (una plantilla anterior no las trae): vacías si faltan. `tolerancia_consumo` es el % de
+     * la familia; vacío, el general.
+     */
+    public const OPTIONAL_COLUMNS = [
+        'Familias' => ['tolerancia_consumo'],
+    ];
+
     public const BATCH_NOTE = 'Carga inicial de inventario';
 
     /** @var list<string> */
@@ -91,8 +99,9 @@ final class BaseDataImporter
             foreach (array_slice($rows, 1) as $index => $cells) {
                 $data = [];
 
-                foreach ($columns as $column) {
-                    $data[$column] = $this->cellText($cells[array_search($column, $header, true)] ?? null);
+                foreach ([...$columns, ...(self::OPTIONAL_COLUMNS[$title] ?? [])] as $column) {
+                    $position = array_search($column, $header, true);
+                    $data[$column] = $position === false ? '' : $this->cellText($cells[$position] ?? null);
                 }
 
                 if (implode('', $data) !== '') {
@@ -152,6 +161,7 @@ final class BaseDataImporter
         if (! $this->valid('Familias', $row, $data, [
             'nombre' => ['required', 'string', 'max:100'],
             'descripcion' => ['nullable', 'string', 'max:1000'],
+            'tolerancia_consumo' => ['nullable', ...NumberType::Percentage->rules('100'), 'min:0'],
         ])) {
             return;
         }
@@ -159,6 +169,7 @@ final class BaseDataImporter
         RawMaterialFamily::create([
             'name' => $data['nombre'],
             'description' => $data['descripcion'] !== '' ? $data['descripcion'] : null,
+            'consumption_tolerance_percentage' => $data['tolerancia_consumo'] !== '' ? $data['tolerancia_consumo'] : null,
             'is_active' => true,
         ]);
         $this->counts['Familias']['created']++;

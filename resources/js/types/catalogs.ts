@@ -39,6 +39,8 @@ export type RawMaterialFamilyRow = {
     id: number;
     name: string;
     description: string | null;
+    /** Nulo: usa el general (`generalTolerance`). */
+    consumption_tolerance_percentage: string | null;
     is_active: boolean;
     categories_count: number;
 };
@@ -46,6 +48,8 @@ export type RawMaterialFamilyRow = {
 export type RawMaterialFamilyFormData = {
     name: string;
     description: string;
+    /** Vacío: usa el general. */
+    consumption_tolerance_percentage: string;
     is_active: boolean;
 };
 

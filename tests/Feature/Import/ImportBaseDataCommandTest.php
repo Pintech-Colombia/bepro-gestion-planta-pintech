@@ -33,13 +33,15 @@ beforeEach(function () {
  * Escribe una plantilla canónica con las filas dadas por hoja; las hojas que no se den van solo con encabezados.
  *
  * @param  array<string, list<list<string>>>  $rows
+ * @param  array<string, list<string>>  $extraColumns  columnas opcionales por hoja (`BaseDataImporter::OPTIONAL_COLUMNS`)
  */
-function canonicalTemplate(array $rows): string
+function canonicalTemplate(array $rows, array $extraColumns = []): string
 {
     $book = new Spreadsheet;
     $book->removeSheetByIndex(0);
 
     foreach (BaseDataImporter::SHEETS as $title => $columns) {
+        $columns = [...$columns, ...($extraColumns[$title] ?? [])];
         $sheet = $book->createSheet()->setTitle($title);
         $sheet->fromArray([$columns, ...($rows[$title] ?? [])], null, 'A1', true);
     }
@@ -187,4 +189,25 @@ it('carga el mismo nombre de categoría en dos familias y la MP la elige por có
 
     expect(RawMaterialCategory::query()->where('name', 'BASE AGUA')->count())->toBe(2)
         ->and(RawMaterial::query()->where('code', 'ABA - 5')->sole()->category->family->name)->toBe('SOLVENTE');
+});
+
+it('carga la tolerancia de consumo de cada familia si la plantilla trae la columna, y vacía como el general', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', ''], ['ENVASE Y EMPAQUE', '', ''], ['RESINA', '', '10']];
+
+    importTemplate(canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]))->assertSuccessful();
+
+    expect(RawMaterialFamily::query()->where('name', 'RESINA')->sole()->consumption_tolerance_percentage)->toBe('10.00')
+        ->and(RawMaterialFamily::query()->where('name', 'ADITIVO')->sole()->consumption_tolerance_percentage)->toBeNull();
+});
+
+it('rechaza una tolerancia de familia fuera de rango', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', '150'], ['ENVASE Y EMPAQUE', '', '']];
+
+    importTemplate(canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]))
+        ->expectsOutputToContain('Familias, fila 2')
+        ->assertFailed();
+
+    expect(RawMaterialFamily::query()->count())->toBe(0);
 });

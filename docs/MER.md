@@ -86,6 +86,7 @@ secundario). Una familia con categorías se desactiva; una sin categorías se el
 | `id` | BIGINT |  | PK |
 | `name` | VARCHAR(100) |  | UNIQUE sobre `LOWER(name)` (`raw_material_families_name_lower_unique`) |
 | `description` | TEXT | sí |  |
+| `consumption_tolerance_percentage` | DECIMAL(5,2) | sí | Tolerancia de consumo de sus materias primas en la OP (0 a 100). Nula = la general (`config/production.php`) |
 | `is_active` | BOOLEAN |  | default `true` |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
@@ -398,7 +399,7 @@ Ingredientes de cada fórmula: una materia prima **o** un producto (PT consumibl
 | `density_kg_per_gallon` | DECIMAL(10,4) | sí |  |
 | `cif_percentage` | DECIMAL(5,2) | sí | CIF del producto el día en que se completó: el de sus lotes y su saldo. Nulo mientras está abierta (usa el del producto) |
 | `cif_percentage_estimated` | BOOLEAN |  | Default false. true = completada antes de la columna, sin lote ni saldo que fijara el CIF: se tomó el del producto al migrar |
-| `consumption_tolerance_percentage` | DECIMAL(5,2) | sí | Tolerancia de consumo con que se evaluó al completar (`config/production.php`). Nula mientras está abierta y en las completadas antes de la columna (no se marcan) |
+| `consumption_tolerance_percentage` | DECIMAL(5,2) | sí | Tolerancia general con que se evaluó al completar (`config/production.php`): la del producto terminado que va como ingrediente y la de las líneas de MP completadas antes de la tolerancia por familia. Nula mientras está abierta y en las completadas antes de la columna (no se marcan) |
 | `created_by` | BIGINT |  | FK → `users` (RESTRICT) |
 | `submitted_by` | BIGINT | sí | FK → `users` (RESTRICT) |
 | `submitted_at` | TIMESTAMP | sí |  |
@@ -424,6 +425,7 @@ Consumo de materia prima por lote en cada orden.
 | `actual_quantity` | DECIMAL(12,4) | sí |  |
 | `unit_cost` | DECIMAL(16,4) |  |  |
 | `total_cost` | DECIMAL(16,4) |  |  |
+| `consumption_tolerance_percentage` | DECIMAL(5,2) | sí | Tolerancia con que se evaluó la línea al completar: la de la familia de su MP o la general. Nula mientras está abierta y en las completadas antes de la columna (usan la de la orden) |
 | `created_at` | TIMESTAMP | sí |  |
 | `updated_at` | TIMESTAMP | sí |  |
 | `step_order` | SMALLINT |  | default `0` |

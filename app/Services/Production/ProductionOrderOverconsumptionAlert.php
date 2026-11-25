@@ -35,16 +35,18 @@ class ProductionOrderOverconsumptionAlert
      */
     public function evaluate(ProductionOrder $order): void
     {
-        // Materias primas y productos terminados de la fórmula, con la misma tolerancia.
+        // Materias primas (cada una con el % de su familia) y productos terminados de la fórmula (con el general).
         $rows = [...$this->consumptionCheck->forOrder($order), ...$this->consumptionCheck->productsForOrder($order)];
 
         if ($rows === []) {
             return;
         }
 
-        $tolerance = $rows[0]['tolerance_percentage'];
-        $doubled = $this->calculator->mul($tolerance, '2', 4);
-        $severity = collect($rows)->contains(fn (array $row): bool => $this->calculator->cmp($row['excess_percentage'], $doubled) >= 0)
+        // Cada fila con su propio %: una resina al 10 % y un pigmento al 5 % no tienen el mismo doble.
+        $severity = collect($rows)->contains(fn (array $row): bool => $this->calculator->cmp(
+            $row['excess_percentage'],
+            $this->calculator->mul($row['tolerance_percentage'], '2', 4),
+        ) >= 0)
             ? AlertSeverity::Alta
             : AlertSeverity::Media;
 

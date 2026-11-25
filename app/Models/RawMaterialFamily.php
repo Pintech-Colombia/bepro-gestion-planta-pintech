@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\NumberType;
 use App\Enums\TextFormat;
 use App\Models\Concerns\HasAuditDescription;
 use App\Models\Concerns\SelectableWhenActive;
@@ -25,6 +26,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property int $id
  * @property string $name
  * @property string|null $description
+ * @property string|null $consumption_tolerance_percentage nulo = el general (`config/production.php`)
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -34,6 +36,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 #[Fillable([
     'name',
     'description',
+    'consumption_tolerance_percentage',
     'is_active',
 ])]
 class RawMaterialFamily extends Model
@@ -52,7 +55,7 @@ class RawMaterialFamily extends Model
         return LogOptions::defaults()
             ->useLogName('familias_materia_prima')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            ->logOnly(['name', 'description', 'is_active'])
+            ->logOnly(['name', 'description', 'consumption_tolerance_percentage', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -61,6 +64,7 @@ class RawMaterialFamily extends Model
     {
         return [
             'name' => TextFormat::Name->cast(),
+            'consumption_tolerance_percentage' => NumberType::Percentage->cast(),
             'is_active' => 'boolean',
         ];
     }

@@ -204,6 +204,7 @@ return [
         'brand' => 'marca',
         'category_id' => 'categoría',
         'family_id' => 'familia',
+        'consumption_tolerance_percentage' => 'tolerancia de consumo',
         'is_controlled_substance' => 'sustancia controlada',
         'family' => 'familia',
         'unit_of_measure_id' => 'unidad de medida',

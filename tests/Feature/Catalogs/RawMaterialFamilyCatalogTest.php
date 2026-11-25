@@ -90,3 +90,44 @@ it('elimina una familia sin categorías y rechaza una con categorías', function
     expect(RawMaterialFamily::query()->whereKey($empty->id)->exists())->toBeFalse()
         ->and(RawMaterialFamily::query()->whereKey($used->id)->exists())->toBeTrue();
 });
+
+it('guarda la tolerancia de consumo de la familia, vacía como el general, y audita el cambio', function () {
+    actingAsRole(SystemRole::SuperAdmin);
+
+    $this->post(route('catalogs.raw-material-families.store'), ['name' => 'RESINA', 'consumption_tolerance_percentage' => '10'])
+        ->assertSessionHasNoErrors();
+    $this->post(route('catalogs.raw-material-families.store'), ['name' => 'PIGMENTO', 'consumption_tolerance_percentage' => ''])
+        ->assertSessionHasNoErrors();
+
+    $resina = RawMaterialFamily::query()->where('name', 'RESINA')->sole();
+    $this->put(route('catalogs.raw-material-families.update', $resina), ['name' => 'RESINA', 'consumption_tolerance_percentage' => '12.5'])
+        ->assertSessionHasNoErrors();
+
+    $log = Activity::query()->where('subject_type', RawMaterialFamily::class)->where('subject_id', $resina->id)->where('event', 'updated')->sole();
+
+    expect($resina->fresh()->consumption_tolerance_percentage)->toBe('12.50')
+        ->and(RawMaterialFamily::query()->where('name', 'PIGMENTO')->sole()->consumption_tolerance_percentage)->toBeNull()
+        ->and($log->properties['old'])->toBe(['consumption_tolerance_percentage' => '10.00'])
+        ->and($log->properties['attributes'])->toBe(['consumption_tolerance_percentage' => '12.50']);
+});
+
+it('rechaza una tolerancia negativa, mayor que 100 o con más de dos decimales', function (string $value) {
+    actingAsRole(SystemRole::SuperAdmin);
+
+    $this->post(route('catalogs.raw-material-families.store'), ['name' => 'RESINA', 'consumption_tolerance_percentage' => $value])
+        ->assertSessionHasErrors('consumption_tolerance_percentage');
+})->with(['-1', '100.01', '10.125']);
+
+it('el listado y el formulario muestran el % general que usa la familia sin el suyo', function () {
+    actingAsRole(SystemRole::SuperAdmin);
+    config(['production.consumption_tolerance_percentage' => '5.00']);
+    $family = RawMaterialFamily::factory()->create(['consumption_tolerance_percentage' => '10.00']);
+
+    $this->get(route('catalogs.raw-material-families.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('generalTolerance', '5.00')
+            ->where('families.data', fn ($rows) => collect($rows)->firstWhere('id', $family->id)['consumption_tolerance_percentage'] === '10.00'));
+
+    $this->get(route('catalogs.raw-material-families.edit', $family))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('generalTolerance', '5.00'));
+});

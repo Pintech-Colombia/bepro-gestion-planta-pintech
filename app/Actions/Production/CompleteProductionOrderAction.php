@@ -69,9 +69,15 @@ class CompleteProductionOrderAction
             // Después de la lista: si la orden cambió, eso se avisa antes que un error de cantidad.
             $data['ingredients'] = $this->lineUnits->ingredientsToRecord($lockedOrder, $data['ingredients']);
 
-            // El % con que se evalúa el consumo queda en la orden: si cambia después, la completada sigue mostrando
-            // lo que se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
+            // El % con que se evalúa el consumo queda guardado: el general en la orden (el del producto terminado) y el de
+            // cada materia prima (el de su familia) en sus líneas. Si cambia después, la completada sigue mostrando lo que
+            // se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
             $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
+            // De las líneas ya cargadas (la evaluación las cargó): `details()` ordena por paso, y PostgreSQL no acepta
+            // `DISTINCT` con un orden que no está en el `select`.
+            $lineTolerances = $this->consumptionCheck->tolerancesByMaterial(
+                $lockedOrder->loadMissing('details')->details->map(fn ($detail): int => (int) $detail->raw_material_id)->unique()->values()->all(),
+            );
             $this->consumptionCheck->recordReasons(
                 $lockedOrder,
                 $data['ingredients'],
@@ -146,6 +152,7 @@ class CompleteProductionOrderAction
                     'actual_quantity' => $actualQuantity,
                     'unit_cost' => $realUnitCost,
                     'total_cost' => $consumedCost,
+                    'consumption_tolerance_percentage' => $lineTolerances[(int) $detail->raw_material_id],
                 ]);
 
                 $totalBulkCost = $this->calculator->add($totalBulkCost, $consumedCost, 4);

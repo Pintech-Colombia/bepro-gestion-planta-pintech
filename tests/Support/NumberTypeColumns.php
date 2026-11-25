@@ -85,6 +85,8 @@ final class NumberTypeColumns
             'raw_materials.price_variation_threshold',
             'production_orders.yield_percentage',
             'production_orders.cif_percentage', 'production_orders.consumption_tolerance_percentage',
+            'raw_material_families.consumption_tolerance_percentage',
+            'production_order_details.consumption_tolerance_percentage',
         ]);
 
         $add(NumberType::ComputedPercentage, ['production_costs.variation_percentage']);

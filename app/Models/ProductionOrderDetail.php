@@ -26,6 +26,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property string|null $actual_quantity
  * @property string $unit_cost
  * @property string $total_cost
+ * @property string|null $consumption_tolerance_percentage el % con que se evaluó al completar (nulo antes)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read ProductionOrder $productionOrder
@@ -42,6 +43,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'actual_quantity',
     'unit_cost',
     'total_cost',
+    'consumption_tolerance_percentage',
 ])]
 class ProductionOrderDetail extends Model
 {
@@ -77,6 +79,7 @@ class ProductionOrderDetail extends Model
             'actual_quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'total_cost' => 'decimal:4',
+            'consumption_tolerance_percentage' => 'decimal:2',
         ];
     }
 
