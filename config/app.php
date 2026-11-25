@@ -69,7 +69,9 @@ return [
 
     'timezone' => 'UTC',
 
-    'plant_timezone' => env('APP_PLANT_TIMEZONE', 'America/Bogota'),
+    // Zona horaria de la planta (fechas que ve el usuario, exportes, tareas programadas). Fija en el código: la planta
+    // está en Colombia en todos los entornos.
+    'plant_timezone' => 'America/Bogota',
 
     /*
     |--------------------------------------------------------------------------
