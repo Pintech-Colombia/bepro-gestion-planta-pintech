@@ -10,6 +10,7 @@ class RawMaterialCategoryFilter extends QueryFilter
 
     protected function search(string $value): void
     {
+        // Solo el nombre: la familia tiene su filtro (buscarla aquí traería «ADITIVO BASE AGUA» al buscar «BASE AGUA»).
         $this->applySearch(['name'], $value);
     }
 

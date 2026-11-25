@@ -11,6 +11,7 @@ use App\Enums\SystemRole;
 use App\Models\Concerns\HasAuditDescription;
 use App\Models\Formula;
 use App\Models\ProductVariant;
+use App\Models\RawMaterialCategory;
 use App\Services\TimezoneService;
 use App\Support\NumberFormat;
 use BackedEnum;
@@ -45,7 +46,11 @@ final class AuditLogPresenter
     private const PROPERTY_REFERENCES = ['product_variant_id' => ProductVariant::class];
 
     /** Lo que necesita el accessor que nombra a cada modelo, para no consultarlo registro por registro. */
-    private const NAME_EAGER_LOADS = [ProductVariant::class => ['product:id,name']];
+    private const NAME_EAGER_LOADS = [
+        ProductVariant::class => ['product:id,name'],
+        // «RESINA · EPOXI»: la categoría se nombra con su familia.
+        RawMaterialCategory::class => ['family:id,name'],
+    ];
 
     private const ROLE_PROPERTIES = ['old_role', 'new_role'];
 

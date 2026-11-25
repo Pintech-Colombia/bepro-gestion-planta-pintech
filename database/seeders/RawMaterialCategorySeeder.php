@@ -8,6 +8,7 @@ use App\Enums\RawMaterialType;
 use App\Models\RawMaterialCategory;
 use App\Models\RawMaterialFamily;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class RawMaterialCategorySeeder extends Seeder
 {
@@ -71,12 +72,15 @@ class RawMaterialCategorySeeder extends Seeder
             return;
         }
 
-        foreach ($categories as $category) {
-            $family = $this->family(...$families[$category['family']]);
-            unset($category['family']);
+        // Todas o ninguna: si falla a mitad, la tabla queda vacía y la próxima corrida las crea completas.
+        DB::transaction(function () use ($categories, $families): void {
+            foreach ($categories as $category) {
+                $family = $this->family(...$families[$category['family']]);
+                unset($category['family']);
 
-            RawMaterialCategory::create([...$category, 'family_id' => $family->id, 'is_active' => true]);
-        }
+                RawMaterialCategory::create([...$category, 'family_id' => $family->id, 'is_active' => true]);
+            }
+        });
 
         $this->command->info(RawMaterialCategory::count().' raw material categories.');
     }

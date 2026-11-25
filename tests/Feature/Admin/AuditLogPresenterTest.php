@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogPresenter;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 
@@ -209,4 +210,23 @@ test('la pantalla recibe los registros presentados y los filtros con su etiqueta
                 ['value' => 'failed_login', 'label' => 'Inicio de sesión fallido'],
             ])
         );
+});
+
+test('las categorías se nombran con su familia sin una consulta por cada una', function () {
+    $categories = collect(['EPOXI', 'ALQUIDICA', 'BASE AGUA'])->map(fn (string $name) => RawMaterialCategory::factory()->create([
+        'name' => $name, 'family_id' => RawMaterialFamily::factory()->create(['name' => "RESINA {$name}"])->id,
+    ]));
+    $logs = $categories->map(fn (RawMaterialCategory $category) => Activity::create([
+        'log_name' => 'materias_primas', 'description' => 'Prueba', 'event' => 'created',
+        'subject_type' => RawMaterial::class, 'subject_id' => 1,
+        'properties' => ['attributes' => ['category_id' => $category->id]],
+    ])->fresh());
+
+    DB::enableQueryLog();
+    $presented = app(AuditLogPresenter::class)->present($logs);
+    $familyReads = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], 'from "raw_material_families"'))->count();
+
+    expect($presented->map(fn (array $log): string => $log['changes'][0]['after'])->all())
+        ->toBe(['RESINA EPOXI · EPOXI', 'RESINA ALQUIDICA · ALQUIDICA', 'RESINA BASE AGUA · BASE AGUA'])
+        ->and($familyReads)->toBe(1);
 });

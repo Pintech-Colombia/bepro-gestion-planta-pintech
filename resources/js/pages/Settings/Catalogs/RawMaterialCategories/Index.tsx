@@ -179,7 +179,7 @@ export default function RawMaterialCategoriesIndex({
                     onClear={clearFilters}
                 />
 
-                {/* Sin detalle: el código abre la edición. */}
+                {/* Sin detalle: el nombre abre la edición. */}
                 <DataListing
                     rows={categories.data}
                     rowKey={(category) => category.id}
@@ -190,7 +190,7 @@ export default function RawMaterialCategoriesIndex({
                     }
                     rowLabel={(category) => category.name}
                     columns={columns}
-                    // El código ya abre la edición: el menú no la repite (DESIGN.md §9).
+                    // El nombre ya abre la edición: el menú no la repite (DESIGN.md §9).
                     actions={(category) => [
                         {
                             label: 'Eliminar',

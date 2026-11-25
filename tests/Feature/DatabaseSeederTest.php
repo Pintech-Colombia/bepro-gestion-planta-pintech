@@ -275,3 +275,15 @@ test('cada línea de las fórmulas de demostración encuentra su materia prima',
         ->doesntExpectOutputToContain('no encontrad')
         ->assertSuccessful();
 });
+
+test('con categorías reales cargadas, el seeder de materias primas no crea MP de prueba sin categoría', function () {
+    $this->seed(UnitsOfMeasureSeeder::class);
+    // Lo que deja import:base-data: categorías reales, ninguna de las base.
+    RawMaterialCategory::factory()->create(['name' => 'EPOXI']);
+
+    $this->seed(RawMaterialCategorySeeder::class);
+    $this->seed(RawMaterialSeeder::class);
+
+    expect(RawMaterialCategory::query()->pluck('name')->all())->toBe(['EPOXI'])
+        ->and(RawMaterial::query()->count())->toBe(0);
+});
