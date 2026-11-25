@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 /**
@@ -46,6 +47,23 @@ final class BaseDataImporter
         // `categoria` es el código de la categoría.
         'Materias primas' => ['codigo', 'categoria', 'unidad', 'stock_minimo', 'dias_alerta', 'controla_inventario', 'precio_manual', 'sustancia_controlada'],
         'Lotes iniciales' => ['codigo_mp', 'cantidad', 'precio', 'fecha_entrada', 'vencimiento', 'proveedor'],
+    ];
+
+    /**
+     * Columnas que pueden faltar (una plantilla anterior no las trae): vacías si faltan. `tolerancia_consumo` es el % de
+     * la familia; vacío, el general. Como todo lo que ya existe, una familia ya creada no cambia al volver a importar:
+     * su % se edita en Configuración → Familias.
+     */
+    public const OPTIONAL_COLUMNS = [
+        'Familias' => ['tolerancia_consumo'],
+    ];
+
+    /**
+     * Columnas de porcentaje que llevan el número tal cual (10 para 10 %). Una celda con formato de porcentaje guarda
+     * 0,1 aunque muestre «10%»: se lee con su formato para rechazarla en vez de cargar 0,1 %.
+     */
+    private const PLAIN_PERCENT_COLUMNS = [
+        'Familias' => ['tolerancia_consumo'],
     ];
 
     public const BATCH_NOTE = 'Carga inicial de inventario';
@@ -91,8 +109,18 @@ final class BaseDataImporter
             foreach (array_slice($rows, 1) as $index => $cells) {
                 $data = [];
 
-                foreach ($columns as $column) {
-                    $data[$column] = $this->cellText($cells[array_search($column, $header, true)] ?? null);
+                foreach ([...$columns, ...(self::OPTIONAL_COLUMNS[$title] ?? [])] as $column) {
+                    $position = array_search($column, $header, true);
+                    $data[$column] = $position === false ? '' : $this->cellText($cells[$position] ?? null);
+
+                    if ($position !== false && in_array($column, self::PLAIN_PERCENT_COLUMNS[$title] ?? [], true)) {
+                        $cell = $sheet->getCell(Coordinate::stringFromColumnIndex($position + 1).($index + 2));
+
+                        if (str_contains($cell->getStyle()->getNumberFormat()->getFormatCode(), '%')) {
+                            // Lo que muestra Excel («10%»): la validación lo rechaza con su mensaje.
+                            $data[$column] = trim((string) $cell->getFormattedValue());
+                        }
+                    }
                 }
 
                 if (implode('', $data) !== '') {
@@ -152,6 +180,7 @@ final class BaseDataImporter
         if (! $this->valid('Familias', $row, $data, [
             'nombre' => ['required', 'string', 'max:100'],
             'descripcion' => ['nullable', 'string', 'max:1000'],
+            'tolerancia_consumo' => ['bail', 'nullable', $this->plainPercent(), ...NumberType::Percentage->rules('100'), 'min:0'],
         ])) {
             return;
         }
@@ -159,6 +188,7 @@ final class BaseDataImporter
         RawMaterialFamily::create([
             'name' => $data['nombre'],
             'description' => $data['descripcion'] !== '' ? $data['descripcion'] : null,
+            'consumption_tolerance_percentage' => $data['tolerancia_consumo'] !== '' ? $data['tolerancia_consumo'] : null,
             'is_active' => true,
         ]);
         $this->counts['Familias']['created']++;
@@ -263,10 +293,12 @@ final class BaseDataImporter
             'controla_inventario' => ['required', Rule::in(['SI', 'NO', 'si', 'no', 'Si', 'No'])],
             // SICOQ: vacío cuenta como NO.
             'sustancia_controlada' => ['nullable', Rule::in(['SI', 'NO', 'si', 'no', 'Si', 'No'])],
-            // Sin control de inventario no hay lotes: el precio de referencia se escribe a mano.
+            // Sin control de inventario no hay lotes: el precio de referencia se escribe a mano. Obligatorio, y 0 sí vale
+            // (el agua), como en la pantalla de MP (`ManualReferencePriceRules`): vacío, los costos lo tomarían como 0
+            // sin que nadie lo decidiera.
             'precio_manual' => $tracksInventory
                 ? ['prohibited']
-                : ['bail', 'required', ...NumberType::Money->rules(), 'gt:0'],
+                : ['bail', 'required', ...NumberType::Money->rules(), 'min:0'],
         ])) {
             return;
         }
@@ -357,6 +389,16 @@ final class BaseDataImporter
     private function findByName(Builder $query, string $name): ?Model
     {
         return $query->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+    }
+
+    /** Un porcentaje con formato de Excel («10%») se rechaza: la columna lleva el número tal cual. */
+    private function plainPercent(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && str_ends_with($value, '%')) {
+                $fail("Trae «{$value}» con formato de porcentaje: escribe el número sin % (10 para 10 %) en una celda de formato General.");
+            }
+        };
     }
 
     private function mustExist(?Model $model, string $message, bool $optional = false): \Closure

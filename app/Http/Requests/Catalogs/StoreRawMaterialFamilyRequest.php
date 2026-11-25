@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Catalogs;
 
+use App\Enums\NumberType;
 use App\Enums\TextFormat;
 use App\Http\Requests\Concerns\NormalizesText;
 use App\Models\RawMaterialFamily;
@@ -37,6 +38,8 @@ class StoreRawMaterialFamilyRequest extends FormRequest
     {
         return [
             'description' => ['nullable', 'string', 'max:1000'],
+            // Vacío = el general (`config/production.php`). Hasta 100 %: el doble de lo planeado ya no es tolerancia.
+            'consumption_tolerance_percentage' => ['nullable', ...NumberType::Percentage->rules('100'), 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -56,8 +59,10 @@ class StoreRawMaterialFamilyRequest extends FormRequest
             ...$this->normalizedText(['name' => TextFormat::Name]),
         ];
 
-        if (is_string($this->input('description')) && trim($this->input('description')) === '') {
-            $merge['description'] = null;
+        foreach (['description', 'consumption_tolerance_percentage'] as $field) {
+            if (is_string($this->input($field)) && trim($this->input($field)) === '') {
+                $merge[$field] = null;
+            }
         }
 
         $this->merge($merge);

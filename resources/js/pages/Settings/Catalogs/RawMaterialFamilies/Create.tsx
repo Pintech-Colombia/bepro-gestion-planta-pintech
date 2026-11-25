@@ -9,10 +9,15 @@ import {
 } from '@/routes/catalogs/raw-material-families';
 import type { RawMaterialFamilyFormData } from '@/types';
 
-export default function RawMaterialFamiliesCreate() {
+type Props = {
+    generalTolerance: string;
+};
+
+export default function RawMaterialFamiliesCreate({ generalTolerance }: Props) {
     const form = useForm<RawMaterialFamilyFormData>({
         name: '',
         description: '',
+        consumption_tolerance_percentage: '',
         is_active: true,
     });
 
@@ -34,7 +39,10 @@ export default function RawMaterialFamiliesCreate() {
                     }}
                     className="grid gap-6"
                 >
-                    <RawMaterialFamilyFields form={form} />
+                    <RawMaterialFamilyFields
+                        form={form}
+                        generalTolerance={generalTolerance}
+                    />
 
                     <FormActions
                         submitLabel="Guardar"

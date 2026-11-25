@@ -10,6 +10,7 @@ use App\Models\ProductionOrderConsumptionReason;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
 use App\Models\ProductionOrderProductLine;
+use App\Models\RawMaterial;
 use App\Services\DecimalCalculator;
 use App\Support\NumberFormat;
 use Illuminate\Support\Collection;
@@ -28,8 +29,12 @@ use Illuminate\Validation\ValidationException;
  * El motivo se pide solo si lo real **sin ajustes** pasa el límite: el exceso que viene de ajustes de línea ya tiene el
  * suyo. La alerta cuenta todo (`exceeds`), porque el costo es real.
  *
+ * El % de cada materia prima es el de su familia (`raw_material_families.consumption_tolerance_percentage`) o, si la
+ * familia no tiene, el general (`config/production.php`). Al completar, cada línea guarda el suyo: la completada sigue
+ * mostrando lo que se evaluó aunque cambie el de la familia (las completadas antes usan el que guardó la orden).
+ *
  * Lo mismo para el producto terminado que la OP lleva como ingrediente (PR E2a de PT consumible), aparte y en kilos: lo
- * gastado de todas sus líneas contra lo planeado de todas sus líneas, con el mismo %. Un producto sin nada planeado (solo
+ * gastado de todas sus líneas contra lo planeado de todas sus líneas, siempre con el % general (no tiene familia). Un producto sin nada planeado (solo
  * líneas agregadas en la orden) no se evalúa. No tiene ajustes de línea: si se pasa, pide motivo. Su motivo va en
  * `product_overconsumption_reasons.<id del producto>`, una llave aparte para que un id de MP y uno de producto no choquen.
  *
@@ -68,10 +73,40 @@ class ProductionOrderConsumptionCheck
         private readonly ProductLineCosts $productLineCosts,
     ) {}
 
-    /** El % vigente para las OP que se evalúan ahora (`config/production.php`). */
+    /** El % general vigente (`config/production.php`): el de las familias sin el suyo y el del producto terminado. */
     public function currentTolerancePercentage(): string
     {
         return $this->calculator->round((string) config('production.consumption_tolerance_percentage'), 2);
+    }
+
+    /**
+     * El % vigente de cada materia prima: el de la familia de su categoría o, si no tiene, el general. Una consulta para
+     * todas. También vale el de una familia desactivada: desactivarla solo impide elegirla en categorías nuevas, y las
+     * que ya la tienen siguen agrupadas en ella.
+     *
+     * @param  list<int>  $rawMaterialIds
+     * @return array<int, string> id de la materia prima => %
+     */
+    public function tolerancesByMaterial(array $rawMaterialIds): array
+    {
+        if ($rawMaterialIds === []) {
+            return [];
+        }
+
+        $general = $this->currentTolerancePercentage();
+        $byFamily = RawMaterial::query()
+            ->leftJoin('raw_material_categories', 'raw_material_categories.id', '=', 'raw_materials.category_id')
+            ->leftJoin('raw_material_families', 'raw_material_families.id', '=', 'raw_material_categories.family_id')
+            ->whereIn('raw_materials.id', $rawMaterialIds)
+            ->pluck('raw_material_families.consumption_tolerance_percentage', 'raw_materials.id');
+
+        $tolerances = [];
+        foreach ($rawMaterialIds as $id) {
+            $family = $byFamily->get($id);
+            $tolerances[(int) $id] = $family !== null ? $this->calculator->round((string) $family, 2) : $general;
+        }
+
+        return $tolerances;
     }
 
     /**
@@ -79,14 +114,17 @@ class ProductionOrderConsumptionCheck
      *
      * @param  array<int, string>|null  $actualByLine  id de la línea => lo real, ya en la unidad de la materia prima. Sin
      *                                                 él, lo guardado en cada línea (vacío cuenta como 0).
-     * @param  string|null  $tolerancePercentage  sin él, el vigente
+     * @param  string|null  $orderTolerance  al mostrar una completada, el % que guardó la orden: cada línea usa el suyo y,
+     *                                       si no tiene (completada antes de la tolerancia por familia), este. Sin él, el
+     *                                       vigente de cada materia prima.
+     * @param  array<int, string>|null  $tolerances  el vigente de cada materia prima, si quien llama ya lo tiene
+     *                                               (`tolerancesByMaterial`): completar lo calcula una vez para evaluar y
+     *                                               para guardarlo en las líneas, así los dos no pueden diferir.
      * @return list<ConsumptionRow>
      */
-    public function evaluate(ProductionOrder $order, ?array $actualByLine = null, ?string $tolerancePercentage = null): array
+    public function evaluate(ProductionOrder $order, ?array $actualByLine = null, ?string $orderTolerance = null, ?array $tolerances = null): array
     {
         $order->loadMissing(['details.rawMaterial.unitOfMeasure', 'lineAdjustments']);
-
-        $tolerance = $tolerancePercentage ?? $this->currentTolerancePercentage();
 
         $adjustedByMaterial = [];
         foreach ($order->lineAdjustments as $adjustment) {
@@ -97,9 +135,16 @@ class ProductionOrderConsumptionCheck
 
         /** @var array<int, array{code: string|null, unit: string|null, planned: string, actual: string}> $materials */
         $materials = [];
+        /** @var array<int, string|null> $stored el % que guardó la línea al completar */
+        $stored = [];
+        // Lo guardado solo cuenta al mostrar una completada (`forOrder` pasa el % de la orden); si no, se mide con el vigente.
+        $showingCompleted = $orderTolerance !== null;
         foreach ($order->details as $detail) {
             /** @var ProductionOrderDetail $detail */
             $id = (int) $detail->raw_material_id;
+            $stored[$id] ??= $showingCompleted && $detail->consumption_tolerance_percentage !== null
+                ? (string) $detail->consumption_tolerance_percentage
+                : null;
             $actual = $actualByLine !== null && array_key_exists((int) $detail->id, $actualByLine)
                 ? (string) $actualByLine[(int) $detail->id]
                 : (string) ($detail->actual_quantity ?? '0');
@@ -114,12 +159,17 @@ class ProductionOrderConsumptionCheck
             $materials[$id]['actual'] = $this->calculator->add($materials[$id]['actual'], $actual, 4);
         }
 
+        // El guardado en la línea; si no, el de la orden; si no, el vigente (una consulta para las que lo necesitan).
+        $pending = array_keys(array_filter($stored, fn (?string $tolerance): bool => $tolerance === null));
+        $current = $orderTolerance === null ? ($tolerances ?? $this->tolerancesByMaterial($pending)) : [];
+
         $rows = [];
         foreach ($materials as $id => $material) {
             if (! $this->calculator->isPositive($material['planned'])) {
                 continue;
             }
 
+            $tolerance = $stored[$id] ?? $orderTolerance ?? $current[$id];
             $consumed = $this->calculator->add($material['actual'], $adjustedByMaterial[$id] ?? '0', 4);
 
             $rows[] = [
@@ -139,7 +189,7 @@ class ProductionOrderConsumptionCheck
      *
      * @param  array<int, string>|null  $actualByLine  id de la línea de producto => lo gastado en kilos. Sin él, lo guardado
      *                                                 (`actual_kg`; vacío cuenta como 0).
-     * @param  string|null  $tolerancePercentage  sin él, el vigente
+     * @param  string|null  $tolerancePercentage  sin él, el general vigente (el producto no tiene familia)
      * @return list<ProductConsumptionRow>
      */
     public function evaluateProducts(ProductionOrder $order, ?array $actualByLine = null, ?string $tolerancePercentage = null): array
@@ -219,6 +269,9 @@ class ProductionOrderConsumptionCheck
             return [];
         }
 
+        // En revisión, el vigente de cada materia prima; completada, el que guardó cada línea (o la orden).
+        $orderTolerance = $order->status === ProductionOrderStatus::Completed ? $tolerance : null;
+
         $order->loadMissing('consumptionReasons');
         $reasons = $order->consumptionReasons->whereNotNull('raw_material_id')->pluck('reason', 'raw_material_id');
         $isCompleted = $order->status === ProductionOrderStatus::Completed;
@@ -229,7 +282,7 @@ class ProductionOrderConsumptionCheck
                 'reason' => $reasons->get($row['raw_material_id']),
                 'extra_cost' => $isCompleted ? $this->extraCost($order, $row) : null,
             ],
-            array_filter($this->evaluate($order, null, $tolerance), fn (array $row): bool => $row['exceeds']),
+            array_filter($this->evaluate($order, null, $orderTolerance), fn (array $row): bool => $row['exceeds']),
         ));
     }
 
@@ -275,10 +328,11 @@ class ProductionOrderConsumptionCheck
      * @param  array<int|string, mixed>  $reasons  id de la materia prima => motivo
      * @param  array<int|string, array<string, mixed>>  $productLines  las líneas de producto enviadas: id, actual_kg
      * @param  array<int|string, mixed>  $productReasons  id del producto => motivo
+     * @param  array<int, string>|null  $tolerances  el % vigente de cada materia prima, si quien llama ya lo calculó
      *
      * @throws ValidationException si falta un motivo
      */
-    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId, array $productLines = [], array $productReasons = []): void
+    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId, array $productLines = [], array $productReasons = [], ?array $tolerances = null): void
     {
         $actualByLine = collect($ingredients)
             ->mapWithKeys(fn (array $row): array => [(int) $row['id'] => (string) $row['actual_quantity']])
@@ -289,7 +343,7 @@ class ProductionOrderConsumptionCheck
         $errors = [];
 
         $writtenMaterials = $this->typedReasons(
-            array_filter($this->evaluate($order, $actualByLine), fn (array $row): bool => $row['needs_reason']),
+            array_filter($this->evaluate($order, $actualByLine, null, $tolerances), fn (array $row): bool => $row['needs_reason']),
             'raw_material_id',
             'overconsumption_reasons',
             $reasons,
@@ -375,7 +429,8 @@ class ProductionOrderConsumptionCheck
     }
 
     /**
-     * El % con que la orden muestra lo que se pasó: completada, el que se guardó al completar (una anterior a la
+     * El % general con que la orden muestra lo que se pasó (el del producto terminado, y el de las líneas de materia prima
+     * de una completada antes de la tolerancia por familia): completada, el que se guardó al completar (una anterior a la
      * tolerancia no lo tiene y no marca nada); en revisión, el vigente; si no, ninguno.
      */
     private function shownTolerance(ProductionOrder $order): ?string

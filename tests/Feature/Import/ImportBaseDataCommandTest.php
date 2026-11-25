@@ -15,6 +15,7 @@ use App\Models\Warehouse;
 use App\Services\Import\BaseDataImporter;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\PendingCommand;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Activitylog\Models\Activity;
@@ -33,13 +34,15 @@ beforeEach(function () {
  * Escribe una plantilla canónica con las filas dadas por hoja; las hojas que no se den van solo con encabezados.
  *
  * @param  array<string, list<list<string>>>  $rows
+ * @param  array<string, list<string>>  $extraColumns  columnas opcionales por hoja (`BaseDataImporter::OPTIONAL_COLUMNS`)
  */
-function canonicalTemplate(array $rows): string
+function canonicalTemplate(array $rows, array $extraColumns = []): string
 {
     $book = new Spreadsheet;
     $book->removeSheetByIndex(0);
 
     foreach (BaseDataImporter::SHEETS as $title => $columns) {
+        $columns = [...$columns, ...($extraColumns[$title] ?? [])];
         $sheet = $book->createSheet()->setTitle($title);
         $sheet->fromArray([$columns, ...($rows[$title] ?? [])], null, 'A1', true);
     }
@@ -187,4 +190,53 @@ it('carga el mismo nombre de categoría en dos familias y la MP la elige por có
 
     expect(RawMaterialCategory::query()->where('name', 'BASE AGUA')->count())->toBe(2)
         ->and(RawMaterial::query()->where('code', 'ABA - 5')->sole()->category->family->name)->toBe('SOLVENTE');
+});
+
+it('carga la tolerancia de consumo de cada familia si la plantilla trae la columna, y vacía como el general', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', ''], ['ENVASE Y EMPAQUE', '', ''], ['RESINA', '', '10']];
+
+    importTemplate(canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]))->assertSuccessful();
+
+    expect(RawMaterialFamily::query()->where('name', 'RESINA')->sole()->consumption_tolerance_percentage)->toBe('10.00')
+        ->and(RawMaterialFamily::query()->where('name', 'ADITIVO')->sole()->consumption_tolerance_percentage)->toBeNull();
+});
+
+it('rechaza una tolerancia de familia fuera de rango', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', '150'], ['ENVASE Y EMPAQUE', '', '']];
+
+    importTemplate(canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]))
+        ->expectsOutputToContain('Familias, fila 2')
+        ->assertFailed();
+
+    expect(RawMaterialFamily::query()->count())->toBe(0);
+});
+
+it('acepta precio de referencia 0 en una MP sin control de inventario, como la pantalla, pero no vacío', function () {
+    $rows = fullTemplateRows();
+    $rows['Materias primas'][2] = ['AGUA', 'AGUA', 'kg', '0', '90', 'NO', '0'];
+
+    importTemplate(canonicalTemplate($rows))->assertSuccessful();
+
+    expect(RawMaterial::query()->where('code', 'AGUA')->sole()->current_price)->toBe('0.0000');
+});
+
+it('rechaza una tolerancia con formato de porcentaje de Excel en vez de cargar 0,1 %', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', ''], ['ENVASE Y EMPAQUE', '', '']];
+    $path = canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]);
+
+    // Quien escribe «10%» en Excel deja 0,1 en la celda, con formato de porcentaje.
+    $book = IOFactory::load($path);
+    $sheet = $book->getSheetByName('Familias');
+    $sheet->setCellValue('C2', 0.1);
+    $sheet->getStyle('C2')->getNumberFormat()->setFormatCode('0%');
+    (new Xlsx($book))->save($path);
+
+    importTemplate($path)
+        ->expectsOutputToContain('Familias, fila 2: Trae «10%» con formato de porcentaje')
+        ->assertFailed();
+
+    expect(RawMaterialFamily::query()->count())->toBe(0);
 });

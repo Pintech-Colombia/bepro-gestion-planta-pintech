@@ -2,6 +2,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { RawMaterialFamilyFields } from '@/components/catalogs/raw-material-family-form';
 import { FormActions } from '@/components/form-actions';
 import Heading from '@/components/heading';
+import { formatForInput } from '@/lib/formatters';
 import {
     edit as familiesEdit,
     index as familiesIndex,
@@ -11,12 +12,19 @@ import type { RawMaterialFamilyFormData, RawMaterialFamilyRow } from '@/types';
 
 type Props = {
     family: RawMaterialFamilyRow;
+    generalTolerance: string;
 };
 
-export default function RawMaterialFamiliesEdit({ family }: Props) {
+export default function RawMaterialFamiliesEdit({
+    family,
+    generalTolerance,
+}: Props) {
     const form = useForm<RawMaterialFamilyFormData>({
         name: family.name,
         description: family.description ?? '',
+        consumption_tolerance_percentage: formatForInput(
+            family.consumption_tolerance_percentage,
+        ),
         is_active: family.is_active,
     });
 
@@ -38,7 +46,10 @@ export default function RawMaterialFamiliesEdit({ family }: Props) {
                     }}
                     className="grid gap-6"
                 >
-                    <RawMaterialFamilyFields form={form} />
+                    <RawMaterialFamilyFields
+                        form={form}
+                        generalTolerance={generalTolerance}
+                    />
 
                     <FormActions
                         submitLabel="Guardar cambios"

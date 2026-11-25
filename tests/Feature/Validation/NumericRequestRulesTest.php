@@ -37,6 +37,9 @@ function numericRequestFields(): array
             'quantity' => 'inventory_movements.quantity',
             'cost_price' => 'inventory_movements.cost_price',
         ],
+        'StoreRawMaterialFamilyRequest|UpdateRawMaterialFamilyRequest' => [
+            'consumption_tolerance_percentage' => 'raw_material_families.consumption_tolerance_percentage',
+        ],
         'StoreRawMaterialRequest|UpdateRawMaterialRequest' => [
             'minimum_stock' => 'raw_materials.minimum_stock',
             'alert_days_before_expiry' => 'raw_materials.alert_days_before_expiry',

@@ -11,6 +11,7 @@ import Pagination from '@/components/pagination';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useFilters } from '@/hooks/use-filters';
+import { formatKind } from '@/lib/formatters';
 import {
     create as familiesCreate,
     destroy as familiesDestroy,
@@ -33,12 +34,15 @@ type Props = {
     can: {
         create: boolean;
     };
+    /** El % general, el de las familias sin el suyo. */
+    generalTolerance: string;
 };
 
 export default function RawMaterialFamiliesIndex({
     families,
     filters,
     can,
+    generalTolerance,
 }: Props) {
     const {
         filters: filterState,
@@ -91,6 +95,19 @@ export default function RawMaterialFamiliesIndex({
                 ) : null,
             mobile: 'subtitle',
             className: 'text-muted-foreground',
+        },
+        {
+            key: 'tolerance',
+            header: 'Tolerancia de consumo',
+            cell: (family) => (
+                <FormattedNumber
+                    value={family.consumption_tolerance_percentage}
+                    kind="percent"
+                    emptyValue={`General (${formatKind(generalTolerance, 'percent')})`}
+                />
+            ),
+            mobile: 'meta',
+            align: 'right',
         },
         {
             key: 'categories',

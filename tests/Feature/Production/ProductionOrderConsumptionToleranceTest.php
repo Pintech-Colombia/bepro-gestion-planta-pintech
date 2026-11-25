@@ -19,6 +19,8 @@ use App\Models\ProductionOrderLineAdjustment;
 use App\Models\ProductionOrderPackagingPlan;
 use App\Models\ProductVariant;
 use App\Models\RawMaterial;
+use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -548,4 +550,91 @@ it('logs the reasons when they are written, corrected and deleted', function () 
         ->and($logs->first()->log_name)->toBe('ordenes_produccion')
         ->and($logs[1]->properties['attributes']['reason'])->toBe('Viscosidad alta')
         ->and($logs[1]->causer_id)->toBe($this->operator->id);
+});
+
+// ─── 7. Tolerancia por familia ────────────────────────────────────────────────────────────────────────────────────
+
+/** Pasa la materia prima a una categoría de una familia con el % dado (null = la familia usa el general). */
+function toleranceFamily(RawMaterial $material, string $name, ?string $percentage): RawMaterialFamily
+{
+    $family = RawMaterialFamily::factory()->create(['name' => $name, 'consumption_tolerance_percentage' => $percentage]);
+    $category = RawMaterialCategory::factory()->create(['family_id' => $family->id]);
+    $material->update(['category_id' => $category->id]);
+
+    return $family;
+}
+
+it('each raw material is measured with the tolerance of its family, and one without family with the general', function () {
+    toleranceFamily($this->s7, 'RESINA', '40.00');
+
+    // S-7: 80 de 60 (+33,3 %), dentro del 40 % de Resina. S-11: 12 de 10 (+20 %), fuera del 10 % general.
+    $rows = collect(app(ProductionOrderConsumptionCheck::class)->evaluate($this->order->fresh(), [
+        $this->s7Step1->id => '60', $this->s11Step2->id => '12', $this->s7Step3->id => '20',
+    ]))->keyBy('code');
+
+    expect($rows['S-7']['tolerance_percentage'])->toBe('40.00')
+        ->and($rows['S-7']['exceeds'])->toBeFalse()
+        ->and($rows['S-11']['tolerance_percentage'])->toBe('10.00')
+        ->and($rows['S-11']['exceeds'])->toBeTrue();
+});
+
+it('a family without its own tolerance uses the general', function () {
+    toleranceFamily($this->s7, 'PIGMENTO', null);
+
+    expect(app(ProductionOrderConsumptionCheck::class)->tolerancesByMaterial([$this->s7->id]))->toBe([$this->s7->id => '10.00']);
+});
+
+it('completing keeps the tolerance of each line, and a later change in the family does not change the completed order', function () {
+    $resina = toleranceFamily($this->s7, 'RESINA', '40.00');
+
+    toleranceComplete($this, tolerancePayload($this, '60', '10', '20'))->assertSessionHasNoErrors();
+
+    $order = $this->order->fresh();
+    expect($this->s7Step1->fresh()->consumption_tolerance_percentage)->toBe('40.00')
+        ->and($this->s7Step3->fresh()->consumption_tolerance_percentage)->toBe('40.00')
+        ->and($this->s11Step2->fresh()->consumption_tolerance_percentage)->toBe('10.00')
+        // La orden guarda el general: el del producto terminado y el de las completadas antes de esto.
+        ->and($order->consumption_tolerance_percentage)->toBe('10.00');
+
+    $resina->update(['consumption_tolerance_percentage' => '5.00']);
+
+    // Con el 40 % que se evaluó, S-7 sigue sin pasarse aunque Resina ahora tenga 5 %.
+    expect(app(ProductionOrderConsumptionCheck::class)->forOrder($order->fresh()))->toBe([]);
+});
+
+it('an order completed before the family tolerance uses the tolerance it kept for every line', function () {
+    toleranceFamily($this->s7, 'RESINA', '40.00');
+    $this->s7Step1->update(['actual_quantity' => '60']);
+    $this->s7Step3->update(['actual_quantity' => '20']);
+    $this->s11Step2->update(['actual_quantity' => '10']);
+    $this->order->update(['status' => ProductionOrderStatus::Completed, 'consumption_tolerance_percentage' => '10.00']);
+
+    // Sus líneas no guardaron %: S-7 se mide con el 10 % de la orden, no con el 40 % de hoy.
+    expect(collect(app(ProductionOrderConsumptionCheck::class)->forOrder($this->order->fresh()))->pluck('code')->all())
+        ->toBe(['S-7']);
+});
+
+it('the alert doubles the tolerance of each raw material, not a shared one', function () {
+    toleranceFamily($this->s7, 'RESINA', '20.00');
+
+    // S-7: 80 de 60 (+33,3 %), fuera del 20 % de Resina pero sin llegar a su doble (40 %).
+    toleranceComplete($this, tolerancePayload($this, '60', '10', '20', [$this->s7->id => 'Viscosidad']))
+        ->assertSessionHasNoErrors();
+
+    expect(Alert::query()->where('type', AlertType::Sobreconsumo)->sole()->severity)->toBe(AlertSeverity::Media);
+});
+
+it('the evaluation uses the tolerances it is given, the same ones completing stores in the lines', function () {
+    toleranceFamily($this->s7, 'RESINA', '40.00');
+
+    // Completar calcula el % una vez y lo pasa: aunque la familia diga 40 %, se evalúa con lo que se pasó.
+    $row = collect(app(ProductionOrderConsumptionCheck::class)->evaluate(
+        $this->order->fresh(),
+        [$this->s7Step1->id => '60', $this->s7Step3->id => '20'],
+        null,
+        [$this->s7->id => '10.00', $this->s11->id => '10.00'],
+    ))->firstWhere('code', 'S-7');
+
+    expect($row['tolerance_percentage'])->toBe('10.00')
+        ->and($row['exceeds'])->toBeTrue();
 });
