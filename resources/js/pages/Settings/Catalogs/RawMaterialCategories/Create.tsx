@@ -19,7 +19,6 @@ export default function RawMaterialCategoriesCreate({
     familyOptions,
 }: Props) {
     const form = useForm<RawMaterialCategoryFormData>({
-        code: '',
         name: '',
         description: '',
         family_id: '',

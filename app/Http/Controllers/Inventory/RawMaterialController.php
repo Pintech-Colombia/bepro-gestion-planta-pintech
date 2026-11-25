@@ -150,7 +150,7 @@ class RawMaterialController extends Controller
         $canViewCosts = $request->user()?->can(Permission::CostsView->value) ?? false;
 
         $rawMaterial->load([
-            'category:id,name,code,type,family_id',
+            'category:id,name,type,family_id',
             'category.family:id,name',
             'unitOfMeasure:id,name,symbol',
             'inventoryBatches' => fn ($query) => $query
@@ -194,7 +194,6 @@ class RawMaterialController extends Controller
                 'category' => $rawMaterial->category ? [
                     'id' => $rawMaterial->category->id,
                     'name' => $rawMaterial->category->name,
-                    'code' => $rawMaterial->category->code,
                     'family_name' => $rawMaterial->category->family?->name,
                     'type' => $rawMaterial->category->type->value,
                     'type_label' => $rawMaterial->category->type->label(),
@@ -354,14 +353,14 @@ class RawMaterialController extends Controller
      *
      * @param  Builder<RawMaterialCategory>  $query
      *                                               El formulario las agrupa por familia: van ordenadas por familia y luego por nombre (las sin familia, al final).
-     * @return list<array{id: int, name: string, code: string, family_name: string|null, type: string, type_label: string}>
+     * @return list<array{id: int, name: string, family_name: string|null, type: string, type_label: string}>
      */
     private function categoryOptions(Builder $query): array
     {
         // Se ordena en SQL, como el filtro de familia: así «Óxidos» queda con la O y no después de la Z.
         return $query
             ->leftJoin('raw_material_families', 'raw_material_families.id', '=', 'raw_material_categories.family_id')
-            ->select('raw_material_categories.id', 'raw_material_categories.name', 'raw_material_categories.code', 'raw_material_categories.type', 'raw_material_categories.family_id')
+            ->select('raw_material_categories.id', 'raw_material_categories.name', 'raw_material_categories.type', 'raw_material_categories.family_id')
             ->with('family:id,name')
             ->orderByRaw('raw_material_families.id IS NULL')
             ->orderBy('raw_material_families.name')
@@ -371,7 +370,6 @@ class RawMaterialController extends Controller
             ->map(fn (RawMaterialCategory $category): array => [
                 'id' => $category->id,
                 'name' => $category->name,
-                'code' => $category->code,
                 'family_name' => $category->family?->name,
                 'type' => $category->type->value,
                 'type_label' => $category->type->label(),

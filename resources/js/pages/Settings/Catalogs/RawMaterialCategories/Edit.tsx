@@ -24,7 +24,6 @@ export default function RawMaterialCategoriesEdit({
     familyOptions,
 }: Props) {
     const form = useForm<RawMaterialCategoryFormData>({
-        code: category.code,
         name: category.name,
         description: category.description ?? '',
         family_id: category.family_id ? String(category.family_id) : '',

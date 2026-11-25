@@ -34,7 +34,6 @@ type UnitOption = {
 export type CategoryOption = {
     id: number;
     name: string;
-    code: string;
     /** El selector agrupa las categorías por familia; llegan ordenadas por familia y las sin familia al final. */
     family_name: string | null;
     /** Tipo de insumo de la categoría: la materia prima lo hereda. */

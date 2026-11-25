@@ -20,7 +20,6 @@ use Spatie\Activitylog\Models\Activity;
 function rawCategoryPayload(array $overrides = []): array
 {
     return array_merge([
-        'code' => 'RESINAS',
         'name' => 'Resinas',
         'description' => null,
         'family_id' => $overrides['family_id'] ?? RawMaterialFamily::factory()->create()->id,
@@ -48,11 +47,11 @@ it('lista las categorías con su tipo y cuántas materias primas tienen', functi
 
 it('filtra por tipo de insumo', function () {
     actingAsRole(SystemRole::SuperAdmin);
-    RawMaterialCategory::factory()->create(['code' => 'RESINAS']);
-    RawMaterialCategory::factory()->label()->create(['code' => 'ETIQUETAS']);
+    RawMaterialCategory::factory()->create(['name' => 'RESINAS']);
+    RawMaterialCategory::factory()->label()->create(['name' => 'ETIQUETAS']);
 
     $this->get(route('catalogs.raw-material-categories.index', ['type' => 'label']))
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('categories.data', fn ($rows) => collect($rows)->pluck('code')->all() === ['ETIQUETAS']));
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('categories.data', fn ($rows) => collect($rows)->pluck('name')->all() === ['ETIQUETAS']));
 });
 
 it('deja a Admin consultar las categorías pero no modificarlas', function () {
@@ -72,40 +71,44 @@ it('niega las categorías a los roles sin catalogs.view', function (SystemRole $
     $this->get(route('catalogs.product-categories.index'))->assertForbidden();
 })->with([SystemRole::Production, SystemRole::Operator, SystemRole::Commercial]);
 
-it('crea una categoría con el código en mayúsculas y la audita', function () {
+it('crea una categoría sin código, identificada por familia y nombre, y la audita', function () {
     actingAsRole(SystemRole::SuperAdmin);
+    $packaging = RawMaterialFamily::factory()->create(['name' => 'EMPAQUE']);
 
-    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload(['code' => ' bandejas ', 'name' => 'Bandejas', 'type' => 'secondary_packaging']))
+    // Un `code` que llegue (un formulario viejo en caché) se ignora: la categoría ya no lo tiene.
+    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload([
+        'code' => 'BANDEJAS', 'name' => '  Bandejas ', 'family_id' => $packaging->id, 'type' => 'secondary_packaging',
+    ]))
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('catalogs.raw-material-categories.index'));
 
-    $category = RawMaterialCategory::query()->where('code', 'BANDEJAS')->sole();
+    $category = RawMaterialCategory::query()->where('name', 'Bandejas')->sole();
 
     expect($category->type)->toBe(RawMaterialType::SecondaryPackaging)
+        ->and($category->code)->toBeNull()
         ->and(Activity::query()->where('subject_type', RawMaterialCategory::class)->where('subject_id', $category->id)->value('description'))
-        ->toBe('Categoría de materia prima "BANDEJAS" creada');
+        ->toBe('Categoría de materia prima "EMPAQUE · Bandejas" creada');
 });
 
 it('valida los campos de la categoría', function (array $overrides, string $field) {
     actingAsRole(SystemRole::SuperAdmin);
-    $existing = RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas']);
+    $existing = RawMaterialCategory::factory()->create(['name' => 'Resinas']);
 
     $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload([...$overrides, 'family_id' => $existing->family_id]))
         ->assertSessionHasErrors($field);
 })->with([
-    'código repetido, aunque cambien las mayúsculas' => [['code' => 'resinas', 'name' => 'Otra'], 'code'],
     // En la misma familia, dos categorías con el mismo nombre no se distinguirían en el selector de la materia prima.
-    'nombre repetido en la familia, aunque cambien las mayúsculas' => [['code' => 'OTRA', 'name' => 'RESINAS'], 'name'],
-    'sin nombre' => [['code' => 'OTRA', 'name' => ''], 'name'],
-    'tipo que no existe' => [['code' => 'OTRA', 'type' => 'pintura'], 'type'],
+    'nombre repetido en la familia, aunque cambien las mayúsculas' => [['name' => 'RESINAS'], 'name'],
+    'sin nombre' => [['name' => ''], 'name'],
+    'tipo que no existe' => [['name' => 'Otra', 'type' => 'pintura'], 'type'],
 ]);
 
 it('no deja cambiar el tipo de una categoría que tiene materias primas', function () {
     actingAsRole(SystemRole::SuperAdmin);
-    $category = RawMaterialCategory::factory()->container()->create(['code' => 'ENV-METAL']);
+    $category = RawMaterialCategory::factory()->container()->create([]);
     RawMaterial::factory()->create(['category_id' => $category->id]);
 
-    $this->put(route('catalogs.raw-material-categories.update', $category), rawCategoryPayload(['code' => 'ENV-METAL', 'type' => 'chemical']))
+    $this->put(route('catalogs.raw-material-categories.update', $category), rawCategoryPayload(['type' => 'chemical']))
         ->assertSessionHasErrors(['type' => 'No se puede cambiar el tipo: la categoría tiene 1 materia prima. Muévela a otra categoría primero.']);
 
     expect($category->fresh()->type)->toBe(RawMaterialType::Container);
@@ -113,13 +116,13 @@ it('no deja cambiar el tipo de una categoría que tiene materias primas', functi
 
 it('deja cambiar el tipo de una categoría vacía y editar el resto de una con materias primas', function () {
     actingAsRole(SystemRole::SuperAdmin);
-    $empty = RawMaterialCategory::factory()->create(['code' => 'VACIA']);
-    $used = RawMaterialCategory::factory()->container()->create(['code' => 'ENV-METAL']);
+    $empty = RawMaterialCategory::factory()->create([]);
+    $used = RawMaterialCategory::factory()->container()->create([]);
     RawMaterial::factory()->create(['category_id' => $used->id]);
 
-    $this->put(route('catalogs.raw-material-categories.update', $empty), rawCategoryPayload(['code' => 'VACIA', 'type' => 'label']))
+    $this->put(route('catalogs.raw-material-categories.update', $empty), rawCategoryPayload(['type' => 'label']))
         ->assertSessionHasNoErrors();
-    $this->put(route('catalogs.raw-material-categories.update', $used), rawCategoryPayload(['code' => 'ENV-METAL', 'name' => 'Envases de lata', 'type' => 'container']))
+    $this->put(route('catalogs.raw-material-categories.update', $used), rawCategoryPayload(['name' => 'Envases de lata', 'type' => 'container']))
         ->assertSessionHasNoErrors();
 
     expect($empty->fresh()->type)->toBe(RawMaterialType::Label)
@@ -129,12 +132,12 @@ it('deja cambiar el tipo de una categoría vacía y editar el resto de una con m
 it('no deja poner el nombre de otra categoría de la familia al editar, pero sí cambiar las mayúsculas del propio', function () {
     actingAsRole(SystemRole::SuperAdmin);
     $family = RawMaterialFamily::factory()->create();
-    RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'name' => 'Resinas', 'family_id' => $family->id]);
-    $solvents = RawMaterialCategory::factory()->create(['code' => 'SOLVENTES', 'name' => 'Solventes', 'family_id' => $family->id]);
+    RawMaterialCategory::factory()->create(['name' => 'Resinas', 'family_id' => $family->id]);
+    $solvents = RawMaterialCategory::factory()->create(['name' => 'Solventes', 'family_id' => $family->id]);
 
-    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'resinas', 'family_id' => $family->id]))
+    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['name' => 'resinas', 'family_id' => $family->id]))
         ->assertSessionHasErrors('name');
-    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['code' => 'SOLVENTES', 'name' => 'SOLVENTES', 'family_id' => $family->id]))
+    $this->put(route('catalogs.raw-material-categories.update', $solvents), rawCategoryPayload(['name' => 'SOLVENTES', 'family_id' => $family->id]))
         ->assertSessionHasNoErrors();
 
     expect($solvents->fresh()->name)->toBe('SOLVENTES');
@@ -142,7 +145,7 @@ it('no deja poner el nombre de otra categoría de la familia al editar, pero sí
 
 it('conserva el estado de la categoría si la edición no lo envía', function () {
     actingAsRole(SystemRole::SuperAdmin);
-    $category = RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'is_active' => false]);
+    $category = RawMaterialCategory::factory()->create(['is_active' => false]);
     $payload = rawCategoryPayload();
     unset($payload['is_active']);
 
@@ -179,7 +182,7 @@ it('exige una familia activa al crear la categoría', function (?Closure $family
 it('conserva al editar la familia que se desactivó, pero no deja pasarse a otra inactiva', function () {
     actingAsRole(SystemRole::SuperAdmin);
     $family = RawMaterialFamily::factory()->create();
-    $category = RawMaterialCategory::factory()->create(['code' => 'RESINAS', 'family_id' => $family->id]);
+    $category = RawMaterialCategory::factory()->create(['family_id' => $family->id]);
     $family->update(['is_active' => false]);
     $otherInactive = RawMaterialFamily::factory()->create(['is_active' => false]);
 
@@ -197,12 +200,12 @@ it('conserva al editar la familia que se desactivó, pero no deja pasarse a otra
 it('filtra las categorías por familia y muestra el nombre de la familia', function () {
     actingAsRole(SystemRole::SuperAdmin);
     $additives = RawMaterialFamily::factory()->create(['name' => 'ADITIVO']);
-    RawMaterialCategory::factory()->create(['code' => 'ADIT-DISP', 'family_id' => $additives->id]);
-    RawMaterialCategory::factory()->create(['code' => 'RESINAS']);
+    RawMaterialCategory::factory()->create(['name' => 'DISPERSANTE', 'family_id' => $additives->id]);
+    RawMaterialCategory::factory()->create(['name' => 'RESINAS']);
 
     $this->get(route('catalogs.raw-material-categories.index', ['family' => $additives->id]))
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('categories.data', fn ($rows) => collect($rows)->pluck('code')->all() === ['ADIT-DISP']
+            ->where('categories.data', fn ($rows) => collect($rows)->pluck('name')->all() === ['DISPERSANTE']
                 && $rows[0]['family_name'] === 'ADITIVO'));
 });
 
@@ -210,9 +213,9 @@ it('deja el mismo nombre de categoría en familias distintas', function () {
     actingAsRole(SystemRole::SuperAdmin);
     $resins = RawMaterialFamily::factory()->create(['name' => 'RESINA']);
     $solvents = RawMaterialFamily::factory()->create(['name' => 'SOLVENTE']);
-    RawMaterialCategory::factory()->create(['code' => 'RESINA - BASE AGUA', 'name' => 'BASE AGUA', 'family_id' => $resins->id]);
+    RawMaterialCategory::factory()->create(['name' => 'BASE AGUA', 'family_id' => $resins->id]);
 
-    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload(['code' => 'SOLVENTE - BASE AGUA', 'name' => 'BASE AGUA', 'family_id' => $solvents->id]))
+    $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload(['name' => 'BASE AGUA', 'family_id' => $solvents->id]))
         ->assertSessionHasNoErrors();
 
     expect(RawMaterialCategory::query()->where('name', 'BASE AGUA')->count())->toBe(2);

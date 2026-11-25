@@ -8,6 +8,7 @@ use App\Enums\RawMaterialType;
 use App\Models\RawMaterialCategory;
 use App\Models\RawMaterialFamily;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class RawMaterialCategorySeeder extends Seeder
 {
@@ -25,42 +26,36 @@ class RawMaterialCategorySeeder extends Seeder
 
         $categories = [
             [
-                'code' => 'QUIMICOS',
                 'family' => 'chemicals',
                 'name' => 'Químicos y Reactivos',
                 'description' => 'Pigmentos, resinas, solventes, aditivos y otros componentes químicos',
                 'type' => RawMaterialType::Chemical,
             ],
             [
-                'code' => 'ENV-METAL',
                 'family' => 'packaging',
                 'name' => 'Envases Metálicos',
                 'description' => 'Cuñetes, galones, tambores y otros recipientes metálicos para productos terminados',
                 'type' => RawMaterialType::Container,
             ],
             [
-                'code' => 'ENV-PLAST',
                 'family' => 'packaging',
                 'name' => 'Envases Plásticos',
                 'description' => 'Galones, bidones, tambores y otros recipientes plásticos',
                 'type' => RawMaterialType::Container,
             ],
             [
-                'code' => 'ETIQUETAS',
                 'family' => 'packaging',
                 'name' => 'Etiquetas',
                 'description' => 'Etiquetas con el diseño del producto que se pegan al envase',
                 'type' => RawMaterialType::Label,
             ],
             [
-                'code' => 'BANDEJAS',
                 'family' => 'packaging',
                 'name' => 'Bandejas',
                 'description' => 'Bandejas para el termoencogido',
                 'type' => RawMaterialType::SecondaryPackaging,
             ],
             [
-                'code' => 'BOLSAS',
                 'family' => 'packaging',
                 'name' => 'Bolsas',
                 'description' => 'Bolsas para el termoencogido',
@@ -68,22 +63,24 @@ class RawMaterialCategorySeeder extends Seeder
             ],
         ];
 
-        foreach ($categories as $category) {
-            // Código y nombre son únicos y los dos se editan desde Configuración: si uno ya existe, la categoría ya
-            // está. Buscar solo por código intentaría crear otra con el mismo nombre y chocaría con el índice único.
-            $exists = RawMaterialCategory::query()
-                ->where('code', $category['code'])
-                ->orWhereRaw('LOWER(name) = ?', [mb_strtolower($category['name'])])
-                ->exists();
+        // Solo la primera vez, con la tabla vacía. Sin código, una categoría renombrada desde Configuración no se
+        // reconoce por nombre: buscarla volvería a crear la base con el nombre viejo (DatabaseSeederTest). Y con las
+        // categorías reales ya cargadas (import:base-data), sembrar no agrega estas.
+        if (RawMaterialCategory::query()->exists()) {
+            $this->command->info('Raw material categories already exist: skipped.');
 
-            if (! $exists) {
+            return;
+        }
+
+        // Todas o ninguna: si falla a mitad, la tabla queda vacía y la próxima corrida las crea completas.
+        DB::transaction(function () use ($categories, $families): void {
+            foreach ($categories as $category) {
                 $family = $this->family(...$families[$category['family']]);
                 unset($category['family']);
 
-                // Solo al crearla: una categoría existente conserva la familia que le hayan puesto en Configuración.
                 RawMaterialCategory::create([...$category, 'family_id' => $family->id, 'is_active' => true]);
             }
-        }
+        });
 
         $this->command->info(RawMaterialCategory::count().' raw material categories.');
     }

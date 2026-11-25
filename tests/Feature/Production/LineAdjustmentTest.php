@@ -32,7 +32,7 @@ beforeEach(function () {
     $this->actingAs($this->user);
 
     $unit = UnitOfMeasure::create(['code' => 'kg', 'name' => 'Kilo', 'symbol' => 'kg']);
-    $rmCat = RawMaterialCategory::create(['code' => 'RMC', 'name' => 'RM Cat', 'is_active' => true]);
+    $rmCat = RawMaterialCategory::create(['name' => 'RM Cat', 'is_active' => true]);
     $pCat = ProductCategory::create(['name' => 'Prod Cat']);
 
     $product = Product::create([

@@ -136,7 +136,6 @@ class RawMaterialCategoryController extends Controller
     {
         return [
             'id' => $category->id,
-            'code' => $category->code,
             'name' => $category->name,
             'family_id' => $category->family_id,
             'family_name' => $category->family?->name,

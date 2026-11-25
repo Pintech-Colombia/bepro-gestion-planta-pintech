@@ -43,7 +43,7 @@ beforeEach(function () {
         'is_active' => true,
     ]);
 
-    $category = RawMaterialCategory::create(['code' => 'RM-AUD', 'name' => 'Materia prima auditada', 'is_active' => true]);
+    $category = RawMaterialCategory::create(['name' => 'Materia prima auditada', 'is_active' => true]);
 
     $this->materials = collect(['RM-AUD-01', 'RM-AUD-02', 'RM-AUD-03', 'RM-AUD-04'])->map(fn (string $code) => RawMaterial::create([
         'code' => $code,

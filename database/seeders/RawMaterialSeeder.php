@@ -26,10 +26,19 @@ class RawMaterialSeeder extends Seeder
         $literUnit = UnitOfMeasure::where('code', 'l')->first();
         $unitUnit = UnitOfMeasure::where('code', 'u')->first();
 
-        // Get category IDs
-        $catQuimicos = RawMaterialCategory::where('code', 'QUIMICOS')->first();
-        $catEnvMetal = RawMaterialCategory::where('code', 'ENV-METAL')->first();
-        $catEnvPlast = RawMaterialCategory::where('code', 'ENV-PLAST')->first();
+        // Por nombre (las categorías ya no tienen código), las de RawMaterialCategorySeeder. Si falta alguna, hay
+        // categorías reales (import:base-data) o las renombraron: no se crea nada, para no dejar MP de prueba sin
+        // categoría ni mezclarlas con las reales.
+        $category = fn (string $name): ?RawMaterialCategory => RawMaterialCategory::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        $catQuimicos = $category('Químicos y Reactivos');
+        $catEnvMetal = $category('Envases Metálicos');
+        $catEnvPlast = $category('Envases Plásticos');
+
+        if ($catQuimicos === null || $catEnvMetal === null || $catEnvPlast === null) {
+            $this->command->warn('Raw materials skipped: the base categories of RawMaterialCategorySeeder are not there.');
+
+            return;
+        }
 
         // --- 1. QUÍMICOS Y MATERIAS PRIMAS BASE ---
         $quimicos = [

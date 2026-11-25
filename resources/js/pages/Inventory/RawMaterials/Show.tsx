@@ -43,7 +43,6 @@ type Props = {
         category: {
             id: number;
             name: string;
-            code: string;
             family_name: string | null;
             type_label: string;
         } | null;

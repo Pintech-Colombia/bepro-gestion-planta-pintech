@@ -10,11 +10,13 @@ use App\Models\ProductVariant;
 use App\Models\Quotation;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
+use App\Models\RawMaterialFamily;
 use App\Models\SalesOrder;
 use App\Models\User;
 use App\Services\Audit\AuditLogPresenter;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 
@@ -44,8 +46,8 @@ function changesByField(array $presented): array
 }
 
 test('muestra cada campo en español, con su valor formateado según el cast y los IDs con su nombre', function (): void {
-    $before = RawMaterialCategory::factory()->create(['code' => 'RES-01']);
-    $after = RawMaterialCategory::factory()->create(['code' => 'SOL-02']);
+    $before = RawMaterialCategory::factory()->create(['name' => 'EPOXI', 'family_id' => RawMaterialFamily::factory()->create(['name' => 'RESINA'])->id]);
+    $after = RawMaterialCategory::factory()->create(['name' => 'BASE AGUA', 'family_id' => RawMaterialFamily::factory()->create(['name' => 'SOLVENTE'])->id]);
 
     $presented = presentLog([
         'subject_type' => RawMaterial::class,
@@ -63,7 +65,7 @@ test('muestra cada campo en español, con su valor formateado según el cast y l
         ->and($presented['eventLabel'])->toBe('Actualizado')
         // El código no cambió: no se lista.
         ->and($changes)->toHaveKeys(['category_id', 'current_price', 'is_active'])->not->toHaveKey('code')
-        ->and($changes['category_id'])->toMatchArray(['label' => 'Categoría', 'before' => 'RES-01', 'after' => 'SOL-02', 'kind' => 'changed'])
+        ->and($changes['category_id'])->toMatchArray(['label' => 'Categoría', 'before' => 'RESINA · EPOXI', 'after' => 'SOLVENTE · BASE AGUA', 'kind' => 'changed'])
         ->and($changes['current_price'])->toMatchArray(['label' => 'Precio actual', 'before' => '1.250,5', 'after' => '1.300'])
         ->and($changes['is_active'])->toMatchArray(['label' => 'Activo', 'before' => 'Sí', 'after' => 'No']);
 });
@@ -208,4 +210,23 @@ test('la pantalla recibe los registros presentados y los filtros con su etiqueta
                 ['value' => 'failed_login', 'label' => 'Inicio de sesión fallido'],
             ])
         );
+});
+
+test('las categorías se nombran con su familia sin una consulta por cada una', function () {
+    $categories = collect(['EPOXI', 'ALQUIDICA', 'BASE AGUA'])->map(fn (string $name) => RawMaterialCategory::factory()->create([
+        'name' => $name, 'family_id' => RawMaterialFamily::factory()->create(['name' => "RESINA {$name}"])->id,
+    ]));
+    $logs = $categories->map(fn (RawMaterialCategory $category) => Activity::create([
+        'log_name' => 'materias_primas', 'description' => 'Prueba', 'event' => 'created',
+        'subject_type' => RawMaterial::class, 'subject_id' => 1,
+        'properties' => ['attributes' => ['category_id' => $category->id]],
+    ])->fresh());
+
+    DB::enableQueryLog();
+    $presented = app(AuditLogPresenter::class)->present($logs);
+    $familyReads = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], 'from "raw_material_families"'))->count();
+
+    expect($presented->map(fn (array $log): string => $log['changes'][0]['after'])->all())
+        ->toBe(['RESINA EPOXI · EPOXI', 'RESINA ALQUIDICA · ALQUIDICA', 'RESINA BASE AGUA · BASE AGUA'])
+        ->and($familyReads)->toBe(1);
 });

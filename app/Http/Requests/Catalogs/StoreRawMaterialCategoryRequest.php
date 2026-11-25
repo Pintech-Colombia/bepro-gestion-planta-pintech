@@ -28,7 +28,6 @@ class StoreRawMaterialCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['bail', 'required', 'string', 'max:50', ...TextFormat::Code->rules(), Rule::unique('raw_material_categories', 'code')],
             'name' => ['bail', 'required', 'string', 'max:100', $this->uniqueNameInFamily()],
             ...$this->sharedRules(),
         ];
@@ -76,10 +75,9 @@ class StoreRawMaterialCategoryRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        // El código sigue la regla de los códigos de materia prima (D-RM1).
         $merge = [
             'is_active' => $this->boolean('is_active', $this->defaultIsActive()),
-            ...$this->normalizedText(['code' => TextFormat::Code, 'name' => TextFormat::Name]),
+            ...$this->normalizedText(['name' => TextFormat::Name]),
         ];
 
         if (is_string($this->input('description')) && trim($this->input('description')) === '') {

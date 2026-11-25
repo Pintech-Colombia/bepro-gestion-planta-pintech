@@ -41,7 +41,6 @@ beforeEach(function () {
         'name' => 'Pinturas',
     ]);
     $this->rawMaterialCategory = RawMaterialCategory::create([
-        'code' => 'RM-REC-CAT',
         'name' => 'Materia Prima Test',
         'is_active' => true,
     ]);

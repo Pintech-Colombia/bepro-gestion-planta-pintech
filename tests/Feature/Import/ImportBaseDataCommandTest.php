@@ -59,15 +59,15 @@ function fullTemplateRows(): array
     return [
         'Familias' => [['ADITIVO', ''], ['ENVASE Y EMPAQUE', '']],
         'Categorias' => [
-            ['ADITIVO - SECANTE', 'ADITIVO - SECANTE', 'ADITIVO', 'chemical'],
-            ['ENVASES METALICOS', 'ENVASES METALICOS', 'ENVASE Y EMPAQUE', 'container'],
-            ['AGUA', 'AGUA', 'ADITIVO', 'chemical'],
+            ['SECANTE', 'ADITIVO', 'chemical'],
+            ['ENVASES METALICOS', 'ENVASE Y EMPAQUE', 'container'],
+            ['AGUA', 'ADITIVO', 'chemical'],
         ],
         'Proveedores' => [['QUIMICA COSMOS', 'Razón social sin verificar'], ['ENVMETALPLAST', '']],
         'Materias primas' => [
-            ['ABS - 10', 'ADITIVO - SECANTE', 'kg', '0', '90', 'SI', '', 'SI'],
-            ['ENV-MET-GTD', 'ENVASES METALICOS', 'u', '0', '90', 'SI', ''],
-            ['AGUA', 'AGUA', 'kg', '0', '90', 'NO', '1000'],
+            ['ABS - 10', 'ADITIVO', 'SECANTE', 'kg', '0', '90', 'SI', '', 'SI'],
+            ['ENV-MET-GTD', 'ENVASE Y EMPAQUE', 'ENVASES METALICOS', 'u', '0', '90', 'SI', ''],
+            ['AGUA', 'ADITIVO', 'AGUA', 'kg', '0', '90', 'NO', '1000'],
         ],
         'Lotes iniciales' => [
             ['ABS - 10', '41.8615', '14950', '2025-01-01', '', 'QUIMICA COSMOS'],
@@ -85,13 +85,14 @@ function importTemplate(string $path, array $options = []): PendingCommand
 it('carga familias, categorías, proveedores, materias primas y lotes como entradas reales', function () {
     importTemplate(canonicalTemplate(fullTemplateRows()))->assertSuccessful();
 
-    $secante = RawMaterialCategory::query()->where('code', 'ADITIVO - SECANTE')->sole();
+    $secante = RawMaterialCategory::query()->where('name', 'SECANTE')->sole();
     $material = RawMaterial::query()->where('code', 'ABS - 10')->sole();
     $batches = InventoryBatch::query()->where('raw_material_id', $material->id)->orderBy('entry_date')->get();
 
     expect(RawMaterialFamily::query()->count())->toBe(2)
         ->and($secante->family->name)->toBe('ADITIVO')
-        ->and(RawMaterialCategory::query()->where('code', 'ENVASES METALICOS')->sole()->type)->toBe(RawMaterialType::Container)
+        ->and(RawMaterialCategory::query()->where('name', 'ENVASES METALICOS')->sole()->type)->toBe(RawMaterialType::Container)
+        ->and(RawMaterialCategory::query()->whereNotNull('code')->exists())->toBeFalse()
         ->and(Supplier::query()->where('name', 'QUIMICA COSMOS')->sole()->notes)->toBe('Razón social sin verificar')
         // Dos lotes de la misma MP, cada uno con su fecha, precio y proveedor.
         ->and($batches)->toHaveCount(2)
@@ -152,7 +153,7 @@ it('se puede volver a correr: no duplica nada ni carga lotes a una MP que ya tie
 
 it('rechaza lotes de una MP sin control de inventario y precios a mano en una que sí controla', function () {
     $rows = fullTemplateRows();
-    $rows['Materias primas'][0][6] = '500';
+    $rows['Materias primas'][0][7] = '500';
     $rows['Lotes iniciales'][] = ['AGUA', '10', '1000', '2026-10-01', '', ''];
 
     importTemplate(canonicalTemplate($rows))
@@ -178,13 +179,13 @@ it('falla si falta una hoja o el usuario no existe', function () {
     $this->artisan('import:base-data', ['file' => $path, '--user' => 'nadie@pintech.test'])->assertFailed();
 });
 
-it('carga el mismo nombre de categoría en dos familias y la MP la elige por código', function () {
+it('carga el mismo nombre de categoría en dos familias y la MP la elige por familia y nombre', function () {
     $rows = fullTemplateRows();
     $rows['Familias'][] = ['RESINA', ''];
     $rows['Familias'][] = ['SOLVENTE', ''];
-    $rows['Categorias'][] = ['RESINA - BASE AGUA', 'BASE AGUA', 'RESINA', 'chemical'];
-    $rows['Categorias'][] = ['SOLVENTE - BASE AGUA', 'BASE AGUA', 'SOLVENTE', 'chemical'];
-    $rows['Materias primas'][] = ['ABA - 5', 'SOLVENTE - BASE AGUA', 'kg', '0', '90', 'SI', ''];
+    $rows['Categorias'][] = ['BASE AGUA', 'RESINA', 'chemical'];
+    $rows['Categorias'][] = ['BASE AGUA', 'SOLVENTE', 'chemical'];
+    $rows['Materias primas'][] = ['ABA - 5', 'SOLVENTE', 'BASE AGUA', 'kg', '0', '90', 'SI', ''];
 
     importTemplate(canonicalTemplate($rows))->assertSuccessful();
 
@@ -215,7 +216,7 @@ it('rechaza una tolerancia de familia fuera de rango', function () {
 
 it('acepta precio de referencia 0 en una MP sin control de inventario, como la pantalla, pero no vacío', function () {
     $rows = fullTemplateRows();
-    $rows['Materias primas'][2] = ['AGUA', 'AGUA', 'kg', '0', '90', 'NO', '0'];
+    $rows['Materias primas'][2] = ['AGUA', 'ADITIVO', 'AGUA', 'kg', '0', '90', 'NO', '0'];
 
     importTemplate(canonicalTemplate($rows))->assertSuccessful();
 

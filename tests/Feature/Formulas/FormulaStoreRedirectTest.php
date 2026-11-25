@@ -37,7 +37,6 @@ beforeEach(function () {
     ]);
 
     $this->rawMaterialCategory = RawMaterialCategory::create([
-        'code' => 'RM-REDIR',
         'name' => 'Materia Prima Redirect',
         'is_active' => true,
     ]);

@@ -41,7 +41,6 @@ beforeEach(function (): void {
     ]);
 
     $rmCategory = RawMaterialCategory::create([
-        'code' => 'ENV-METAL',
         'name' => 'Envase Metal',
         'is_active' => true,
     ]);
