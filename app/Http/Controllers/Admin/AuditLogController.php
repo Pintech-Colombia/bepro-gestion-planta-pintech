@@ -30,13 +30,13 @@ class AuditLogController extends Controller
 
         $logs->setCollection($this->presenter->present($logs->getCollection()));
 
-        // Por la etiqueta sin tildes: por bytes, «Órdenes de producción» quedaría al final de la lista.
         $logNames = Activity::select('log_name')->distinct()->whereNotNull('log_name')->pluck('log_name');
         $events = Activity::select('event')->distinct()->whereNotNull('event')->pluck('event');
 
         return Inertia::render('Admin/AuditLogs/Index', [
             'logs' => $logs,
             'filters' => $request->validated(),
+            // Por la etiqueta sin tildes: por bytes, «Órdenes de producción» quedaría al final de la lista.
             'options' => [
                 'logNames' => $logNames
                     ->map(fn (string $name): array => ['value' => $name, 'label' => AuditLogPresenter::moduleLabel($name)])

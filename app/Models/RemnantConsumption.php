@@ -112,7 +112,10 @@ class RemnantConsumption extends Model
                 ->value('order_number');
 
             return implode(' · ', [
-                $this->auditRelatedValue('targetOrder', 'order_number') ?? "OP #{$this->target_order_id}",
+                // La columna admite nulo, aunque planear un saldo siempre la llena.
+                $this->target_order_id !== null
+                    ? ($this->auditRelatedValue('targetOrder', 'order_number') ?? "OP #{$this->target_order_id}")
+                    : 'sin OP',
                 $sourceOrderNumber !== null ? "saldo de {$sourceOrderNumber}" : "saldo #{$this->remnant_id}",
             ]);
         });

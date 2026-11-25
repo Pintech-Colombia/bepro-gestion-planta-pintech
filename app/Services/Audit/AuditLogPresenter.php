@@ -9,6 +9,7 @@ use App\Enums\LabelFormat;
 use App\Enums\Permission;
 use App\Enums\SystemRole;
 use App\Models\Concerns\HasAuditDescription;
+use App\Models\Formula;
 use App\Models\ProductVariant;
 use App\Services\TimezoneService;
 use App\Support\NumberFormat;
@@ -21,6 +22,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Str;
 use ReflectionClass;
+use ReflectionEnum;
 use ReflectionMethod;
 use ReflectionNamedType;
 use Spatie\Activitylog\Models\Activity;
@@ -29,7 +31,8 @@ use Spatie\Activitylog\Models\Activity;
  * Lo que muestra la pantalla de Auditoría de cada registro, ya en español: el módulo, el evento y cada cambio con su
  * etiqueta y sus valores formateados según el cast del modelo (fechas en hora de planta, decimales sin ceros de más,
  * Sí/No, enums con su etiqueta e IDs con el nombre del registro al que apuntan). Los nombres se consultan una vez por
- * página, agrupados por modelo.
+ * página y por modelo; los que arma un accessor pueden consultar además por registro (las presentaciones se precargan
+ * con su producto, que es el caso que más se repite).
  *
  * @phpstan-type AuditChange array{field: string, label: string, before: string|null, after: string|null, kind: 'changed'|'set'|'unset'}
  */
@@ -40,6 +43,9 @@ final class AuditLogPresenter
 
     /** Datos de los registros manuales que son el ID de otro registro. */
     private const PROPERTY_REFERENCES = ['product_variant_id' => ProductVariant::class];
+
+    /** Lo que necesita el accessor que nombra a cada modelo, para no consultarlo registro por registro. */
+    private const NAME_EAGER_LOADS = [ProductVariant::class => ['product:id,name']];
 
     private const ROLE_PROPERTIES = ['old_role', 'new_role'];
 
@@ -202,12 +208,16 @@ final class AuditLogPresenter
 
     private function formatProperty(string $field, mixed $value): ?string
     {
+        // Antes del vacío: sin rol anterior es «Sin rol», como lo dice la descripción del mismo registro.
+        if (in_array($field, self::ROLE_PROPERTIES, true)) {
+            return SystemRole::labelFor(is_scalar($value) && $value !== '' ? (string) $value : null);
+        }
+
         if ($value === null || $value === '') {
             return null;
         }
 
         return match (true) {
-            in_array($field, self::ROLE_PROPERTIES, true) => SystemRole::labelFor((string) $value),
             in_array($field, self::PERMISSION_PROPERTIES, true) => collect((array) $value)
                 ->map(fn (mixed $name): string => Permission::tryFrom((string) $name)?->label() ?? (string) $name)
                 ->implode(', ') ?: null,
@@ -253,7 +263,18 @@ final class AuditLogPresenter
     /** @param class-string<BackedEnum> $enum */
     private function enumLabel(string $enum, int|string|float|bool $value): string
     {
-        $case = $enum::tryFrom(is_int($value) ? $value : (string) $value);
+        // `tryFrom` exige el tipo del enum: un enum de enteros con «30» en texto lanzaría un TypeError (strict_types).
+        if ((new ReflectionEnum($enum))->getBackingType()?->getName() === 'int') {
+            if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+                return (string) $value;
+            }
+
+            $value = (int) $value;
+        } else {
+            $value = (string) $value;
+        }
+
+        $case = $enum::tryFrom($value);
 
         return $case !== null && method_exists($case, 'label') ? $case->label() : (string) $value;
     }
@@ -309,6 +330,15 @@ final class AuditLogPresenter
      */
     private function namesFor(string $class, array $ids): array
     {
+        // El identificador de la fórmula es solo su versión: desde otro registro, «Fórmula: 2» no dice de qué producto.
+        if ($class === Formula::class) {
+            return Formula::query()->whereKey($ids)->with('product:id,name')->get()
+                ->mapWithKeys(fn (Formula $formula): array => [
+                    $formula->getKey() => trim(($formula->product->name ?? '')." v{$formula->version}"),
+                ])
+                ->all();
+        }
+
         $model = new $class;
         $attribute = in_array(HasAuditDescription::class, class_uses_recursive($class), true)
             ? $model->auditIdentifierKey()
@@ -321,7 +351,7 @@ final class AuditLogPresenter
         $query = $class::query()->whereKey($ids);
 
         if ($model->hasGetMutator($attribute) || $model->hasAttributeGetMutator($attribute)) {
-            return $query->get()
+            return $query->with(self::NAME_EAGER_LOADS[$class] ?? [])->get()
                 ->mapWithKeys(fn (Model $related): array => [$related->getKey() => (string) $related->getAttribute($attribute)])
                 ->all();
         }

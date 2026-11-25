@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use App\Models\FinishedInventory;
+use App\Models\Formula;
+use App\Models\FormulaDetail;
 use App\Models\ProductionOrder;
 use App\Models\ProductVariant;
+use App\Models\Quotation;
 use App\Models\RawMaterial;
 use App\Models\RawMaterialCategory;
 use App\Models\SalesOrder;
@@ -138,11 +141,36 @@ test('los registros manuales salen como una lista de datos con su etiqueta', fun
             'Navegador' => 'Safari',
         ])
         ->and(collect($roleChanged['changes'])->pluck('after', 'label')->all())->toBe([
-            'Rol anterior' => null,
+            'Rol anterior' => 'Sin rol',
             'Rol nuevo' => 'Administrador',
             'Permisos añadidos' => 'Ver usuarios',
             'Origen' => 'Consola',
         ]);
+});
+
+test('un enum de enteros guardado como texto sale con su etiqueta, sin romper la página', function (): void {
+    $presented = presentLog([
+        'log_name' => 'cotizaciones',
+        'subject_type' => Quotation::class,
+        'subject_id' => 1,
+        'properties' => ['old' => ['validity_days' => '30'], 'attributes' => ['validity_days' => 45]],
+    ]);
+
+    expect(changesByField($presented)['validity_days'])->toMatchArray(['before' => '30 días', 'after' => '45 días']);
+});
+
+test('la fórmula de otro registro se nombra con su producto y su versión', function (): void {
+    $formula = Formula::factory()->create(['version' => 2]);
+
+    $presented = presentLog([
+        'log_name' => 'formulas',
+        'subject_type' => FormulaDetail::class,
+        'subject_id' => 1,
+        'event' => 'created',
+        'properties' => ['attributes' => ['formula_id' => $formula->id]],
+    ]);
+
+    expect(changesByField($presented)['formula_id']['after'])->toBe($formula->product->name.' v2');
 });
 
 test('un módulo o evento sin etiqueta se muestra con su nombre', function (): void {

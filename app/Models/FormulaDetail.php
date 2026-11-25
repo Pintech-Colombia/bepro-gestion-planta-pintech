@@ -84,7 +84,8 @@ class FormulaDetail extends Model
     protected function auditIdentifier(): Attribute
     {
         return Attribute::get(function (): string {
-            $this->loadMissing(['formula.product', 'rawMaterial:id,code', 'product:id,name']);
+            // La fórmula y su producto se cargan enteros; la materia prima y el producto de la línea, solo el dato.
+            $this->loadMissing('formula.product');
 
             $formula = $this->formula;
             $parts = [
@@ -94,7 +95,11 @@ class FormulaDetail extends Model
                 "paso {$this->step_order}",
             ];
 
-            $ingredient = $this->product_id !== null ? $this->product?->name : $this->rawMaterial?->code;
+            $ingredient = match (true) {
+                $this->product_id !== null => $this->auditRelatedValue('product', 'name'),
+                $this->raw_material_id !== null => $this->auditRelatedValue('rawMaterial', 'code'),
+                default => null,
+            };
 
             if ($ingredient !== null) {
                 $parts[] = $ingredient;

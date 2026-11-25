@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Models\Formula;
+use App\Models\FormulaDetail;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderDetail;
 use App\Models\ProductionOrderLineAdjustment;
@@ -14,6 +16,7 @@ use App\Models\RemnantConsumption;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 
 uses(RefreshDatabase::class);
@@ -151,4 +154,61 @@ test('el identificador de la auditoría no deja relaciones a medias en el modelo
     // Crear el plan arma su descripción; lo que lea el código después tiene que ser el registro entero.
     expect($plan->relationLoaded('productVariant'))->toBeFalse()
         ->and($plan->productVariant->code)->toBe($variant->code);
+});
+
+test('la línea de fórmula no deja la materia prima a medias tras su auditoría', function (): void {
+    $formula = Formula::factory()->create();
+    $detail = FormulaDetail::create([
+        'formula_id' => $formula->id,
+        'raw_material_id' => $this->rawMaterial->id,
+        'quantity' => '2',
+        'unit_of_measure_id' => $this->rawMaterial->unit_of_measure_id,
+        'step_order' => 1,
+    ]);
+
+    expect(Activity::query()->where('subject_type', FormulaDetail::class)->sole()->description)->toContain('S - 12')
+        ->and($detail->relationLoaded('rawMaterial'))->toBeFalse()
+        ->and($detail->rawMaterial->current_price)->toBe($this->rawMaterial->current_price);
+});
+
+test('con la OP puesta como relación, la auditoría de la línea no la consulta', function (): void {
+    $detail = ProductionOrderDetail::create([
+        'production_order_id' => $this->order->id,
+        'raw_material_id' => $this->rawMaterial->id,
+        'step_order' => 1,
+        'planned_quantity' => '10',
+        'unit_cost' => '2',
+        'total_cost' => '20',
+    ]);
+    $detail->setRelation('productionOrder', $this->order)->setRelation('rawMaterial', $this->rawMaterial);
+
+    DB::enableQueryLog();
+    $detail->update(['actual_quantity' => '9']);
+    // Spatie relee la línea misma; lo que no debe leer es la OP ni la materia prima.
+    $relatedReads = collect(DB::getQueryLog())->filter(
+        fn (array $query): bool => (bool) preg_match('/from "(production_orders|raw_materials)"/', $query['query']),
+    );
+
+    expect($relatedReads)->toBeEmpty()
+        ->and(logsOf(ProductionOrderDetail::class)->sole()->description)->toContain('OP-2026-0045 · S - 12');
+});
+
+test('un saldo usado sin OP destino se describe sin dejar «OP #» suelto', function (): void {
+    $sourceOrder = ProductionOrder::factory()->create(['order_number' => 'OP-2026-0030', 'created_by' => $this->user->id]);
+    $remnant = ProductionRemnant::factory()->create([
+        'source_order_id' => $sourceOrder->id,
+        'product_id' => $sourceOrder->product_id,
+        'warehouse_id' => $sourceOrder->warehouse_id,
+        'created_by' => $this->user->id,
+    ]);
+
+    RemnantConsumption::create([
+        'remnant_id' => $remnant->id,
+        'quantity_kg' => '5',
+        'quantity_gallons' => '1',
+        'consumed_by' => $this->user->id,
+        'consumed_at' => now(),
+    ]);
+
+    expect(logsOf(RemnantConsumption::class)->sole()->description)->toBe('Saldo usado en OP "sin OP · saldo de OP-2026-0030" creado');
 });
