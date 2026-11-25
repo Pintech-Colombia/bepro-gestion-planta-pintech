@@ -81,7 +81,8 @@ class ProductionOrderConsumptionCheck
 
     /**
      * El % vigente de cada materia prima: el de la familia de su categoría o, si no tiene, el general. Una consulta para
-     * todas.
+     * todas. También vale el de una familia desactivada: desactivarla solo impide elegirla en categorías nuevas, y las
+     * que ya la tienen siguen agrupadas en ella.
      *
      * @param  list<int>  $rawMaterialIds
      * @return array<int, string> id de la materia prima => %
@@ -116,9 +117,12 @@ class ProductionOrderConsumptionCheck
      * @param  string|null  $orderTolerance  al mostrar una completada, el % que guardó la orden: cada línea usa el suyo y,
      *                                       si no tiene (completada antes de la tolerancia por familia), este. Sin él, el
      *                                       vigente de cada materia prima.
+     * @param  array<int, string>|null  $tolerances  el vigente de cada materia prima, si quien llama ya lo tiene
+     *                                               (`tolerancesByMaterial`): completar lo calcula una vez para evaluar y
+     *                                               para guardarlo en las líneas, así los dos no pueden diferir.
      * @return list<ConsumptionRow>
      */
-    public function evaluate(ProductionOrder $order, ?array $actualByLine = null, ?string $orderTolerance = null): array
+    public function evaluate(ProductionOrder $order, ?array $actualByLine = null, ?string $orderTolerance = null, ?array $tolerances = null): array
     {
         $order->loadMissing(['details.rawMaterial.unitOfMeasure', 'lineAdjustments']);
 
@@ -157,7 +161,7 @@ class ProductionOrderConsumptionCheck
 
         // El guardado en la línea; si no, el de la orden; si no, el vigente (una consulta para las que lo necesitan).
         $pending = array_keys(array_filter($stored, fn (?string $tolerance): bool => $tolerance === null));
-        $current = $orderTolerance === null ? $this->tolerancesByMaterial($pending) : [];
+        $current = $orderTolerance === null ? ($tolerances ?? $this->tolerancesByMaterial($pending)) : [];
 
         $rows = [];
         foreach ($materials as $id => $material) {
@@ -324,10 +328,11 @@ class ProductionOrderConsumptionCheck
      * @param  array<int|string, mixed>  $reasons  id de la materia prima => motivo
      * @param  array<int|string, array<string, mixed>>  $productLines  las líneas de producto enviadas: id, actual_kg
      * @param  array<int|string, mixed>  $productReasons  id del producto => motivo
+     * @param  array<int, string>|null  $tolerances  el % vigente de cada materia prima, si quien llama ya lo calculó
      *
      * @throws ValidationException si falta un motivo
      */
-    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId, array $productLines = [], array $productReasons = []): void
+    public function recordReasons(ProductionOrder $order, array $ingredients, array $reasons, int $userId, array $productLines = [], array $productReasons = [], ?array $tolerances = null): void
     {
         $actualByLine = collect($ingredients)
             ->mapWithKeys(fn (array $row): array => [(int) $row['id'] => (string) $row['actual_quantity']])
@@ -338,7 +343,7 @@ class ProductionOrderConsumptionCheck
         $errors = [];
 
         $writtenMaterials = $this->typedReasons(
-            array_filter($this->evaluate($order, $actualByLine), fn (array $row): bool => $row['needs_reason']),
+            array_filter($this->evaluate($order, $actualByLine, null, $tolerances), fn (array $row): bool => $row['needs_reason']),
             'raw_material_id',
             'overconsumption_reasons',
             $reasons,

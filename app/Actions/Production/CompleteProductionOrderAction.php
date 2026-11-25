@@ -73,7 +73,7 @@ class CompleteProductionOrderAction
             // cada materia prima (el de su familia) en sus líneas. Si cambia después, la completada sigue mostrando lo que
             // se evaluó. Quien completa escribe o corrige el motivo de lo que se pasó: 422 si falta uno.
             $consumptionTolerance = $this->consumptionCheck->currentTolerancePercentage();
-            // De las líneas ya cargadas (la evaluación las cargó): `details()` ordena por paso, y PostgreSQL no acepta
+            // De las líneas cargadas, no con `details()->distinct()`: la relación ordena por paso, y PostgreSQL no acepta
             // `DISTINCT` con un orden que no está en el `select`.
             $lineTolerances = $this->consumptionCheck->tolerancesByMaterial(
                 $lockedOrder->loadMissing('details')->details->map(fn ($detail): int => (int) $detail->raw_material_id)->unique()->values()->all(),
@@ -85,6 +85,8 @@ class CompleteProductionOrderAction
                 $userId,
                 $data['product_lines'] ?? [],
                 $data['product_overconsumption_reasons'] ?? [],
+                // El mismo % que se guarda en las líneas: calculado una vez, no puede diferir del que decidió los motivos.
+                $lineTolerances,
             );
 
             // Lo real gastado de cada producto y, por lote, lo que quedó pesado. Toda línea de la fórmula con alguna fuente.

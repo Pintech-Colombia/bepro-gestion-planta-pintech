@@ -623,3 +623,18 @@ it('the alert doubles the tolerance of each raw material, not a shared one', fun
 
     expect(Alert::query()->where('type', AlertType::Sobreconsumo)->sole()->severity)->toBe(AlertSeverity::Media);
 });
+
+it('the evaluation uses the tolerances it is given, the same ones completing stores in the lines', function () {
+    toleranceFamily($this->s7, 'RESINA', '40.00');
+
+    // Completar calcula el % una vez y lo pasa: aunque la familia diga 40 %, se evalúa con lo que se pasó.
+    $row = collect(app(ProductionOrderConsumptionCheck::class)->evaluate(
+        $this->order->fresh(),
+        [$this->s7Step1->id => '60', $this->s7Step3->id => '20'],
+        null,
+        [$this->s7->id => '10.00', $this->s11->id => '10.00'],
+    ))->firstWhere('code', 'S-7');
+
+    expect($row['tolerance_percentage'])->toBe('10.00')
+        ->and($row['exceeds'])->toBeTrue();
+});

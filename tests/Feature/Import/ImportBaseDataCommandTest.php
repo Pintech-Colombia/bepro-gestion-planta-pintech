@@ -15,6 +15,7 @@ use App\Models\Warehouse;
 use App\Services\Import\BaseDataImporter;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\PendingCommand;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Activitylog\Models\Activity;
@@ -207,6 +208,34 @@ it('rechaza una tolerancia de familia fuera de rango', function () {
 
     importTemplate(canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]))
         ->expectsOutputToContain('Familias, fila 2')
+        ->assertFailed();
+
+    expect(RawMaterialFamily::query()->count())->toBe(0);
+});
+
+it('acepta precio de referencia 0 en una MP sin control de inventario, como la pantalla, pero no vacío', function () {
+    $rows = fullTemplateRows();
+    $rows['Materias primas'][2] = ['AGUA', 'AGUA', 'kg', '0', '90', 'NO', '0'];
+
+    importTemplate(canonicalTemplate($rows))->assertSuccessful();
+
+    expect(RawMaterial::query()->where('code', 'AGUA')->sole()->current_price)->toBe('0.0000');
+});
+
+it('rechaza una tolerancia con formato de porcentaje de Excel en vez de cargar 0,1 %', function () {
+    $rows = fullTemplateRows();
+    $rows['Familias'] = [['ADITIVO', '', ''], ['ENVASE Y EMPAQUE', '', '']];
+    $path = canonicalTemplate($rows, ['Familias' => ['tolerancia_consumo']]);
+
+    // Quien escribe «10%» en Excel deja 0,1 en la celda, con formato de porcentaje.
+    $book = IOFactory::load($path);
+    $sheet = $book->getSheetByName('Familias');
+    $sheet->setCellValue('C2', 0.1);
+    $sheet->getStyle('C2')->getNumberFormat()->setFormatCode('0%');
+    (new Xlsx($book))->save($path);
+
+    importTemplate($path)
+        ->expectsOutputToContain('Familias, fila 2: Trae «10%» con formato de porcentaje')
         ->assertFailed();
 
     expect(RawMaterialFamily::query()->count())->toBe(0);
