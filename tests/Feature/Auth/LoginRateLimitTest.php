@@ -71,6 +71,32 @@ it('frena en el intento 11 un correo atacado desde muchas IP', function (): void
         ->assertRedirect(route('dashboard', absolute: false));
 });
 
+it('cuenta como una sola IP las direcciones IPv6 del mismo bloque /64', function (): void {
+    // Quien tiene un /64 puede estrenar dirección en cada intento.
+    foreach (range(1, 20) as $attempt) {
+        attemptLoginFrom("2001:db8:abcd:12::{$attempt}", "probe{$attempt}@example.test")->assertRedirect();
+    }
+
+    attemptLoginFrom('2001:db8:abcd:12:ffff:ffff:ffff:ffff', 'probe21@example.test')->assertTooManyRequests();
+});
+
+it('cuenta aparte las direcciones IPv6 de bloques /64 distintos', function (): void {
+    foreach (range(1, 20) as $attempt) {
+        attemptLoginFrom("2001:db8:abcd:12::{$attempt}", "probe{$attempt}@example.test");
+    }
+
+    attemptLoginFrom('2001:db8:abcd:13::1', 'probe21@example.test')->assertRedirect();
+});
+
+it('sigue contando los intentos cuando la petición llega sin IP', function (): void {
+    // Detrás de Nginx siempre hay IP; sin ella el login no debe responder 500.
+    foreach (range(1, 20) as $attempt) {
+        attemptLoginFrom('', "probe{$attempt}@example.test")->assertRedirect();
+    }
+
+    attemptLoginFrom('', 'probe21@example.test')->assertTooManyRequests();
+});
+
 it('avisa en español cuando el login queda frenado', function (): void {
     foreach (range(1, 20) as $attempt) {
         attemptLoginFrom('203.0.113.7', "probe{$attempt}@example.test", inertia: true);

@@ -20,6 +20,7 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 use Laravel\Fortify\Http\Controllers\PasswordResetLinkController;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -98,7 +99,7 @@ class FortifyServiceProvider extends ServiceProvider
             // El limitador corre antes de validar: un arreglo en el correo (petición armada a mano) no es texto.
             $username = $request->input(Fortify::username());
             $email = Str::transliterate(Str::lower(is_string($username) ? $username : ''));
-            $ip = (string) $request->ip();
+            $ip = $this->loginThrottleIp($request);
 
             return [
                 // Muchos intentos sobre una cuenta desde un mismo equipo.
@@ -106,10 +107,26 @@ class FortifyServiceProvider extends ServiceProvider
                 // Una IP que prueba muchos correos (rociado de contraseñas). La planta sale por una sola IP y sus
                 // usuarios no llegan a 20 ingresos por minuto.
                 Limit::perMinute(20)->by('ip:'.$ip),
-                // Una cuenta atacada desde muchas IP. Quien lo use para bloquear a otro solo lo frena un minuto.
+                // Una cuenta atacada desde muchas IP. Contra: quien conoce el correo puede mantener frenada esa cuenta
+                // mientras siga intentando desde 2 o más IP (los intentos frenados no suman, así que le bastan 10 por
+                // minuto), y con N/2 IP frena N cuentas a la vez (cada IP da 20 por minuto, 5 por correo). Respuesta:
+                // bloquear esas IP en Cloudflare. Caso límite aceptado (CL-68).
                 Limit::perMinute(10)->by('email:'.$email),
             ];
         });
+    }
+
+    /**
+     * La IP con la que cuentan los límites del login. Una IPv6 cuenta por su bloque /64: el proveedor le entrega a cada
+     * cliente al menos un /64 y quien lo tiene puede estrenar dirección en cada intento. Las IPv4, también las mapeadas
+     * (::ffff:x.x.x.x), quedan completas. Sin una IP válida (no pasa detrás de Nginx) se usa tal cual: anonymize()
+     * lanzaría un TypeError y el login respondería 500.
+     */
+    private function loginThrottleIp(Request $request): string
+    {
+        $ip = (string) $request->ip();
+
+        return filter_var($ip, FILTER_VALIDATE_IP) === false ? $ip : IpUtils::anonymize($ip, 0, 8);
     }
 
     /**
