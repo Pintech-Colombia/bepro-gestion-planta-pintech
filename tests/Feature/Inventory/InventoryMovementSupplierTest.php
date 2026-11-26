@@ -168,8 +168,8 @@ it('shows the name of the supplier in the raw material detail', function (): voi
     $this->get(route('raw-materials.show', $this->rawMaterial))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('rawMaterial.inventory_batches.0.lot_number', 'CON-PROV')
-            ->where('rawMaterial.inventory_batches.0.supplier', 'Químicos del Valle'));
+            ->where('activeBatches.0.lot_number', 'CON-PROV')
+            ->where('activeBatches.0.supplier', 'Químicos del Valle'));
 });
 
 it('keeps the raw material detail working for a lot without a supplier', function (): void {
@@ -178,7 +178,7 @@ it('keeps the raw material detail working for a lot without a supplier', functio
     $this->get(route('raw-materials.show', $this->rawMaterial))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('rawMaterial.inventory_batches.0.supplier', null));
+            ->where('activeBatches.0.supplier', null));
 });
 
 it('audits the supplier of the lot', function (): void {

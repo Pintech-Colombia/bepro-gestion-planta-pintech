@@ -206,11 +206,12 @@ módulo, lo envía el controlador en `can` y sin él se pinta el texto solo.
 **Ubicación:** `resources/js/components/nav-tabs.tsx`.
 
 Barra de pestañas horizontal con línea inferior para secciones de un área que son páginas distintas (como
-Configuración), usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link prefetch>` de Inertia (Wayfinder)
-dentro de una lista (`<ul>`/`<li>`) en un `<nav aria-label=…>` con `aria-current="page"` en la activa (usando
-`isCurrentOrParentUrl`, con límite de segmento, así las pantallas de crear y editar mantienen marcada su sección). Para
-paneles dentro de una misma página se usa Radix `<Tabs>` (`ui/tabs.tsx`); `design-contract.test.ts` rechaza combinar
-`<Link>` con `TabsList`/`TabsTrigger` en `pages/`, `components/` y `layouts/`.
+Configuración), con el estilo de línea inferior de `lib/tabs.ts` que comparte con `<SectionTabs*>` (`DESIGN.md` §10).
+Cada pestaña es un `<Link prefetch>` de Inertia (Wayfinder) dentro de una lista (`<ul>`/`<li>`) en un
+`<nav aria-label=…>` con `aria-current="page"` en la activa (usando `isCurrentOrParentUrl`, con límite de segmento, así
+las pantallas de crear y editar mantienen marcada su sección). Para paneles dentro de una misma página se usa Radix
+`<Tabs>` con `<SectionTabsList>`/`<SectionTabsTrigger>`; `design-contract.test.ts` rechaza combinar `<Link>` con
+`(Section)TabsList`/`(Section)TabsTrigger` en `pages/`, `components/` y `layouts/`.
 
 - **Grupos:** recibe `groups: NavGroup[]` y pinta un separador vertical entre grupos; sin rótulos visibles y sin
   separador cuando solo queda un grupo.
@@ -242,6 +243,57 @@ caja como su contenido y escucha `scroll` (desactivable con `trackScroll: false`
   `scrollLeftToRevealItem` para dejar a la vista la pestaña activa.
 - `DetailTable` pasa `{ observeParent: true, trackScroll: false }` porque el `ref` va en `<table>` y quien se desplaza
   es el contenedor padre de `ui/table.tsx`.
+
+---
+
+## SectionTabs (pestañas de sección)
+
+**Ubicación:** `resources/js/components/section-tabs.tsx`.
+
+`SectionTabsList` y `SectionTabsTrigger` envuelven Radix `Tabs.List` y `Tabs.Trigger` con el estilo de línea inferior de
+`lib/tabs.ts` (el mismo de `NavTabs`) y 44 px de alto en pantallas táctiles. Van dentro de `<Tabs>` y con `<TabsContent>`
+de `ui/tabs.tsx`. El `TabsList` de `ui/tabs.tsx` (caja gris, copia de shadcn que no se modifica) queda solo para un
+selector segmentado de 2–3 modos dentro de un control pequeño (campana, selector de fuente de la OP).
+
+```tsx
+<Tabs value={tab} onValueChange={setTab}>
+    <SectionTabsList>
+        <SectionTabsTrigger value="existencia">Con existencia (3)</SectionTabsTrigger>
+        <SectionTabsTrigger value="historial">Historial (12)</SectionTabsTrigger>
+    </SectionTabsList>
+    <TabsContent value="existencia">…</TabsContent>
+    <TabsContent value="historial">…</TabsContent>
+</Tabs>
+```
+
+---
+
+## useUrlTab (pestañas en la URL)
+
+**Ubicación:** `resources/js/hooks/use-url-tab.ts` y la construcción de la URL en `resources/js/lib/url-tab.ts` (con sus
+pruebas de Vitest).
+
+Sincroniza Radix `<Tabs>` dentro de una misma página con un parámetro de la URL validado por el servidor (enlace
+directo, recarga y botón Atrás), conservando otros parámetros como `return_to` y omitiendo el parámetro cuando equivale
+a la pestaña por defecto. Al hacer clic cambia la pestaña al instante (`isLoading` mientras responde el servidor), pide
+solo las props de `reloadOnly` vía `router.get` con `preserveState` y `preserveScroll`, y limpia parámetros auxiliares
+(`clearParams`, p. ej. `lotes_page`). Lo usa la ficha de MP (`Inventory/RawMaterials/Show`). Un modo sin recarga (todas
+las pestañas ya llegan en la carga) se agrega con su primera pantalla, con el router de Inertia y nunca
+`history.pushState` directo.
+
+---
+
+## ToneBadge (pastilla informativa por tono)
+
+**Ubicación:** `resources/js/components/tone-badge.tsx`.
+
+Pastilla que pinta uno de los cinco tonos aprobados de `lib/tones.ts` (`neutral`, `info`, `warning`, `success`,
+`danger`) para etiquetas informativas que no salen de un enum PHP (como «Se consume primero» en lotes FIFO). Las
+pantallas nunca arman clases de tono a mano (`DESIGN.md` §4).
+
+```tsx
+<ToneBadge tone="info">Se consume primero</ToneBadge>
+```
 
 ---
 

@@ -10,6 +10,7 @@ use App\Enums\Permission;
 use App\Filters\RawMaterialFilter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RawMaterials\IndexRawMaterialRequest;
+use App\Http\Requests\RawMaterials\ShowRawMaterialRequest;
 use App\Http\Requests\RawMaterials\StoreRawMaterialRequest;
 use App\Http\Requests\RawMaterials\UpdateRawMaterialRequest;
 use App\Models\InventoryBatch;
@@ -18,6 +19,7 @@ use App\Models\RawMaterialCategory;
 use App\Models\RawMaterialFamily;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Services\DecimalCalculator;
 use App\Services\RawMaterialUsageService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +36,7 @@ class RawMaterialController extends Controller
         private readonly DeleteUnusedRecordAction $deleteUnused,
         private readonly UpdateRawMaterialAction $updateRawMaterial,
         private readonly RawMaterialUsageService $usage,
+        private readonly DecimalCalculator $calculator,
     ) {}
 
     /**
@@ -143,36 +146,94 @@ class RawMaterialController extends Controller
     /**
      * Display the specified raw material with its batches and activity status.
      */
-    public function show(Request $request, RawMaterial $rawMaterial): Response
+    public function show(ShowRawMaterialRequest $request, RawMaterial $rawMaterial): Response
     {
-        $this->authorize('view', $rawMaterial);
-
         $canViewCosts = $request->user()?->can(Permission::CostsView->value) ?? false;
+        $batchesTab = $request->batchesTab();
 
         $rawMaterial->load([
             'category:id,name,type,family_id',
             'category.family:id,name',
             'unitOfMeasure:id,name,symbol',
-            'inventoryBatches' => fn ($query) => $query
+        ]);
+
+        // Lotes con existencia en orden FIFO (el mismo que consume la OP). Se selecciona `warehouse_id` para
+        // señalar el primer lote FIFO por bodega.
+        $activeBatchModels = $rawMaterial->inventoryBatches()
+            ->available()
+            ->fifoOrder()
+            ->select(
+                'id',
+                'raw_material_id',
+                'warehouse_id',
+                'lot_number',
+                'supplier_id',
+                'initial_quantity',
+                'remaining_quantity',
+                'unit_price',
+                'entry_date',
+                'expiry_date',
+            )
+            ->with('supplier:id,name')
+            ->get();
+
+        $seenWarehouses = [];
+        $activeBatches = $activeBatchModels->map(function (InventoryBatch $batch) use (&$seenWarehouses, $canViewCosts): array {
+            $consumesFirst = ! isset($seenWarehouses[$batch->warehouse_id]);
+            $seenWarehouses[$batch->warehouse_id] = true;
+
+            return [
+                'id' => $batch->id,
+                'lot_number' => $batch->lot_number,
+                'supplier' => $batch->supplier?->name,
+                'initial_quantity' => $batch->initial_quantity,
+                'remaining_quantity' => $batch->remaining_quantity,
+                ...($canViewCosts ? ['unit_price' => $batch->unit_price] : []),
+                'entry_date' => $batch->entry_date?->format('Y-m-d'),
+                'expiry_date' => $batch->expiry_date?->format('Y-m-d'),
+                'consumes_first' => $consumesFirst,
+            ];
+        })->values();
+
+        $activeBatchCount = $activeBatchModels->count();
+        $exhaustedBatchCount = $rawMaterial->inventoryBatches()
+            ->where('remaining_quantity', '<=', 0)
+            ->count();
+
+        // El historial de lotes agotados solo se consulta cuando se abre esa pestaña.
+        $exhaustedBatches = $batchesTab === 'historial'
+            ? $rawMaterial->inventoryBatches()
+                ->where('remaining_quantity', '<=', 0)
                 ->select(
                     'id',
                     'raw_material_id',
                     'lot_number',
                     'supplier_id',
                     'initial_quantity',
-                    'remaining_quantity',
                     'unit_price',
                     'entry_date',
-                    'expiry_date'
+                    'expiry_date',
                 )
+                ->with('supplier:id,name')
                 ->orderByDesc('entry_date')
-                ->orderByDesc('id'),
-            'inventoryBatches.supplier:id,name',
-        ]);
+                ->orderByDesc('id')
+                ->paginate(15, ['*'], 'lotes_page')
+                ->withQueryString()
+                ->through(fn (InventoryBatch $batch): array => [
+                    'id' => $batch->id,
+                    'lot_number' => $batch->lot_number,
+                    'supplier' => $batch->supplier?->name,
+                    'initial_quantity' => $batch->initial_quantity,
+                    ...($canViewCosts ? ['unit_price' => $batch->unit_price] : []),
+                    'entry_date' => $batch->entry_date?->format('Y-m-d'),
+                    'expiry_date' => $batch->expiry_date?->format('Y-m-d'),
+                ])
+            : null;
 
-        $hasAvailableStock = $rawMaterial->inventoryBatches
-            ->contains(fn ($batch) => (float) $batch->remaining_quantity > 0);
-
+        $totalAvailableQuantity = $this->calculator->sum(
+            $activeBatchModels->pluck('remaining_quantity')->all(),
+        );
+        $hasAvailableStock = $activeBatchCount > 0;
         $hasActivity = $this->usage->hasActivity($rawMaterial);
 
         return Inertia::render('Inventory/RawMaterials/Show', [
@@ -203,17 +264,13 @@ class RawMaterialController extends Controller
                     'name' => $rawMaterial->unitOfMeasure->name,
                     'symbol' => $rawMaterial->unitOfMeasure->symbol,
                 ] : null,
-                'inventory_batches' => $rawMaterial->inventoryBatches->map(fn (InventoryBatch $batch): array => [
-                    'id' => $batch->id,
-                    'lot_number' => $batch->lot_number,
-                    'supplier' => $batch->supplier?->name,
-                    'initial_quantity' => $batch->initial_quantity,
-                    'remaining_quantity' => $batch->remaining_quantity,
-                    ...($canViewCosts ? ['unit_price' => $batch->unit_price] : []),
-                    'entry_date' => $batch->entry_date?->format('Y-m-d'),
-                    'expiry_date' => $batch->expiry_date?->format('Y-m-d'),
-                ])->values(),
             ],
+            'batchesTab' => $batchesTab,
+            'activeBatches' => $activeBatches,
+            'exhaustedBatches' => $exhaustedBatches,
+            'activeBatchCount' => $activeBatchCount,
+            'exhaustedBatchCount' => $exhaustedBatchCount,
+            'totalAvailableQuantity' => $totalAvailableQuantity,
             'hasAvailableStock' => $hasAvailableStock,
             'hasActivity' => $hasActivity,
             'can' => [

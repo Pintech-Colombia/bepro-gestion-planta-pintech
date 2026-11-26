@@ -109,6 +109,7 @@ How it works:
 | `<StatusBadge enum="SalesOrderStatus" value={order.status} />` | Any enum of `ToneEnums::ALL`; label and tone from the enum |
 | `<ActiveBadge isActive={client.is_active} />` | Active flag: «Activo» success / «Inactivo» neutral |
 | `<PriorityBadge value={order.priority} />` | Sales order priority: bars icon + label |
+| `<ToneBadge tone="info">Se consume primero</ToneBadge>` | Informational pill not backed by a PHP enum, using one of the 5 approved tones |
 | `useEnumCase('SalesOrderStatus', value)` | The label (and tone) without a pill: plain text, selects |
 
 - A new enum with color: implement `HasTone`, add it to `ToneEnums::ALL` and its short name to `ToneEnumName` in
@@ -525,9 +526,13 @@ they open nothing.
 - **Breadcrumbs are the only way back.** No loose «← Volver» button in the content (`design-contract.test.ts` checks
   it); on the phone the breadcrumb collapses to the previous level, e.g. «← Productos». _(pending)_
 - **Page tabs vs. in-page panels:** sections of an area that are separate pages (Settings) use `<NavTabs>`
-  (`components/nav-tabs.tsx`, Inertia `<Link>` items inside `<nav>` with `aria-current="page"`). Radix `<Tabs>`
-  (`ui/tabs.tsx`) is only for panels within the same page (`design-contract.test.ts` rejects combining `<Link>` with
-  `TabsList`/`TabsTrigger` across `pages/`, `components/` and `layouts/`).
+  (`components/nav-tabs.tsx`, Inertia `<Link>` items inside `<nav>` with `aria-current="page"`). Large panels within
+  the same page (the batches of a raw material) use Radix `<Tabs>` with `<SectionTabsList>`/`<SectionTabsTrigger>`
+  (`components/section-tabs.tsx`). Both share the underline style of `lib/tabs.ts`, so section tabs look the same
+  everywhere. `TabsList`/`TabsTrigger` from `ui/tabs.tsx` (grey box) are only a segmented switch of 2–3 modes inside a
+  small control (notifications bell, source picker of the production order). `design-contract.test.ts` rejects
+  combining `<Link>` with any of them across `pages/`, `components/` and `layouts/`. When in-page tabs sync with a URL
+  query parameter, use `useUrlTab` (`hooks/use-url-tab.ts`).
 - The sidebar toggle uses the panel icon (`PanelLeftClose`/`PanelLeftOpen`), never arrows; on the phone, `Menu` (☰).
 - Navigation links use Wayfinder (`@/routes`, `@/actions`), never hardcoded URLs.
 

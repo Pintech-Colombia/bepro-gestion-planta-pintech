@@ -428,23 +428,38 @@ describe('contrato de DESIGN.md', () => {
             expect(staleExceptions).toEqual([]);
         });
 
-        it('usa <NavTabs> para pestañas que son páginas, nunca <Link> con TabsList o TabsTrigger', () => {
+        // <Link> dentro de una pestaña de Radix (o al revés), con la caja gris (`Tabs*`) o la de sección (`SectionTabs*`).
+        const tabLinkPatterns = [
+            /<((?:Section)?Tabs(?:List|Trigger))\b(?:(?!<\/\1>)[\s\S])*?<Link\b(?:(?!<\/\1>)[\s\S])*?<\/\1>/g,
+            /<Link\b(?:(?!<\/Link>)[\s\S])*?<(?:Section)?TabsTrigger\b(?:(?!<\/Link>)[\s\S])*?<\/Link>/g,
+        ];
+
+        it('usa <NavTabs> para pestañas que son páginas, nunca <Link> con (Section)TabsList o (Section)TabsTrigger', () => {
             const rule =
                 'DESIGN.md §10: las pestañas que navegan a otra página usan <NavTabs>, no <Link> con Radix Tabs';
-            const found = violationsAcrossLines(screenFiles, [
-                {
-                    pattern:
-                        /<(TabsList|TabsTrigger)\b(?:(?!<\/\1>)[\s\S])*?<Link\b(?:(?!<\/\1>)[\s\S])*?<\/\1>/g,
-                    rule,
-                },
-                {
-                    pattern:
-                        /<Link\b(?:(?!<\/Link>)[\s\S])*?<TabsTrigger\b(?:(?!<\/Link>)[\s\S])*?<\/Link>/g,
-                    rule,
-                },
-            ]);
+            const found = violationsAcrossLines(
+                screenFiles,
+                tabLinkPatterns.map((pattern) => ({ pattern, rule })),
+            );
 
             expect(report(found)).toEqual([]);
+        });
+
+        it('el guardián de pestañas detecta <Link> con las pestañas de caja y las de sección', () => {
+            const samples = [
+                '<TabsList>\n<Link href="/a">A</Link>\n</TabsList>',
+                '<SectionTabsList>\n<Link href="/a">A</Link>\n</SectionTabsList>',
+                '<SectionTabsTrigger value="a">\n<Link href="/a">A</Link>\n</SectionTabsTrigger>',
+                '<Link href="/a">\n<SectionTabsTrigger value="a">A</SectionTabsTrigger>\n</Link>',
+            ];
+
+            for (const sample of samples) {
+                expect(
+                    tabLinkPatterns.some((pattern) =>
+                        new RegExp(pattern.source, pattern.flags).test(sample),
+                    ),
+                ).toBe(true);
+            }
         });
     });
 

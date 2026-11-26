@@ -46,6 +46,10 @@ function numericRequestFields(): array
             'price_variation_threshold' => 'raw_materials.price_variation_threshold',
             'current_price' => 'raw_materials.current_price',
         ],
+        // Parámetro de paginación del historial de lotes en la ficha (sin columna en BD; lleva tope `max`).
+        'ShowRawMaterialRequest' => [
+            'lotes_page' => null,
+        ],
         'StoreProductionOrderRequest' => [
             'quantity' => 'production_orders.quantity',
             'packaging.*.planned_units' => 'production_order_packaging_plan.planned_units',

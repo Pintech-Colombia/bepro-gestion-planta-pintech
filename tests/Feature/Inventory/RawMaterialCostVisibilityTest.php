@@ -58,11 +58,11 @@ it('hides raw material and batch prices from users without costs.view', function
             ->component('Inventory/RawMaterials/Show')
             ->where('can.viewCosts', false)
             ->where('rawMaterial.code', 'MP-COST-001')
-            ->where('rawMaterial.inventory_batches.0.lot_number', 'L-COST-01')
-            ->where('rawMaterial.inventory_batches.0.remaining_quantity', '80.0000')
+            ->where('activeBatches.0.lot_number', 'L-COST-01')
+            ->where('activeBatches.0.remaining_quantity', '80.0000')
             ->missing('rawMaterial.current_price')
             ->missing('rawMaterial.previous_price')
-            ->missing('rawMaterial.inventory_batches.0.unit_price'));
+            ->missing('activeBatches.0.unit_price'));
 });
 
 it('shows raw material and batch prices to users with costs.view', function (): void {
@@ -73,7 +73,7 @@ it('shows raw material and batch prices to users with costs.view', function (): 
             ->where('can.viewCosts', true)
             ->has('rawMaterial.current_price')
             ->has('rawMaterial.previous_price')
-            ->where('rawMaterial.inventory_batches.0.unit_price', '11.5000'));
+            ->where('activeBatches.0.unit_price', '11.5000'));
 });
 
 it('never sends prices to the raw material edit form, even to an editor without costs.view', function (): void {
