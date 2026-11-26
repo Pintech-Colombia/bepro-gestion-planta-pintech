@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\RecalculationKind;
 use App\Jobs\Concerns\ReportsRecalculationFailure;
 use App\Models\RawMaterial;
 use App\Services\AlertService;
-use App\Services\ProductionCostRecalculationService;
 use App\Services\RawMaterialReferencePriceService;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 
+/**
+ * Recalcula el precio de referencia de una materia prima desde sus compras. Si cambia, encola el recálculo de los costos
+ * que dependen de ella (`RecalculateRawMaterialDependentCosts`) en vez de hacerlo aquí: el precio queda guardado en su
+ * propia transacción, y si los costos fallaran después, un reintento de este trabajo vería el precio ya igual y no los
+ * recalcularía nunca. Separados, cada uno se reintenta y avisa por su cuenta.
+ */
 class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
@@ -59,7 +65,6 @@ class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcess
 
     public function handle(
         RawMaterialReferencePriceService $rawMaterialReferencePriceService,
-        ProductionCostRecalculationService $productionCostRecalculationService,
         AlertService $alertService,
     ): void {
         $currentPriceChanged = $rawMaterialReferencePriceService
@@ -67,10 +72,15 @@ class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcess
 
         if ($currentPriceChanged) {
             $this->evaluatePriceVariationAlert($alertService);
-            $productionCostRecalculationService->recalculateForRawMaterial($this->rawMaterialId);
+            RecalculateRawMaterialDependentCosts::dispatch($this->rawMaterialId);
         }
 
         $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureKey(): string
+    {
+        return RecalculationKind::ReferencePrice->sourceKey($this->rawMaterialId);
     }
 
     protected function recalculationFailureRawMaterialId(): ?int
@@ -82,7 +92,7 @@ class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcess
     {
         $code = RawMaterial::query()->whereKey($this->rawMaterialId)->value('code') ?? '#'.$this->rawMaterialId;
 
-        return __('No se pudo recalcular el precio de referencia de :code ni los costos que dependen de él. Pida a sistemas que ejecute «php artisan costs:recalculate-raw-material :id» en el servidor.', [
+        return __('No se pudo recalcular el precio de referencia de :code. Pida a sistemas que ejecute «php artisan costs:recalculate-raw-material :id» en el servidor.', [
             'code' => $code,
             'id' => $this->rawMaterialId,
         ]);

@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\AlertSeverity;
 use App\Enums\AlertType;
+use App\Enums\RecalculationKind;
 use App\Models\Alert;
 use App\Models\InventoryBatch;
 use App\Models\RawMaterial;
@@ -15,9 +16,6 @@ use Illuminate\Support\Carbon;
 
 class AlertService
 {
-    /** @var list<array{id: int, message: string, severity: string, type: string, type_label: string}> */
-    private array $createdInRequest = [];
-
     public function __construct(
         private readonly DecimalCalculator $calculator,
         private readonly TimezoneService $timezone,
@@ -86,17 +84,6 @@ class AlertService
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * @return list<array{id: int, message: string, severity: string, type: string, type_label: string}>
-     */
-    public function pullCreatedInRequest(): array
-    {
-        $created = $this->createdInRequest;
-        $this->createdInRequest = [];
-
-        return $created;
     }
 
     public function evaluateLowStock(int $rawMaterialId): void
@@ -310,12 +297,12 @@ class AlertService
 
     /**
      * Un recálculo de costo que agotó sus intentos (`ReportsRecalculationFailure`): una sola alerta sin resolver por
-     * elemento, aunque falle varias veces o falle otro trabajo del mismo elemento. Si el elemento es una materia prima,
-     * la alerta va atada a ella; si no (un producto, una unidad), el elemento lo identifica el mensaje, que lo nombra.
+     * recálculo y elemento (`source_key`), aunque falle varias veces. Si el elemento es una materia prima, la alerta
+     * enlaza a ella.
      */
-    public function raiseRecalculationFailure(?int $rawMaterialId, string $message): void
+    public function raiseRecalculationFailure(string $sourceKey, ?int $rawMaterialId, string $message): void
     {
-        $alert = $this->activeRecalculationFailure($rawMaterialId, $message)->first();
+        $alert = $this->activeRecalculationFailures()->where('source_key', $sourceKey)->first();
 
         if ($alert !== null) {
             $alert->update(['message' => $message]);
@@ -323,22 +310,43 @@ class AlertService
             return;
         }
 
+        // Solo se borra una materia prima sin uso, pero pudo pasar entre el fallo y este aviso: con su id, la llave
+        // foránea rechazaría la alerta y el fallo volvería a quedar en silencio.
+        if ($rawMaterialId !== null && ! RawMaterial::query()->whereKey($rawMaterialId)->exists()) {
+            $rawMaterialId = null;
+        }
+
         $this->announce(Alert::create([
             'type' => AlertType::FalloRecalculo,
             'raw_material_id' => $rawMaterialId,
+            'source_key' => $sourceKey,
             'severity' => AlertSeverity::Media,
             'message' => $message,
             'is_resolved' => false,
         ]));
     }
 
-    /** Un recálculo posterior del mismo elemento terminó bien: su alerta de fallo, si la hay, queda resuelta. */
-    public function resolveRecalculationFailure(?int $rawMaterialId, string $message): void
+    /** El mismo recálculo del mismo elemento terminó bien: su alerta de fallo, si la hay, queda resuelta. */
+    public function resolveRecalculationFailure(string $sourceKey): void
     {
-        $this->activeRecalculationFailure($rawMaterialId, $message)->update([
-            'is_resolved' => true,
-            'resolved_at' => now(),
-        ]);
+        $this->activeRecalculationFailures()
+            ->where('source_key', $sourceKey)
+            ->update(['is_resolved' => true, 'resolved_at' => now()]);
+    }
+
+    /**
+     * Resuelve las alertas de fallo de estos recálculos, de cualquier elemento: para cuando se recalcula todo lo que
+     * cubren (`costs:recalculate-product`).
+     */
+    public function resolveRecalculationFailures(RecalculationKind ...$kinds): int
+    {
+        return $this->activeRecalculationFailures()
+            ->where(function (Builder $query) use ($kinds): void {
+                foreach ($kinds as $kind) {
+                    $query->orWhere('source_key', 'like', $kind->keyPrefix().'%');
+                }
+            })
+            ->update(['is_resolved' => true, 'resolved_at' => now()]);
     }
 
     public function resolve(Alert $alert, int $userId): void
@@ -416,23 +424,21 @@ class AlertService
             'type_label' => $alert->type->label(),
         ];
 
-        $this->createdInRequest[] = $payload;
-        session()->push('new_alerts', $payload);
+        // Solo si hay a quién mostrarlo: en el worker de la cola no hay petición ni sesión, y lo guardado se acumularía en
+        // memoria sin que nadie lo lea. La alerta igual queda en la campana.
+        if (request()->hasSession()) {
+            request()->session()->push('new_alerts', $payload);
+        }
     }
 
     /**
      * @return Builder<Alert>
      */
-    private function activeRecalculationFailure(?int $rawMaterialId, string $message): Builder
+    private function activeRecalculationFailures(): Builder
     {
         return Alert::query()
             ->where('type', AlertType::FalloRecalculo)
-            ->where('is_resolved', false)
-            ->when(
-                $rawMaterialId !== null,
-                fn ($query) => $query->where('raw_material_id', $rawMaterialId),
-                fn ($query) => $query->whereNull('raw_material_id')->where('message', $message),
-            );
+            ->where('is_resolved', false);
     }
 
     private function autoResolveActive(AlertType $type, int $rawMaterialId, ?int $batchId): void

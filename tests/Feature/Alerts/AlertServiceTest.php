@@ -15,7 +15,6 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\AlertService;
 use App\Services\InventoryService;
-use App\Services\ProductionCostRecalculationService;
 use App\Services\RawMaterialReferencePriceService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -240,7 +239,6 @@ test('it creates price variation alert via async job when reference price change
     $job = new RecalculateRawMaterialReferencePrice((int) $rawMaterial->id);
     $job->handle(
         app(RawMaterialReferencePriceService::class),
-        app(ProductionCostRecalculationService::class),
         app(AlertService::class),
     );
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\RecalculationKind;
 use App\Jobs\Concerns\ReportsRecalculationFailure;
 use App\Models\RawMaterial;
 use App\Services\AlertService;
@@ -14,9 +15,10 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 /**
- * Recalcula lo que depende del precio de una materia prima cuando ese precio se escribe a mano (las que no controlan
- * inventario, como el agua o las etiquetas). `RecalculateRawMaterialReferencePrice` no sirve aquí: recalcula el precio
- * desde los lotes de compra, que estas no tienen, y al no ver cambio no recalcula nada.
+ * Recalcula lo que depende del precio de una materia prima: los productos con ella en su fórmula de referencia y las
+ * presentaciones que la usan como envase o etiqueta. Lo encola `RecalculateRawMaterialReferencePrice` cuando el precio de
+ * compra cambia, y la edición de la materia prima cuando el precio se escribe a mano (las que no controlan inventario,
+ * como el agua o las etiquetas). Siempre recalcula: no depende de que el precio haya cambiado.
  */
 class RecalculateRawMaterialDependentCosts implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
@@ -67,6 +69,11 @@ class RecalculateRawMaterialDependentCosts implements ShouldBeUniqueUntilProcess
         $this->resolveRecalculationFailure($alertService);
     }
 
+    protected function recalculationFailureKey(): string
+    {
+        return RecalculationKind::RawMaterialCosts->sourceKey($this->rawMaterialId);
+    }
+
     protected function recalculationFailureRawMaterialId(): ?int
     {
         return $this->rawMaterialId;
@@ -76,8 +83,9 @@ class RecalculateRawMaterialDependentCosts implements ShouldBeUniqueUntilProcess
     {
         $code = RawMaterial::query()->whereKey($this->rawMaterialId)->value('code') ?? '#'.$this->rawMaterialId;
 
-        return __('No se pudo recalcular el costo de los productos que usan :code. Pida a sistemas que ejecute «php artisan costs:recalculate-product» en el servidor.', [
+        return __('No se pudo recalcular el costo de los productos y presentaciones que usan :code. Pida a sistemas que ejecute «php artisan costs:recalculate-raw-material :id» en el servidor.', [
             'code' => $code,
+            'id' => $this->rawMaterialId,
         ]);
     }
 }

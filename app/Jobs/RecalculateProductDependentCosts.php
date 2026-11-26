@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\RecalculationKind;
 use App\Jobs\Concerns\ReportsRecalculationFailure;
 use App\Models\Product;
 use App\Services\AlertService;
@@ -57,6 +58,11 @@ class RecalculateProductDependentCosts implements ShouldQueue
         $productionCostRecalculationService->recalculateDependentsOf($this->productId, $this->depth);
 
         $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureKey(): string
+    {
+        return RecalculationKind::ProductChain->sourceKey($this->productId);
     }
 
     protected function recalculationFailureRawMaterialId(): ?int

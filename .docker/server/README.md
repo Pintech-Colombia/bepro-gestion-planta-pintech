@@ -141,12 +141,14 @@ Un recálculo de costo que agota sus intentos deja la alerta «Fallo de recálcu
 repite. Los dos se pueden correr en cualquier momento: solo recalculan, no borran nada.
 
 ```bash
-# Precio de referencia de una materia prima (el ID que dice la alerta) o, sin ID, de todas las activas. Solo encola:
-# el trabajo lo hace el servicio `queue`, y la alerta se resuelve sola cuando termina bien.
+# Una materia prima (el ID que dice la alerta): su precio de referencia, si controla inventario, y los costos de los
+# productos y presentaciones que la usan. Solo encola: el trabajo lo hace el servicio `queue`, y la alerta se resuelve
+# sola cuando termina bien.
 sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-raw-material 12
+# Sin ID: el precio de referencia de todas las activas que controlan inventario (y los costos de las que cambien).
 sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-raw-material
-# Costo de todos los productos con fórmula de referencia (o de uno, con su ID). Corre ahí mismo, sin la cola; la alerta
-# hay que marcarla resuelta a mano en Alertas.
+# Costo de todos los productos con fórmula de referencia (o de uno, con su ID). Corre ahí mismo, sin la cola. Sin ID,
+# resuelve las alertas de los recálculos de unidad y de producto, que es lo que cubre.
 sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-product
 ```
 

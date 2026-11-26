@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\RecalculationKind;
 use App\Jobs\Concerns\ReportsRecalculationFailure;
 use App\Models\UnitOfMeasure;
 use App\Services\AlertService;
@@ -65,6 +66,11 @@ class RecalculateUnitDependentCosts implements ShouldBeUniqueUntilProcessing, Sh
         $productionCostRecalculationService->recalculateForUnit($this->unitOfMeasureId);
 
         $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureKey(): string
+    {
+        return RecalculationKind::UnitCosts->sourceKey($this->unitOfMeasureId);
     }
 
     protected function recalculationFailureRawMaterialId(): ?int

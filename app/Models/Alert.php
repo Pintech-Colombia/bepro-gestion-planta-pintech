@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $raw_material_id
  * @property int|null $batch_id
  * @property int|null $production_order_id
+ * @property string|null $source_key
  * @property AlertSeverity $severity
  * @property string $message
  * @property bool $is_resolved
@@ -40,6 +41,7 @@ use Illuminate\Support\Carbon;
     'raw_material_id',
     'batch_id',
     'production_order_id',
+    'source_key',
     'severity',
     'message',
     'is_resolved',
