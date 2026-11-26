@@ -27,8 +27,6 @@ beforeEach(function () {
 
 function createPublicQrFixture(): array
 {
-    Storage::fake('local');
-
     $unit = UnitOfMeasure::create([
         'code' => 'gal-public',
         'name' => 'Galón',

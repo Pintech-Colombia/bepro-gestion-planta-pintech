@@ -26,7 +26,8 @@ use Tests\TestCase;
 */
 
 // El disco `local` es falso en todas las pruebas de Feature: si no, cada OP completada deja su certificado de calidad
-// (y cada firma o documento subido su archivo) en `storage/app/private` del equipo que corre la suite.
+// (y cada firma o documento subido su archivo) en `storage/app/private` del equipo que corre la suite. Las pruebas no lo
+// repiten: cada una empieza con el disco vacío.
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->beforeEach(fn () => Storage::fake('local'))

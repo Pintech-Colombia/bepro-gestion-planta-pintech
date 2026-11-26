@@ -26,7 +26,6 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     test()->seed(RolePermissionSeeder::class);
@@ -117,7 +116,6 @@ function createCertificateCompletionFixture(): array
 }
 
 test('completing an order stores quality solids and generates current certificate document', function () {
-    Storage::fake('local');
     Queue::fake();
     [$user, $order, $detail] = createCertificateCompletionFixture();
 
@@ -153,7 +151,6 @@ test('completing an order stores quality solids and generates current certificat
 });
 
 test('regenerating a certificate keeps only one current certificate', function () {
-    Storage::fake('local');
     [$user, $order] = createCertificateCompletionFixture();
     $service = app(QualityInspectionCertificateService::class);
 
@@ -179,7 +176,6 @@ test('regenerating a certificate keeps only one current certificate', function (
 });
 
 test('completing an order at night in the plant stores the plant date, not the UTC one', function () {
-    Storage::fake('local');
     Queue::fake();
     [$user, $order, $detail] = createCertificateCompletionFixture();
     $variant = ProductVariant::create([

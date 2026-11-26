@@ -146,8 +146,6 @@ test('phone can be cleared', function () {
 });
 
 test('signature can be uploaded', function () {
-    Storage::fake('local');
-
     $user = User::factory()->create();
     $file = UploadedFile::fake()->image('firma.png', 200, 50);
 
@@ -170,8 +168,6 @@ test('signature can be uploaded', function () {
 });
 
 test('signature can be removed', function () {
-    Storage::fake('local');
-
     $user = User::factory()->create();
     $path = Storage::disk('local')->putFile('signatures', UploadedFile::fake()->image('firma.png'));
     $user->update(['signature_path' => $path]);
@@ -255,8 +251,6 @@ test('email verification status is unchanged when the email address is unchanged
 });
 
 test('profile update fails gracefully when signature optimizer throws validation exception', function () {
-    Storage::fake('local');
-
     $user = User::factory()->create([
         'signature_path' => 'signatures/keep_me.png',
     ]);

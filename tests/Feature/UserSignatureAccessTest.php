@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Storage;
  * El certificado PDF no depende de esta regla: lleva la firma incrustada.
  */
 beforeEach(function () {
-    Storage::fake('local');
     // Defensivo: la subida de firmas no debe escribir nada en el disco público.
     Storage::fake('public');
 

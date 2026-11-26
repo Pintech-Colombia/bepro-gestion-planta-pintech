@@ -45,7 +45,6 @@ function createProductDocumentFixture(): array
 }
 
 test('authorized users can upload and version product PDF documents', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     $this->actingAs($user)->post(route('products.documents.store', $product), [
@@ -64,7 +63,6 @@ test('authorized users can upload and version product PDF documents', function (
 });
 
 test('authorized users can preview product PDF documents inline with nosniff header', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     Storage::disk('local')->put("product-documents/{$product->id}/ficha.pdf", "%PDF-1.4\ncontent");
@@ -94,7 +92,6 @@ test('authorized users can preview product PDF documents inline with nosniff hea
 });
 
 test('product document upload validates PDF files', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     $this->actingAs($user)->post(route('products.documents.store', $product), [
@@ -127,7 +124,6 @@ test('guests cannot manage product documents', function () {
 });
 
 test('it deletes physical file from storage if transaction fails', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     // Force an invalid user ID or database error to trigger transaction failure during service call
@@ -161,7 +157,6 @@ test('produccion cannot upload product documents', function () {
 // bytes que admite el sistema de archivos: «Failed to store document file to disk» (500).
 
 test('a document with a long name is stored with a bounded file name', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     $this->actingAs($user)->post(route('products.documents.store', $product), [
@@ -177,7 +172,6 @@ test('a document with a long name is stored with a bounded file name', function 
 });
 
 test('a document whose original name does not fit the file name column is rejected with 422', function () {
-    Storage::fake('local');
     [$user, $product] = createProductDocumentFixture();
 
     $this->actingAs($user)->post(route('products.documents.store', $product), [

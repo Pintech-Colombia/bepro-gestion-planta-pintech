@@ -188,7 +188,6 @@ test('index filters by search text case insensitively', function () {
 });
 
 test('show displays qr code detail with documents', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture(['created_by' => $user->id]);
 
@@ -279,7 +278,6 @@ test('admin can download qr image for inactive qr code', function () {
 });
 
 test('admin can download old document version', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture(['created_by' => $user->id]);
 
@@ -360,7 +358,6 @@ function currentCertificateFor(QrCode $qrCode, User $user, int $version = 1): Qr
 }
 
 test('produccion uploads a certificate that becomes the current version with the standard name', function () {
-    Storage::fake('local');
     $user = produccionUser();
     $qrCode = createQrFixture();
     $generated = currentCertificateFor($qrCode, $user);
@@ -382,7 +379,6 @@ test('produccion uploads a certificate that becomes the current version with the
 });
 
 test('the public page offers the uploaded certificate and no longer serves the previous one', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
     $generated = currentCertificateFor($qrCode, $user);
@@ -397,7 +393,6 @@ test('the public page offers the uploaded certificate and no longer serves the p
 });
 
 test('roles without the permission cannot upload or delete certificates', function () {
-    Storage::fake('local');
     $comercial = comercialUser();
     $qrCode = createQrFixture();
     $document = currentCertificateFor($qrCode, $comercial);
@@ -413,7 +408,6 @@ test('roles without the permission cannot upload or delete certificates', functi
 });
 
 test('only a pdf can be uploaded as a certificate', function () {
-    Storage::fake('local');
     $qrCode = createQrFixture();
 
     $this->actingAs(adminUser())
@@ -426,7 +420,6 @@ test('only a pdf can be uploaded as a certificate', function () {
 });
 
 test('a certificate cannot be uploaded while the order is not completed', function () {
-    Storage::fake('local');
     $qrCode = createQrFixture();
     $qrCode->productionOrder->update(['status' => ProductionOrderStatus::InProgress, 'completion_date' => null]);
 
@@ -439,7 +432,6 @@ test('a certificate cannot be uploaded while the order is not completed', functi
 });
 
 test('deleting a document removes the record and its file, leaves an audit entry and does not revive the previous version', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
     $previous = currentCertificateFor($qrCode, $user);
@@ -467,7 +459,6 @@ test('deleting a document removes the record and its file, leaves an audit entry
 });
 
 test('a document of another qr code cannot be deleted through this one', function () {
-    Storage::fake('local');
     $user = adminUser();
     $document = currentCertificateFor(createQrFixture(), $user);
 
@@ -494,7 +485,6 @@ test('the detail tells the screen what the user can do with the documents', func
 ]);
 
 test('the queued certificate does not replace one uploaded by hand while it was waiting', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
     $uploaded = currentCertificateFor($qrCode, $user);
@@ -506,7 +496,6 @@ test('the queued certificate does not replace one uploaded by hand while it was 
 });
 
 test('the queued certificate is generated when there is no current one', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
 
@@ -517,7 +506,6 @@ test('the queued certificate is generated when there is no current one', functio
 });
 
 test('if the file cannot be written the current certificate stays current and nothing is recorded', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
     $current = currentCertificateFor($qrCode, $user);
@@ -535,7 +523,6 @@ test('if the file cannot be written the current certificate stays current and no
 });
 
 test('uploading after deleting the highest version does not reuse its file', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture();
     $service = app(QualityInspectionCertificateService::class);
@@ -551,7 +538,6 @@ test('uploading after deleting the highest version does not reuse its file', fun
 
 // Un documento subido de noche en Bogotá ya es del día siguiente en UTC: el detalle muestra el día de planta.
 test('show dates documents by plant day', function () {
-    Storage::fake('local');
     $user = adminUser();
     $qrCode = createQrFixture(['created_by' => $user->id]);
     $document = currentCertificateFor($qrCode, $user);
