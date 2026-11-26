@@ -2,7 +2,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { EmptyCell } from '@/components/empty-cell';
-import { hasTimeZone, toPlantWallClockDate } from '@/lib/plant-time';
+import { plantWallClockOf } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 export interface FormattedDateProps {
@@ -13,10 +13,11 @@ export interface FormattedDateProps {
     className?: string;
 }
 
-const formatPatterns = {
+/** El día de cada formato; `datetime` le agrega `, HH:mm` (15 ene 2024, 10:30). */
+const dayPatterns = {
     short: 'dd MMM yyyy', // 15 ene 2024
     long: 'dd MMMM yyyy', // 15 enero 2024
-    datetime: 'dd MMM yyyy, HH:mm', // 15 ene 2024, 10:30
+    datetime: 'dd MMM yyyy', // 15 ene 2024, 10:30
     date: 'dd/MM/yyyy', // 15/01/2024
 };
 
@@ -83,12 +84,29 @@ export function formatSafeDate(
             return emptyValue;
         }
 
-        const pattern = formatPatterns[formatType];
-        // Un instante con zona (caso 3) se muestra con el reloj de la planta, no con el del navegador. Los casos 1 y 2
-        // (sin zona) ya son día u hora de planta.
-        const shown = hasTimeZone(value) ? toPlantWallClockDate(date) : date;
+        // Un instante con zona (caso 3) se muestra con el reloj de la planta, no con el del navegador; los casos 1 y 2
+        // (sin zona) ya son día u hora de planta. Un texto en otro formato queda como lo leyó el navegador.
+        const clock = plantWallClockOf(value) ?? {
+            year: date.getFullYear(),
+            month: date.getMonth() + 1,
+            day: date.getDate(),
+            hour: date.getHours(),
+            minute: date.getMinutes(),
+        };
+        // El día se formatea a mediodía: ningún cambio de horario de verano cae a esa hora, así que el día no se corre.
+        const dayText = format(
+            new Date(clock.year, clock.month - 1, clock.day, 12),
+            dayPatterns[formatType],
+            { locale: es },
+        );
 
-        return format(shown, pattern, { locale: es });
+        if (formatType !== 'datetime') {
+            return dayText;
+        }
+
+        const pad = (n: number) => String(n).padStart(2, '0');
+
+        return `${dayText}, ${pad(clock.hour)}:${pad(clock.minute)}`;
     } catch {
         return value;
     }

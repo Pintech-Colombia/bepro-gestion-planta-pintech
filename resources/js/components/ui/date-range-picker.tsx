@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import * as React from 'react';
 import {
     endOfMonth,
@@ -26,8 +25,8 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { usePlantToday } from '@/hooks/use-plant-today';
 import { parsePlantDate, toPlantDate } from '@/lib/plant-date';
-import { plantClockToday } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 export type DateRangePickerProps = {
@@ -44,7 +43,7 @@ export type DateRangePickerProps = {
 
 type Preset = {
     label: string;
-    /** `today` es hoy en la planta (`plantToday`), no el reloj del navegador. */
+    /** `today` es hoy en la planta (`usePlantToday`), no el reloj del navegador. */
     getValue: (today: Date) => { from: Date; to: Date };
 };
 
@@ -160,10 +159,11 @@ export function DateRangePicker({
     showPresets = true,
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false);
-    const { plantToday } = usePage().props;
-    // Hoy en la planta: los atajos («Hoy», «Este mes»…) y el mes que abre el calendario sin valor.
+    // Hoy en la planta para los atajos, el «hoy» del calendario y el mes que abre sin valor. `usePlantToday` siempre da un
+    // día válido, así que `parsePlantDate` no devuelve `undefined`.
+    const plantToday = usePlantToday();
     const today = React.useMemo(
-        () => parsePlantDate(plantToday) ?? plantClockToday(),
+        () => parsePlantDate(plantToday) as Date,
         [plantToday],
     );
 
@@ -360,6 +360,7 @@ export function DateRangePicker({
                             onSelect={setDraftRange}
                             numberOfMonths={1}
                             locale={es}
+                            today={today}
                         />
 
                         <div className="flex items-center justify-between border-t border-border pt-2.5 px-2 pb-1 mt-1">

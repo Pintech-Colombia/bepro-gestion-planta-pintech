@@ -2,9 +2,11 @@
  * La «hora de pared» de la planta: un instante (`2026-11-15T02:00:00Z`) visto con el reloj de la planta
  * (`America/Bogota`), no con el del navegador. Un celular con la zona mal puesta mostraría las horas corridas.
  *
- * La zona sale de la prop compartida `plantTimezone`; `app.tsx` la fija al cargar cada página. Sin ella (pruebas, una
- * página sin la prop) se usa `America/Bogota`.
+ * La zona sale de la prop compartida `plantTimezone`; `app.tsx` la fija una vez, antes del primer render. Sin ella
+ * (pruebas, una página sin la prop) se usa `America/Bogota`.
  */
+
+import { latestPlantDate, parsePlantDate, toPlantDate } from '@/lib/plant-date';
 
 const DEFAULT_PLANT_TIMEZONE = 'America/Bogota';
 
@@ -79,21 +81,40 @@ export function toPlantWallClock(instant: Date): PlantWallClock {
     };
 }
 
-/**
- * El instante como fecha local con los campos del reloj de la planta, para dárselo a `format` de date-fns, que formatea
- * con la zona del navegador. Solo sirve para mostrar: no es el mismo instante.
- */
-export function toPlantWallClockDate(instant: Date): Date {
-    const clock = toPlantWallClock(instant);
+/** `YYYY-MM-DD`, con hora opcional (`T` o espacio) y segundos opcionales; lo que sigue (fracciones) se ignora. */
+const WALL_CLOCK_TEXT =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?/;
 
-    return new Date(
-        clock.year,
-        clock.month - 1,
-        clock.day,
-        clock.hour,
-        clock.minute,
-        clock.second,
-    );
+/**
+ * Los campos del reloj de la planta para un texto del servidor: un instante con zona se convierte; un día o una hora
+ * sin zona ya son de planta y se leen tal cual, sin pasar por la zona del navegador. `null` si no es una fecha.
+ *
+ * Se trabaja con los campos y no con un `Date` local: en un navegador con horario de verano, una hora que allí no existe
+ * (las 02:30 del día del cambio) se correría una hora.
+ */
+export function plantWallClockOf(value: string): PlantWallClock | null {
+    const trimmed = value.trim();
+
+    if (hasTimeZone(trimmed)) {
+        const instant = new Date(trimmed);
+
+        return isNaN(instant.getTime()) ? null : toPlantWallClock(instant);
+    }
+
+    const match = WALL_CLOCK_TEXT.exec(trimmed);
+
+    if (!match) {
+        return null;
+    }
+
+    return {
+        year: Number(match[1]),
+        month: Number(match[2]),
+        day: Number(match[3]),
+        hour: Number(match[4] ?? 0),
+        minute: Number(match[5] ?? 0),
+        second: Number(match[6] ?? 0),
+    };
 }
 
 /**
@@ -104,4 +125,18 @@ export function plantClockToday(): Date {
     const clock = toPlantWallClock(new Date());
 
     return new Date(clock.year, clock.month - 1, clock.day);
+}
+
+/**
+ * Hoy en la planta en este momento, como fecha local a medianoche: el más tardío entre `plantToday` (la prop del
+ * servidor, del momento en que cargó la página) y el reloj del equipo en la zona de planta. Una página abierta antes de
+ * la medianoche ya da el día siguiente sin recargar, y un equipo con el reloj atrasado no gana al servidor.
+ */
+export function currentPlantToday(plantToday: string | null | undefined): Date {
+    const clockToday = plantClockToday();
+
+    return (
+        parsePlantDate(latestPlantDate(plantToday, toPlantDate(clockToday))) ??
+        clockToday
+    );
 }

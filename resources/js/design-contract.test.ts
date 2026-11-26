@@ -1039,4 +1039,40 @@ describe('contrato de DESIGN.md', () => {
 
         expect(staleExceptions).toEqual([]);
     });
+
+    it('no formatea fechas con la zona del navegador: sin toLocaleDateString, Intl.DateTimeFormat ni otros formateadores de date-fns', () => {
+        // `toLocaleString` ya lo vigila la regla de números. Los permitidos, con su motivo. Al resolver uno, se quita.
+        const browserZoneExceptions = [
+            // La pieza única: Intl.DateTimeFormat con la zona de planta.
+            'resources/js/lib/plant-time.ts',
+        ];
+        const rules = [
+            {
+                pattern:
+                    /\.toLocale(?:Date|Time)String\(|\bIntl\.DateTimeFormat\b|\b(?:formatRelative|lightFormat|intlFormat|formatISO)\b/g,
+                rule: 'Una fecha u hora se muestra con <FormattedDate>, formatSafeDate o formatRelativeTime (components/formatted-date.tsx), en hora de planta',
+            },
+        ];
+        const matchesIn = (file: string) =>
+            violationsAcrossLines([file], rules);
+
+        const found = filesUnder(join(root, 'resources/js'), ['.ts', '.tsx'])
+            .filter((file) => {
+                const path = relativePath(file);
+
+                return (
+                    !path.endsWith('.test.ts') &&
+                    !browserZoneExceptions.includes(path)
+                );
+            })
+            .flatMap(matchesIn);
+
+        expect(report(found)).toEqual([]);
+
+        const staleExceptions = browserZoneExceptions.filter((path) =>
+            exceptionIsStale(path, matchesIn),
+        );
+
+        expect(staleExceptions).toEqual([]);
+    });
 });
