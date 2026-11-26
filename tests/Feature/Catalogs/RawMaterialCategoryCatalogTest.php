@@ -85,7 +85,7 @@ it('crea una categoría sin código, identificada por familia y nombre, y la aud
     $category = RawMaterialCategory::query()->where('name', 'Bandejas')->sole();
 
     expect($category->type)->toBe(RawMaterialType::SecondaryPackaging)
-        ->and($category->code)->toBeNull()
+        ->and($category->getAttributes())->not->toHaveKey('code')
         ->and(Activity::query()->where('subject_type', RawMaterialCategory::class)->where('subject_id', $category->id)->value('description'))
         ->toBe('Categoría de materia prima "EMPAQUE · Bandejas" creada');
 });

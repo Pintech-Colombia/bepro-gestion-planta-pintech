@@ -92,7 +92,6 @@ it('carga familias, categorías, proveedores, materias primas y lotes como entra
     expect(RawMaterialFamily::query()->count())->toBe(2)
         ->and($secante->family->name)->toBe('ADITIVO')
         ->and(RawMaterialCategory::query()->where('name', 'ENVASES METALICOS')->sole()->type)->toBe(RawMaterialType::Container)
-        ->and(RawMaterialCategory::query()->whereNotNull('code')->exists())->toBeFalse()
         ->and(Supplier::query()->where('name', 'QUIMICA COSMOS')->sole()->notes)->toBe('Razón social sin verificar')
         // Dos lotes de la misma MP, cada uno con su fecha, precio y proveedor.
         ->and($batches)->toHaveCount(2)

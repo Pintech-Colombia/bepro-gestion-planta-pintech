@@ -65,7 +65,6 @@ uso (envase de una presentación, línea de fórmula) a una categoría de otro t
 | Columna | Tipo | Nulo | Notas |
 | --- | --- | :-: | --- |
 | `id` | BIGINT |  | PK |
-| `code` | VARCHAR(50) | sí | **Obsoleto:** el sistema ya no lo usa ni lo escribe (2026-11-25); se borra en una migración posterior. UNIQUE (admite varios nulos) |
 | `name` | VARCHAR(100) |  | Junto con la familia identifica la categoría: UNIQUE sobre `(family_id, LOWER(name))` (`raw_material_categories_family_name_lower_unique`). «BASE AGUA» puede estar en Resina y en Solvente |
 | `description` | TEXT | sí |  |
 | `family_id` | BIGINT | sí | FK → `raw_material_families` (RESTRICT). Nula solo en categorías anteriores a las familias; el formulario la exige |
