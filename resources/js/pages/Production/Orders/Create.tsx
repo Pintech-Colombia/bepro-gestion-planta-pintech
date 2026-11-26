@@ -186,7 +186,7 @@ export default function ProductionOrdersCreate({
             (v) => v.id === Number(pack.product_variant_id),
         );
         const units = parseDecimal(pack.planned_units) ?? 0;
-        const value = variant?.presentation_value || 0;
+        const value = parseDecimal(variant?.presentation_value) ?? 0;
 
         return sum + units * value;
     }, 0);

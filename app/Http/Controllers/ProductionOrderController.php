@@ -151,7 +151,8 @@ class ProductionOrderController extends Controller
             ->map(fn (ProductVariant $v) => [
                 'id' => $v->id,
                 'presentation_label' => $v->presentation_label,
-                'presentation_value' => (float) $v->presentation_value,
+                // El string del cast (o null si la presentación no tiene galones): con `(float)` llegaba 0 y se veía «(0 gal)».
+                'presentation_value' => $v->presentation_value,
             ]);
 
         $user = $request->user();

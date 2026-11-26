@@ -296,6 +296,28 @@ test('the order detail only offers presentations that are not in the plan yet', 
             ->where('availableVariants.0.id', $this->variantCunete->id));
 });
 
+test('a presentation without gallons reaches the packaging plan with a null value, not zero', function () {
+    $this->productionOrder->update(['status' => ProductionOrderStatus::InProgress]);
+    ProductionOrderPackagingPlan::createForVariant($this->productionOrder->id, $this->variant->id, 10);
+    ProductionOrderPackagingPlan::createForVariant($this->productionOrder->id, $this->variantCunete->id, 2);
+
+    $unit = ProductVariant::create([
+        'product_id' => $this->variant->product_id,
+        'code' => 'P-01-UND',
+        'unit_of_measure_id' => $this->variant->unit_of_measure_id,
+        'presentation_value' => null,
+        'presentation_label' => 'Unidad',
+        'is_active' => true,
+    ]);
+
+    $this->get(route('production-orders.show', $this->productionOrder))
+        ->assertSuccessful()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('availableVariants', 1)
+            ->where('availableVariants.0.id', $unit->id)
+            ->where('availableVariants.0.presentation_value', null));
+});
+
 test('a concurrent request with the same presentation gets the validation message, not a server error', function () {
     $this->productionOrder->update(['status' => ProductionOrderStatus::InProgress]);
 
