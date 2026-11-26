@@ -12,8 +12,6 @@ use Illuminate\Validation\ValidationException;
 uses(RefreshDatabase::class);
 
 test('optimizer resizes oversized signature image', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
 
     // Crear imagen grande (800x400) en memoria
@@ -58,8 +56,6 @@ test('optimizer resizes oversized signature image', function () {
 });
 
 test('optimizer does not resize already small signature', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
 
     // Crear imagen pequena (200x100)
@@ -91,8 +87,6 @@ test('optimizer does not resize already small signature', function () {
 });
 
 test('optimized signature does not cause memory error on certificate generation', function () {
-    Storage::fake('local');
-
     $user = User::factory()->create([
         'email_verified_at' => now(),
         'job_title' => 'Analista de Calidad',
@@ -133,8 +127,6 @@ test('optimized signature does not cause memory error on certificate generation'
 });
 
 test('optimizeAndStore stores the optimized signature on the private disk and returns its path', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
     $file = UploadedFile::fake()->image('my_signature.png', 800, 400);
 
@@ -145,8 +137,6 @@ test('optimizeAndStore stores the optimized signature on the private disk and re
 });
 
 test('optimizeAndStore throws ValidationException with signature message on failure', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
     $tempFile = tempnam(sys_get_temp_dir(), 'corrupt_');
     file_put_contents($tempFile, 'not-a-valid-image');
@@ -167,8 +157,6 @@ test('optimizeAndStore throws ValidationException with signature message on fail
 });
 
 test('optimizeAndStore converts any Throwable into ValidationException', function () {
-    Storage::fake('local');
-
     $service = new class extends SignatureOptimizerService
     {
         public function optimize(UploadedFile $file): UploadedFile
@@ -189,8 +177,6 @@ test('optimizeAndStore converts any Throwable into ValidationException', functio
 });
 
 test('optimize converts small jpeg to png format and returns png path', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
 
     // Crear JPEG pequeño (200x100)
@@ -223,8 +209,6 @@ test('optimize converts small jpeg to png format and returns png path', function
 });
 
 test('optimizeAndStore cleans up temporary file in sys_get_temp_dir after storage', function () {
-    Storage::fake('local');
-
     $service = app(SignatureOptimizerService::class);
     $file = UploadedFile::fake()->image('big_signature.png', 800, 400);
 

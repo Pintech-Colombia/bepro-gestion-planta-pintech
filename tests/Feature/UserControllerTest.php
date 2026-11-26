@@ -217,8 +217,6 @@ test('admin can update user is_active from false to true', function () {
 // ──────────────────────────────────────────────
 
 test('admin can create user with signature', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -245,8 +243,6 @@ test('admin can create user with signature', function () {
 });
 
 test('admin can update user signature', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -277,8 +273,6 @@ test('admin can update user signature', function () {
 });
 
 test('user creation fails gracefully when signature optimizer throws exception', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -308,8 +302,6 @@ test('user creation fails gracefully when signature optimizer throws exception',
 });
 
 test('user update preserves existing signature when optimizer throws exception', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -346,8 +338,6 @@ test('user update preserves existing signature when optimizer throws exception',
 });
 
 test('admin can remove user signature', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -374,8 +364,6 @@ test('admin can remove user signature', function () {
 });
 
 test('signature file is deleted when user is deleted', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('super-admin');
 
@@ -397,8 +385,6 @@ test('signature file is deleted when user is deleted', function () {
 });
 
 test('orphaned signature file is cleaned up if database transaction fails during store', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -447,8 +433,6 @@ test('orphaned signature file is cleaned up if database transaction fails during
 });
 
 test('signature file is preserved on disk if user deletion fails', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('super-admin');
 
@@ -473,8 +457,6 @@ test('signature file is preserved on disk if user deletion fails', function () {
 });
 
 test('orphaned signature file is cleaned up and database rolled back if transaction fails during update', function () {
-    Storage::fake('local');
-
     $admin = User::factory()->create();
     $admin->assignRole('admin');
 
@@ -795,8 +777,6 @@ test('the last active super-admin cannot be deactivated or demoted', function ()
 });
 
 test('a blocked super-admin demotion changes nothing and discards the uploaded signature', function () {
-    Storage::fake('local');
-
     $activeSuperAdmin = User::factory()->create(['is_active' => true, 'name' => 'Nombre original']);
     $activeSuperAdmin->assignRole(SystemRole::SuperAdmin->value);
 

@@ -107,7 +107,6 @@ it('elimina una fórmula sin historial con sus ingredientes y rechaza una usada 
 });
 
 it('elimina un documento de producto con su archivo y lo registra en la auditoría', function () {
-    Storage::fake('local');
     $admin = actingAsRole(SystemRole::Admin);
     $product = Product::factory()->create();
     Storage::disk('local')->put('product-documents/ficha.pdf', 'pdf');

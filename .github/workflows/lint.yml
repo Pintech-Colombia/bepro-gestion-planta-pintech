@@ -50,9 +50,12 @@ jobs:
       DB_PASSWORD: postgres
 
     steps:
+      # Dos commits: en un PR, el checkout es el commit de fusión y su primer padre es la punta de la rama base. Lo usa
+      # el paso que decide si las auditorías de dependencias bloquean.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
@@ -119,14 +122,51 @@ jobs:
       - name: Vitest
         run: npm run test:js
 
-      # Bloqueantes desde 2026-09 (partimos de 0 avisos): una vulnerabilidad conocida frena el merge, y el arreglo suele
-      # llegar solo como PR de Dependabot. Un paquete abandonado avisa pero no bloquea.
+      # Política de dependencias («Avisos que bloquean»): una vulnerabilidad conocida bloquea los PR que tocan
+      # dependencias (composer.json, composer.lock, package.json, package-lock.json o un Dockerfile), el PR hacia main
+      # (release o hotfix) y el despliegue a producción (la llamada desde `cd` con un push a main). En los demás PR y en
+      # el despliegue a staging avisa sin frenar, como Trivy en `cd`: un aviso nuevo sobre algo que ya estaba en develop
+      # no es culpa del cambio, y la auditoría diaria (`security`) se encarga de que no se pierda.
+      - name: ¿El cambio toca dependencias?
+        id: deps
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            if [ "$REF" = "refs/heads/main" ]; then
+              echo "blocking=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "blocking=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Despliegue a staging: las auditorías avisan, pero no bloquean."
+            fi
+            exit 0
+          fi
+
+          if [ "$BASE_REF" = "main" ]; then
+            echo "blocking=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only HEAD^1 HEAD)"
+
+          if printf '%s\n' "$changed" | grep -qE '(^|/)(composer\.(json|lock)|package(-lock)?\.json|Dockerfile)$'; then
+            echo "blocking=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "blocking=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::El PR no toca dependencias: las auditorías avisan, pero no bloquean."
+          fi
+
+      # Un paquete abandonado avisa pero no bloquea.
       - name: Auditoría de dependencias PHP
+        continue-on-error: ${{ steps.deps.outputs.blocking != 'true' }}
         run: composer audit --no-interaction --abandoned=report
 
       # `!cancelled()`: se ejecuta aunque falle la auditoría de PHP, para ver los dos resultados en una pasada.
       - name: Auditoría de dependencias Node (producción)
         if: ${{ !cancelled() }}
+        continue-on-error: ${{ steps.deps.outputs.blocking != 'true' }}
         run: npm audit --omit=dev
 
       # Herramientas de compilación y de lint: no llegan al navegador, solo avisan.

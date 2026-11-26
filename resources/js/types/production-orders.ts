@@ -33,7 +33,8 @@ export type ProductShortage = {
 export type VariantOption = {
     id: number;
     presentation_label: string;
-    presentation_value: number;
+    /** Galones de la presentación, como string decimal; null si no tiene. */
+    presentation_value: string | null;
 };
 
 export type RawMaterialOption = {

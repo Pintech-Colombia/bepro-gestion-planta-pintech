@@ -22,7 +22,6 @@ use App\Models\Warehouse;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Storage;
 
 /*
  * Auditoría 3.6, PR 4 (esquema): el dinero de la OP cabe en 16,4 (OPC-01, OPL-03), el responsable en 150 caracteres
@@ -33,7 +32,6 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     Queue::fake();
-    Storage::fake('local');
     $this->seed(RolePermissionSeeder::class);
 
     $this->admin = User::factory()->create(['job_title' => 'Jefe de producción', 'signature_path' => 'signatures/a.png']);

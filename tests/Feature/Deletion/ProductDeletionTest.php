@@ -71,8 +71,6 @@ function variantUpdatePayload(ProductVariant $variant, bool $isActive): array
     ];
 }
 
-beforeEach(fn () => Storage::fake('local'));
-
 it('elimina un producto sin historial junto con sus presentaciones y documentos', function () {
     $superAdmin = actingAsRole(SystemRole::SuperAdmin);
     $product = Product::factory()->create();

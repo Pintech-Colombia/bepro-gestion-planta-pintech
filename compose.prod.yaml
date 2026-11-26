@@ -44,6 +44,11 @@ services:
           cpus: ${WEB_CPUS:?}
           memory: ${WEB_MEMORY:?}
 
+  # Un solo trabajador de cola, a propósito. Los recálculos de costo (`RecalculateRawMaterialReferencePrice`,
+  # `RecalculateRawMaterialDependentCosts` y `RecalculateUnitDependentCosts`) se protegen con `WithoutOverlapping`, que
+  # devuelve el trabajo a la cola si otro del mismo elemento está corriendo, y cada devolución gasta un intento. Con dos
+  # o más trabajadores, un segundo recálculo seguido del mismo elemento puede agotar sus intentos y quedar en
+  # `failed_jobs`. Antes de subir `replicas` o lanzar otro `queue:work`, revisar esos trabajos.
   queue:
     <<: *app
     command: ['php', 'artisan', 'queue:work', '--sleep=3', '--tries=3', '--timeout=60']

@@ -29,7 +29,6 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     test()->seed(RolePermissionSeeder::class);
-    Storage::fake('local');
 
     $this->user = User::factory()->create([
         'email_verified_at' => now(),
