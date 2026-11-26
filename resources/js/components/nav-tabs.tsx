@@ -83,21 +83,21 @@ export function NavTabs({ groups, label, className }: NavTabsProps) {
         <nav
             aria-label={label}
             className={cn(
-                'relative w-fit max-w-full min-w-0 overflow-hidden rounded-lg bg-muted text-muted-foreground',
+                'relative w-full min-w-0 border-b border-border',
                 className,
             )}
         >
             <div
                 ref={containerRef}
-                className="relative [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                className="relative -mb-px [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
             >
-                <div className="flex w-max items-center gap-1 p-1">
+                <div className="flex w-max items-center gap-1">
                     {visibleGroups.map((group, groupIndex) => (
                         <Fragment key={group.label || `group-${groupIndex}`}>
                             {groupIndex > 0 && (
                                 <span
                                     aria-hidden="true"
-                                    className="mx-1 h-4 w-px shrink-0 bg-border"
+                                    className="mx-1.5 h-4 w-px shrink-0 bg-border"
                                 />
                             )}
                             {group.items.map((item) => {
@@ -112,10 +112,10 @@ export function NavTabs({ groups, label, className }: NavTabsProps) {
                                         }
                                         data-touch-target="default"
                                         className={cn(
-                                            'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-2.5 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+                                            'relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-t-md px-2.5 py-2 text-sm font-medium whitespace-nowrap transition-colors after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
                                             active
-                                                ? 'bg-background text-foreground shadow-sm'
-                                                : 'text-muted-foreground hover:text-foreground',
+                                                ? 'text-foreground after:bg-foreground'
+                                                : 'text-muted-foreground after:bg-transparent hover:text-foreground',
                                         )}
                                     >
                                         {item.icon && <item.icon />}
@@ -131,13 +131,13 @@ export function NavTabs({ groups, label, className }: NavTabsProps) {
             {canScrollLeft && (
                 <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-linear-to-r from-muted via-muted/80 to-transparent"
+                    className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-linear-to-r from-background via-background/80 to-transparent"
                 />
             )}
             {canScrollRight && (
                 <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-linear-to-l from-muted via-muted/80 to-transparent"
+                    className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-linear-to-l from-background via-background/80 to-transparent"
                 />
             )}
         </nav>

@@ -205,11 +205,11 @@ módulo, lo envía el controlador en `can` y sin él se pinta el texto solo.
 
 **Ubicación:** `resources/js/components/nav-tabs.tsx`.
 
-Barra de pestañas horizontal para secciones de un área que son páginas distintas (como Configuración), con el mismo
-aspecto que `ui/tabs.tsx` usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link>` de Inertia (Wayfinder)
-dentro de un `<nav aria-label=…>` con `aria-current="page"` en la activa (usando `isCurrentOrParentUrl`, así las
-pantallas de crear y editar mantienen marcada su sección). Para paneles dentro de una misma página se usa Radix `<Tabs>`
-(`ui/tabs.tsx`); `design-contract.test.ts` rechaza `<Link>` dentro de `TabsList`/`TabsTrigger` en `pages/`.
+Barra de pestañas horizontal con línea inferior para secciones de un área que son páginas distintas (como
+Configuración), usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link>` de Inertia (Wayfinder) dentro de un
+`<nav aria-label=…>` con `aria-current="page"` en la activa (usando `isCurrentOrParentUrl`, así las pantallas de crear y
+editar mantienen marcada su sección). Para paneles dentro de una misma página se usa Radix `<Tabs>` (`ui/tabs.tsx`);
+`design-contract.test.ts` rechaza `<Link>` dentro de `TabsList`/`TabsTrigger` en `pages/`.
 
 - **Grupos:** recibe `groups: NavGroup[]` y pinta un separador vertical entre grupos; sin rótulos visibles y sin
   separador cuando solo queda un grupo.
