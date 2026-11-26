@@ -122,18 +122,29 @@ jobs:
       - name: Vitest
         run: npm run test:js
 
-      # Política de dependencias («Avisos que bloquean»): una vulnerabilidad conocida bloquea solo los PR que tocan
+      # Política de dependencias («Avisos que bloquean»): una vulnerabilidad conocida bloquea los PR que tocan
       # dependencias (composer.json, composer.lock, package.json, package-lock.json o un Dockerfile), el PR hacia main
-      # (release o hotfix) y el despliegue (la llamada desde `cd`, que es un push). En los demás PR avisa sin frenar: un
-      # aviso nuevo sobre algo que ya estaba en develop no es culpa de ese PR, y la auditoría diaria (`security`) se
-      # encarga de que no se pierda.
+      # (release o hotfix) y el despliegue a producción (la llamada desde `cd` con un push a main). En los demás PR y en
+      # el despliegue a staging avisa sin frenar, como Trivy en `cd`: un aviso nuevo sobre algo que ya estaba en develop
+      # no es culpa del cambio, y la auditoría diaria (`security`) se encarga de que no se pierda.
       - name: ¿El cambio toca dependencias?
         id: deps
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
         run: |
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" = "main" ]; then
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            if [ "$REF" = "refs/heads/main" ]; then
+              echo "blocking=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "blocking=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Despliegue a staging: las auditorías avisan, pero no bloquean."
+            fi
+            exit 0
+          fi
+
+          if [ "$BASE_REF" = "main" ]; then
             echo "blocking=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
