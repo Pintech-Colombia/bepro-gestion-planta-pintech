@@ -80,6 +80,9 @@ class HandleInertiaRequests extends Middleware
             // `always`: también llega en las recargas parciales (las que abren los cajones de movimientos), para que una
             // página cargada ayer no proponga la fecha de ayer.
             'plantToday' => Inertia::always(fn (): string => $this->timezone->todayInPlant()),
+            // La zona de planta, para mostrar las horas con el reloj de la planta y no con el del navegador. No cambia
+            // entre páginas: el front la fija al cargar y la conserva en las recargas parciales.
+            'plantTimezone' => $this->timezone->getPlantTimezone(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'warehouseContext' => fn (): ?array => $user ? $this->warehouseContext($request, $user) : null,
             'unresolvedAlertsCount' => fn (): int => $user?->can(Permission::AlertsView->value)

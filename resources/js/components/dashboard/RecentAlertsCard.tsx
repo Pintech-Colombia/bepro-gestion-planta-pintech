@@ -1,8 +1,7 @@
 import { Link } from '@inertiajs/react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { BellRing } from 'lucide-react';
 
+import { formatSafeDate } from '@/components/formatted-date';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,10 +78,9 @@ export function RecentAlertsCard({
                                 </p>
                                 {alert.created_at && (
                                     <p className="mt-2 text-xs text-muted-foreground">
-                                        {format(
-                                            new Date(alert.created_at),
-                                            'dd MMM HH:mm',
-                                            { locale: es },
+                                        {formatSafeDate(
+                                            alert.created_at,
+                                            'datetime',
                                         )}
                                     </p>
                                 )}

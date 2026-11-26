@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import { CalendarIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -10,6 +9,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { usePlantToday } from '@/hooks/use-plant-today';
 import {
     isPlantDate,
     isPlantDateSelectable,
@@ -19,6 +19,7 @@ import {
     plantDateMonthRange,
     toPlantDate,
 } from '@/lib/plant-date';
+import { plantClockToday } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 type PlantDateInputProps = {
@@ -47,7 +48,7 @@ type PlantDateInputProps = {
 
 /**
  * Campo de fecha de planta con el calendario de la app (DESIGN.md §8), nunca el selector nativo del navegador. Concentra
- * los límites de cada formulario: `notFuture`/`notPast` contra el «hoy» de la planta (`plantToday`), `min`/`max` y la
+ * los límites de cada formulario: `notFuture`/`notPast` contra el «hoy» de la planta (`usePlantToday`), `min`/`max` y la
  * fecha guardada que se puede conservar. El valor por defecto (normalmente `plantToday`) lo pone el formulario.
  */
 export function PlantDateInput({
@@ -67,7 +68,7 @@ export function PlantDateInput({
     'aria-invalid': ariaInvalid,
     'aria-required': ariaRequired,
 }: PlantDateInputProps) {
-    const { plantToday } = usePage().props;
+    const plantToday = usePlantToday();
     const [open, setOpen] = useState(false);
     const bounds = useMemo(
         () =>
@@ -88,7 +89,7 @@ export function PlantDateInput({
         () =>
             parsePlantDate(
                 `${plantDateInitialMonth(value, bounds, plantToday)}-01`,
-            ) ?? new Date(),
+            ) ?? plantClockToday(),
     );
     const canPickToday = isPlantDateSelectable(plantToday, bounds, saved);
 
@@ -98,7 +99,7 @@ export function PlantDateInput({
             setMonth(
                 parsePlantDate(
                     `${plantDateInitialMonth(value, bounds, plantToday)}-01`,
-                ) ?? new Date(),
+                ) ?? plantClockToday(),
             );
         }
 

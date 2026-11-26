@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { toLocalDateTimeInput, toUtcIsoString } from '@/lib/date-time-helpers';
+import { toPlantDateTimeInput } from '@/lib/date-time-helpers';
 import { formErrorMessages } from '@/lib/form-errors';
 import { formatQuantity } from '@/lib/formatters';
 import { parseDecimal } from '@/lib/numeric-input';
@@ -302,13 +302,13 @@ export function ControlCard({
                         <Label className="text-xs">Inicio Agitación</Label>
                         <Input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(
+                            value={toPlantDateTimeInput(
                                 data.agitation_start_time,
                             )}
                             onChange={(event) =>
                                 setData(
                                     'agitation_start_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -318,13 +318,13 @@ export function ControlCard({
                         <Label className="text-xs">Fin Agitación</Label>
                         <Input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(
+                            value={toPlantDateTimeInput(
                                 data.agitation_end_time,
                             )}
                             onChange={(event) =>
                                 setData(
                                     'agitation_end_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -334,13 +334,13 @@ export function ControlCard({
                         <Label className="text-xs">Inicio Empaque</Label>
                         <Input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(
+                            value={toPlantDateTimeInput(
                                 data.packaging_start_time,
                             )}
                             onChange={(event) =>
                                 setData(
                                     'packaging_start_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -350,13 +350,13 @@ export function ControlCard({
                         <Label className="text-xs">Fin Empaque</Label>
                         <Input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(
+                            value={toPlantDateTimeInput(
                                 data.packaging_end_time,
                             )}
                             onChange={(event) =>
                                 setData(
                                     'packaging_end_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}

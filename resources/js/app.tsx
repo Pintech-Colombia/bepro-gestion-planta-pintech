@@ -6,24 +6,35 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/Settings/layout';
 import { focusFirstError } from '@/lib/focus-first-error';
+import { setPlantTimezone } from '@/lib/plant-time';
 
-let appName = import.meta.env.VITE_APP_NAME || 'Pintech Colombia S.A.S';
+/**
+ * Las props compartidas de la página inicial, antes de que Inertia dibuje nada. Inertia 3 la manda en
+ * `<script data-page="app" type="application/json">`, no en un atributo del `<div id="app">`.
+ */
+function initialPageProps(): { name?: string; plantTimezone?: string } {
+    if (typeof document === 'undefined') {
+        return {};
+    }
 
-if (typeof window !== 'undefined') {
-    const el = document.getElementById('app');
+    try {
+        const script = document.querySelector('script[data-page="app"]');
 
-    if (el && el.dataset.page) {
-        try {
-            const page = JSON.parse(el.dataset.page);
-
-            if (page?.props?.name) {
-                appName = page.props.name;
-            }
-        } catch {
-            // Fallback silencioso
-        }
+        return JSON.parse(script?.textContent ?? '{}')?.props ?? {};
+    } catch {
+        return {};
     }
 }
+
+const initialProps = initialPageProps();
+const appName =
+    initialProps.name ||
+    import.meta.env.VITE_APP_NAME ||
+    'Pintech Colombia S.A.S';
+
+// La zona de planta para mostrar las horas (`lib/plant-time`). Se fija antes del primer render, una sola vez: no cambia
+// entre páginas.
+setPlantTimezone(initialProps.plantTimezone);
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
