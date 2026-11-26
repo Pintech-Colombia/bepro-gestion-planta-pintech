@@ -135,6 +135,23 @@ sudo docker compose --project-directory /srv/pintech/staging run --rm web php ar
 El primer usuario, los datos de demostración y el reset de staging se explican en el README principal («Entornos
 protegidos»).
 
+### Recalcular precios y costos a mano
+
+Un recálculo de costo que agota sus intentos deja la alerta «Fallo de recálculo» en la campana, con el comando que lo
+repite. Los dos se pueden correr en cualquier momento: solo recalculan, no borran nada.
+
+```bash
+# Precio de referencia de una materia prima (el ID que dice la alerta) o, sin ID, de todas las activas. Solo encola:
+# el trabajo lo hace el servicio `queue`, y la alerta se resuelve sola cuando termina bien.
+sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-raw-material 12
+sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-raw-material
+# Costo de todos los productos con fórmula de referencia (o de uno, con su ID). Corre ahí mismo, sin la cola; la alerta
+# hay que marcarla resuelta a mano en Alertas.
+sudo docker compose --project-directory /srv/pintech/staging run --rm web php artisan costs:recalculate-product
+```
+
+En producción, lo mismo con `/srv/pintech/prod`.
+
 ## Copias de seguridad
 
 `pintech-backup` corre todos los días a las 02:00 de Colombia (`pintech-backup.cron`) y guarda en

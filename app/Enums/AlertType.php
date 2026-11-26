@@ -13,6 +13,7 @@ enum AlertType: string implements HasTone
     case VariacionPrecio = 'variacion_precio';
     case PaintDevelopmentRequest = 'paint_development_request';
     case Sobreconsumo = 'sobreconsumo';
+    case FalloRecalculo = 'fallo_recalculo';
 
     public function label(): string
     {
@@ -22,6 +23,7 @@ enum AlertType: string implements HasTone
             self::VariacionPrecio => __('Variación de precio'),
             self::PaintDevelopmentRequest => __('Solicitud de desarrollo de pintura'),
             self::Sobreconsumo => __('Sobreconsumo'),
+            self::FalloRecalculo => __('Fallo de recálculo'),
         };
     }
 
@@ -35,7 +37,8 @@ enum AlertType: string implements HasTone
             self::VencimientoProximo,
             self::VariacionPrecio,
             self::PaintDevelopmentRequest,
-            self::Sobreconsumo => Tone::Neutral,
+            self::Sobreconsumo,
+            self::FalloRecalculo => Tone::Neutral,
         };
     }
 
@@ -54,6 +57,8 @@ enum AlertType: string implements HasTone
             self::PaintDevelopmentRequest => Permission::PaintDevelopmentRequestsViewAll,
             // El mensaje lleva el costo del exceso y el margen real de la OP.
             self::Sobreconsumo => Permission::CostsView,
+            // Lo que quedó sin recalcular es un precio o un costo.
+            self::FalloRecalculo => Permission::CostsView,
         };
     }
 }

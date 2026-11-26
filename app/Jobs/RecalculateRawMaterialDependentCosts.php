@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\ReportsRecalculationFailure;
+use App\Models\RawMaterial;
+use App\Services\AlertService;
 use App\Services\ProductionCostRecalculationService;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,6 +21,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 class RecalculateRawMaterialDependentCosts implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
+    use ReportsRecalculationFailure;
 
     public int $tries = 3;
 
@@ -54,8 +58,26 @@ class RecalculateRawMaterialDependentCosts implements ShouldBeUniqueUntilProcess
         ];
     }
 
-    public function handle(ProductionCostRecalculationService $productionCostRecalculationService): void
-    {
+    public function handle(
+        ProductionCostRecalculationService $productionCostRecalculationService,
+        AlertService $alertService,
+    ): void {
         $productionCostRecalculationService->recalculateForRawMaterial($this->rawMaterialId);
+
+        $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureRawMaterialId(): ?int
+    {
+        return $this->rawMaterialId;
+    }
+
+    protected function recalculationFailureMessage(): string
+    {
+        $code = RawMaterial::query()->whereKey($this->rawMaterialId)->value('code') ?? '#'.$this->rawMaterialId;
+
+        return __('No se pudo recalcular el costo de los productos que usan :code. Pida a sistemas que ejecute «php artisan costs:recalculate-product» en el servidor.', [
+            'code' => $code,
+        ]);
     }
 }

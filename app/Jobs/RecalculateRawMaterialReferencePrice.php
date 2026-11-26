@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\ReportsRecalculationFailure;
 use App\Models\RawMaterial;
 use App\Services\AlertService;
 use App\Services\ProductionCostRecalculationService;
@@ -16,6 +17,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
+    use ReportsRecalculationFailure;
 
     public int $tries = 3;
 
@@ -67,6 +69,23 @@ class RecalculateRawMaterialReferencePrice implements ShouldBeUniqueUntilProcess
             $this->evaluatePriceVariationAlert($alertService);
             $productionCostRecalculationService->recalculateForRawMaterial($this->rawMaterialId);
         }
+
+        $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureRawMaterialId(): ?int
+    {
+        return $this->rawMaterialId;
+    }
+
+    protected function recalculationFailureMessage(): string
+    {
+        $code = RawMaterial::query()->whereKey($this->rawMaterialId)->value('code') ?? '#'.$this->rawMaterialId;
+
+        return __('No se pudo recalcular el precio de referencia de :code ni los costos que dependen de él. Pida a sistemas que ejecute «php artisan costs:recalculate-raw-material :id» en el servidor.', [
+            'code' => $code,
+            'id' => $this->rawMaterialId,
+        ]);
     }
 
     private function evaluatePriceVariationAlert(AlertService $alertService): void

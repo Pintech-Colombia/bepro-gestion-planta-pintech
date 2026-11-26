@@ -10,6 +10,7 @@ use App\Models\Alert;
 use App\Models\InventoryBatch;
 use App\Models\RawMaterial;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class AlertService
@@ -31,7 +32,7 @@ class AlertService
     }
 
     /**
-     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int, sobreconsumo: int}
+     * @return array{stock_bajo: int, vencimiento_proximo: int, variacion_precio: int, paint_development_request: int, sobreconsumo: int, fallo_recalculo: int}
      */
     public function unresolvedBreakdown(?User $user): array
     {
@@ -48,6 +49,7 @@ class AlertService
             'variacion_precio' => (int) ($counts[AlertType::VariacionPrecio->value] ?? 0),
             'paint_development_request' => (int) ($counts[AlertType::PaintDevelopmentRequest->value] ?? 0),
             'sobreconsumo' => (int) ($counts[AlertType::Sobreconsumo->value] ?? 0),
+            'fallo_recalculo' => (int) ($counts[AlertType::FalloRecalculo->value] ?? 0),
         ];
     }
 
@@ -306,6 +308,39 @@ class AlertService
         ]));
     }
 
+    /**
+     * Un recálculo de costo que agotó sus intentos (`ReportsRecalculationFailure`): una sola alerta sin resolver por
+     * elemento, aunque falle varias veces o falle otro trabajo del mismo elemento. Si el elemento es una materia prima,
+     * la alerta va atada a ella; si no (un producto, una unidad), el elemento lo identifica el mensaje, que lo nombra.
+     */
+    public function raiseRecalculationFailure(?int $rawMaterialId, string $message): void
+    {
+        $alert = $this->activeRecalculationFailure($rawMaterialId, $message)->first();
+
+        if ($alert !== null) {
+            $alert->update(['message' => $message]);
+
+            return;
+        }
+
+        $this->announce(Alert::create([
+            'type' => AlertType::FalloRecalculo,
+            'raw_material_id' => $rawMaterialId,
+            'severity' => AlertSeverity::Media,
+            'message' => $message,
+            'is_resolved' => false,
+        ]));
+    }
+
+    /** Un recálculo posterior del mismo elemento terminó bien: su alerta de fallo, si la hay, queda resuelta. */
+    public function resolveRecalculationFailure(?int $rawMaterialId, string $message): void
+    {
+        $this->activeRecalculationFailure($rawMaterialId, $message)->update([
+            'is_resolved' => true,
+            'resolved_at' => now(),
+        ]);
+    }
+
     public function resolve(Alert $alert, int $userId): void
     {
         if ($alert->is_resolved) {
@@ -383,6 +418,21 @@ class AlertService
 
         $this->createdInRequest[] = $payload;
         session()->push('new_alerts', $payload);
+    }
+
+    /**
+     * @return Builder<Alert>
+     */
+    private function activeRecalculationFailure(?int $rawMaterialId, string $message): Builder
+    {
+        return Alert::query()
+            ->where('type', AlertType::FalloRecalculo)
+            ->where('is_resolved', false)
+            ->when(
+                $rawMaterialId !== null,
+                fn ($query) => $query->where('raw_material_id', $rawMaterialId),
+                fn ($query) => $query->whereNull('raw_material_id')->where('message', $message),
+            );
     }
 
     private function autoResolveActive(AlertType $type, int $rawMaterialId, ?int $batchId): void
