@@ -75,7 +75,8 @@ it('crea una categoría sin código, identificada por familia y nombre, y la aud
     actingAsRole(SystemRole::SuperAdmin);
     $packaging = RawMaterialFamily::factory()->create(['name' => 'EMPAQUE']);
 
-    // Un `code` que llegue (un formulario viejo en caché) se ignora: la categoría ya no lo tiene.
+    // Un `code` que llegue (un formulario viejo en caché) se ignora: si llegara a la base, el guardado fallaría, porque
+    // la columna ya no existe.
     $this->post(route('catalogs.raw-material-categories.store'), rawCategoryPayload([
         'code' => 'BANDEJAS', 'name' => '  Bandejas ', 'family_id' => $packaging->id, 'type' => 'secondary_packaging',
     ]))
@@ -85,7 +86,6 @@ it('crea una categoría sin código, identificada por familia y nombre, y la aud
     $category = RawMaterialCategory::query()->where('name', 'Bandejas')->sole();
 
     expect($category->type)->toBe(RawMaterialType::SecondaryPackaging)
-        ->and($category->getAttributes())->not->toHaveKey('code')
         ->and(Activity::query()->where('subject_type', RawMaterialCategory::class)->where('subject_id', $category->id)->value('description'))
         ->toBe('Categoría de materia prima "EMPAQUE · Bandejas" creada');
 });
