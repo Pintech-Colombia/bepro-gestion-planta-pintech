@@ -68,7 +68,7 @@ it('defaults to showing active unresolved alerts when no status filter is provid
             ->component('Alerts/Index')
             ->has('alerts.data', 2)
             ->has('statusOptions', 2)
-            ->has('typeOptions', 5)
+            ->has('typeOptions', count(AlertType::cases()))
             ->has('severityOptions', 3)
             ->where('filters.status', 'active')
     );

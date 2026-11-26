@@ -49,6 +49,8 @@ it('asigna a cada tipo de alerta el permiso de su módulo', function (AlertType 
     'vencimiento' => [AlertType::VencimientoProximo, Permission::RawMaterialsView],
     'variación de precio' => [AlertType::VariacionPrecio, Permission::CostsView],
     'desarrollo de pinturas' => [AlertType::PaintDevelopmentRequest, Permission::PaintDevelopmentRequestsViewAll],
+    'sobreconsumo' => [AlertType::Sobreconsumo, Permission::CostsView],
+    'fallo de recálculo' => [AlertType::FalloRecalculo, Permission::CostsView],
 ]);
 
 it('no muestra a Producción las alertas de precios ni las de desarrollo de pinturas', function () {

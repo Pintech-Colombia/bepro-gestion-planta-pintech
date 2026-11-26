@@ -940,6 +940,7 @@ Alertas (visibles según el permiso de su tipo).
 | `raw_material_id` | BIGINT | sí | FK → `raw_materials` (CASCADE) |
 | `batch_id` | BIGINT | sí | FK → `inventory_batches` (CASCADE) |
 | `production_order_id` | BIGINT | sí | FK → `production_orders` (RESTRICT), con índice. La alerta de sobreconsumo (una por OP) |
+| `source_key` | VARCHAR(100) | sí | Origen de la alerta cuando no basta con la MP, el lote o la OP: `recalc:<tipo>:<id>` en los fallos de recálculo. Índice con `is_resolved` |
 | `severity` | VARCHAR(255) |  | default `media` |
 | `message` | TEXT |  |  |
 | `is_resolved` | BOOLEAN |  | default `false` |
@@ -1123,7 +1124,7 @@ Algunas tienen además una restricción `CHECK` en PostgreSQL.
 
 | Enum | Columna(s) | Valores |
 | --- | --- | --- |
-| `AlertType` | `alerts.type` | stock_bajo, vencimiento_proximo, variacion_precio, paint_development_request, sobreconsumo |
+| `AlertType` | `alerts.type` | stock_bajo, vencimiento_proximo, variacion_precio, paint_development_request, sobreconsumo, fallo_recalculo |
 | `AlertSeverity` | `alerts.severity` | baja, media, alta |
 | `WarehouseType` | `warehouses.type` | factory, storage |
 | `RawMaterialType` | `raw_material_categories.type` | chemical, container, label, secondary_packaging |

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\RecalculationKind;
+use App\Jobs\Concerns\ReportsRecalculationFailure;
+use App\Models\UnitOfMeasure;
+use App\Services\AlertService;
 use App\Services\ProductionCostRecalculationService;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,6 +22,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 class RecalculateUnitDependentCosts implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
+    use ReportsRecalculationFailure;
 
     public int $tries = 3;
 
@@ -54,8 +59,31 @@ class RecalculateUnitDependentCosts implements ShouldBeUniqueUntilProcessing, Sh
         ];
     }
 
-    public function handle(ProductionCostRecalculationService $productionCostRecalculationService): void
-    {
+    public function handle(
+        ProductionCostRecalculationService $productionCostRecalculationService,
+        AlertService $alertService,
+    ): void {
         $productionCostRecalculationService->recalculateForUnit($this->unitOfMeasureId);
+
+        $this->resolveRecalculationFailure($alertService);
+    }
+
+    protected function recalculationFailureKey(): string
+    {
+        return RecalculationKind::UnitCosts->sourceKey($this->unitOfMeasureId);
+    }
+
+    protected function recalculationFailureRawMaterialId(): ?int
+    {
+        return null;
+    }
+
+    protected function recalculationFailureMessage(): string
+    {
+        $unit = UnitOfMeasure::query()->whereKey($this->unitOfMeasureId)->value('name') ?? '#'.$this->unitOfMeasureId;
+
+        return __('No se pudo recalcular el costo de los productos que usan la unidad :unit. Pida a sistemas que ejecute «php artisan costs:recalculate-product» en el servidor.', [
+            'unit' => $unit,
+        ]);
     }
 }

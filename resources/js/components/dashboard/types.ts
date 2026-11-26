@@ -17,6 +17,7 @@ export type AlertBreakdown = {
     variacion_precio: number;
     paint_development_request?: number;
     sobreconsumo?: number;
+    fallo_recalculo?: number;
 };
 
 export type RecentQuote = {
