@@ -544,9 +544,7 @@ describe('contrato de DESIGN.md', () => {
         // `FormField`, `FormCheckbox` y `FormError` (form-field.tsx) ponen la etiqueta, la ayuda y el error, enlazados
         // para el lector de pantalla. Excepciones por archivo, con su motivo; al migrar una, se quita de aquí.
         const fieldExceptions = [
-            // Orden de producción: la tabla de envasado (campos por fila) y el diálogo de devolver a planta; con el PR C
-            // de su rediseño.
-            'resources/js/components/production/packaging-section.tsx',
+            // Orden de producción: el diálogo de devolver a planta; con el PR C de su rediseño.
             'resources/js/pages/Production/Orders/Show.tsx',
             // Formularios dentro del detalle del producto: con el rediseño del producto.
             'resources/js/pages/Products/Show.tsx',
