@@ -328,7 +328,8 @@ test('users without the dashboard.view permission receive a 403', function () {
         ->assertForbidden();
 });
 
-// «Hoy» es el día de planta: a las 8 p. m. del 14 en Bogotá ya es el 15 en UTC.
+// «Hoy» es el día de planta: a las 8 p. m. del 14 en Bogotá ya es el 15 en UTC. DashboardService ya lo hacía bien;
+// la prueba lo protege si alguien vuelve a un `today()` en UTC.
 test('completed today counts the plant day, not the UTC day', function () {
     $this->travelTo(CarbonImmutable::parse('2026-11-15 01:00:00', 'UTC'));
 

@@ -7,6 +7,9 @@ use Symfony\Component\Finder\Finder;
 // Todo «hoy» y todo «día» del servidor sale de TimezoneService: de 7 p. m. a medianoche en Bogotá ya es el día
 // siguiente en UTC, y cualquier conversión que no pase por la zona de planta falla en esa franja. Esta prueba recorre
 // app/ y routes/ y falla si aparece una copia. Los comentarios no cuentan: se lee el código con el tokenizer de PHP.
+//
+// Atrapa las formas de abajo, escritas sobre `now()` o sobre una columna `*_at`. No adivina por el nombre de una
+// variable (`$createdAt->toDateString()`): eso queda para la revisión de código.
 
 /**
  * Archivos que sí pueden leer la zona de planta directamente, con su razón.
@@ -73,26 +76,32 @@ function plantTimezoneLineAt(array $offsets, int $position): int
 
 it('calcula «hoy» y el día de un instante solo con TimezoneService', function (): void {
     // Los tokens van separados por un espacio: `now ( ) -> toDateString ( )`.
+    // El grupo 1, cuando lo hay, es la columna: las de PLANT_TIMEZONE_DATE_COLUMNS no cuentan.
     $rules = [
         // `today()` global, `Carbon::today()`, `Date::today()`, `\today()`; no un método `->today()` ni su declaración.
         '/(?<!-> |function )\btoday \(/' => '«hoy» en UTC: usa TimezoneService::todayInPlant()',
         '/\bnow \( \) \??-> toDateString \( \)/' => '«hoy» en UTC: usa TimezoneService::todayInPlant()',
-        '/\bnow \( \) \??-> format \( [\'"]Y/' => '«hoy» en UTC: usa TimezoneService::todayInPlant() o nowInPlant()',
         '/[\'"]app\.plant_timezone[\'"]/' => 'la zona de planta se lee de TimezoneService::getPlantTimezone()',
+        '/\bnow \( \) \??-> format \(/' => '«hoy» o la hora en UTC: usa TimezoneService::todayInPlant() o nowInPlant()',
+        '/\bnow \( \) \??-> (?:startOfDay|endOfDay) \( \)/' => 'el día en UTC: usa TimezoneService::nowInPlant() o plantDayStartUtc()',
         '/\b(\w+_at) \??-> toDateString \( \)/' => 'un instante convertido a día en UTC: usa TimezoneService::plantDateOf()',
+        '/\b(\w+_at) \??-> format \(/' => 'un instante formateado en UTC: usa TimezoneService::formatPlantDateTime()',
+        // Un filtro por día sobre un `timestamp` toma el día UTC (el error de los filtros de OP y auditoría).
+        '/\b(?:applyDateRange|whereDate|orWhereDate|whereYear|orWhereYear|whereMonth|orWhereMonth|whereDay|orWhereDay) \( [\'"](?:\w+\.)?(\w+_at)[\'"]/' => 'un filtro por día sobre un instante: usa applyInstantDateRange() o los límites de TimezoneService',
     ];
 
     $files = Finder::create()->files()->name('*.php')->in([base_path('app'), base_path('routes')]);
     $violations = [];
 
     foreach ($files as $file) {
-        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getRealPath(), strlen(base_path()) + 1));
+        // `getPathname()` empieza por base_path(), igual que las rutas de la lista; `getRealPath()` resolvería symlinks.
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen(base_path()) + 1));
 
         if (array_key_exists($relative, PLANT_TIMEZONE_ALLOWED_FILES)) {
             continue;
         }
 
-        [$code, $offsets] = plantTimezoneCode($file->getRealPath());
+        [$code, $offsets] = plantTimezoneCode($file->getPathname());
 
         foreach ($rules as $pattern => $message) {
             preg_match_all($pattern, $code, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
