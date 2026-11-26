@@ -66,7 +66,7 @@ export default function RawMaterialFamiliesEdit({
 
 RawMaterialFamiliesEdit.layout = (props: Props) => ({
     breadcrumbs: [
-        { title: 'Familias de materia prima', href: familiesIndex() },
+        { title: 'Familias de MP', href: familiesIndex() },
         {
             title: props.family.name,
             href: familiesEdit(props.family.id),

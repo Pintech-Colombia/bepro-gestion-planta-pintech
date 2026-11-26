@@ -1,11 +1,9 @@
-import { Link, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
+import { NavTabs } from '@/components/nav-tabs';
 import { PageHeader } from '@/components/page-header';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { useCurrentUrl } from '@/hooks/use-current-url';
 import { filterNavItemsByPermissions } from '@/lib/navigation';
-import { cn, toUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { index as productCategoriesIndex } from '@/routes/catalogs/product-categories';
 import { index as rawMaterialCategoriesIndex } from '@/routes/catalogs/raw-material-categories';
@@ -43,13 +41,13 @@ const settingsNavGroups: NavGroup[] = [
                 allowedPermissions: ['catalogs.view'],
             },
             {
-                title: 'Familias de materia prima',
+                title: 'Familias de MP',
                 href: rawMaterialFamiliesIndex().url,
                 icon: null,
                 allowedPermissions: ['catalogs.view'],
             },
             {
-                title: 'Categorías de materia prima',
+                title: 'Categorías de MP',
                 href: rawMaterialCategoriesIndex().url,
                 icon: null,
                 allowedPermissions: ['catalogs.view'],
@@ -85,7 +83,6 @@ export default function SettingsLayout({
     children,
     wide = false,
 }: SettingsLayoutProps) {
-    const { isCurrentOrParentUrl } = useCurrentUrl();
     const userPermissions = usePage().props.auth.user?.permissions ?? [];
 
     const groups = settingsNavGroups
@@ -97,7 +94,7 @@ export default function SettingsLayout({
     const showsCatalogs = groups.length > 1;
 
     return (
-        <div className="px-4 py-6 md:px-6">
+        <div className="min-w-0 space-y-6 px-4 py-6 md:px-6">
             <PageHeader
                 title="Configuración"
                 description={
@@ -107,79 +104,16 @@ export default function SettingsLayout({
                 }
             />
 
-            <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:gap-8">
-                <aside className="w-full max-w-xl lg:w-56">
-                    <nav
-                        className="flex flex-col space-y-1 rounded-lg border border-border bg-card p-2 shadow-xs"
-                        aria-label="Configuración"
-                    >
-                        {groups.map((group, groupIndex) => (
-                            <div key={group.label} className="space-y-1">
-                                {showsCatalogs && (
-                                    <p
-                                        className={cn(
-                                            'px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase',
-                                            groupIndex > 0 && 'pt-3',
-                                        )}
-                                    >
-                                        {group.label}
-                                    </p>
-                                )}
-                                {group.items.map((item) => (
-                                    <Button
-                                        key={toUrl(item.href)}
-                                        size="sm"
-                                        variant="ghost"
-                                        asChild
-                                        className={cn(
-                                            'w-full justify-start rounded-lg px-3',
-                                            {
-                                                'bg-muted text-foreground':
-                                                    isCurrentOrParentUrl(
-                                                        item.href,
-                                                    ),
-                                            },
-                                        )}
-                                    >
-                                        <Link
-                                            href={item.href}
-                                            className={cn(
-                                                'text-muted-foreground',
-                                                {
-                                                    'text-foreground':
-                                                        isCurrentOrParentUrl(
-                                                            item.href,
-                                                        ),
-                                                },
-                                            )}
-                                        >
-                                            {item.icon && (
-                                                <item.icon className="h-4 w-4" />
-                                            )}
-                                            {item.title}
-                                        </Link>
-                                    </Button>
-                                ))}
-                            </div>
-                        ))}
-                    </nav>
-                </aside>
+            <NavTabs groups={groups} label="Configuración" />
 
-                <Separator className="my-6 lg:hidden" />
-
-                <div
-                    className={cn('flex-1', wide ? 'min-w-0' : 'md:max-w-3xl')}
-                >
-                    <section
-                        className={cn(
-                            'space-y-10 rounded-lg border border-border bg-card p-6 shadow-xs',
-                            !wide && 'max-w-2xl',
-                        )}
-                    >
-                        {children}
-                    </section>
-                </div>
-            </div>
+            <section
+                className={cn(
+                    'space-y-10 rounded-lg border border-border bg-card p-6 shadow-xs',
+                    !wide && 'max-w-2xl',
+                )}
+            >
+                {children}
+            </section>
         </div>
     );
 }

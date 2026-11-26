@@ -127,12 +127,12 @@ export default function RawMaterialCategoriesIndex({
 
     return (
         <>
-            <Head title="Categorías de materia prima" />
+            <Head title="Categorías de MP" />
 
             <div className="space-y-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <Heading
-                        title="Categorías de materia prima"
+                        title="Categorías de MP"
                         description="Agrupan las materias primas. Su tipo de insumo decide dónde se ofrecen: fórmulas, envases, etiquetas o termoencogido."
                     />
                     {can.create && (

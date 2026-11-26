@@ -427,6 +427,25 @@ describe('contrato de DESIGN.md', () => {
 
             expect(staleExceptions).toEqual([]);
         });
+
+        it('usa <NavTabs> para pestañas que son páginas, nunca <Link> con TabsList o TabsTrigger', () => {
+            const rule =
+                'DESIGN.md §10: las pestañas que navegan a otra página usan <NavTabs>, no <Link> con Radix Tabs';
+            const found = violationsAcrossLines(screenFiles, [
+                {
+                    pattern:
+                        /<(TabsList|TabsTrigger)\b(?:(?!<\/\1>)[\s\S])*?<Link\b(?:(?!<\/\1>)[\s\S])*?<\/\1>/g,
+                    rule,
+                },
+                {
+                    pattern:
+                        /<Link\b(?:(?!<\/Link>)[\s\S])*?<TabsTrigger\b(?:(?!<\/Link>)[\s\S])*?<\/Link>/g,
+                    rule,
+                },
+            ]);
+
+            expect(report(found)).toEqual([]);
+        });
     });
 
     describe('formularios: confirmación y fechas de la app, no las del navegador', () => {
@@ -801,7 +820,7 @@ describe('contrato de DESIGN.md', () => {
             'resources/js/components/users/signature-upload-field.tsx',
             // Grupo de permisos dentro de la tarjeta del rol (`bg-card/40`): una tarjeta no va dentro de otra.
             'resources/js/components/roles/role-permissions-fields.tsx',
-            // Marco del layout de Configuración (menú y caja de cada pantalla), no una sección de página.
+            // Marco del layout de Configuración (caja de cada pantalla), no una sección de página.
             'resources/js/layouts/Settings/layout.tsx',
             // Pastilla de conteo, no una sección: se retoma con el rediseño del dashboard.
             'resources/js/pages/Alerts/Index.tsx',

@@ -77,6 +77,33 @@ export function breadcrumbHref(
 }
 
 /**
+ * Compara dos rutas (`pathname`). Con `matchChildren`, exige igualdad exacta o límite de segmento `/`
+ * para que `/perfil` coincida con `/perfil/editar` pero nunca con `/perfil-seguridad`.
+ */
+export function matchesUrlPath(
+    targetPath: string,
+    currentPath: string,
+    matchChildren = false,
+): boolean {
+    if (!matchChildren) {
+        return targetPath === currentPath;
+    }
+
+    if (targetPath === '/') {
+        return currentPath === '/';
+    }
+
+    const normalizedTarget = targetPath.endsWith('/')
+        ? targetPath.slice(0, -1)
+        : targetPath;
+
+    return (
+        currentPath === normalizedTarget ||
+        currentPath.startsWith(`${normalizedTarget}/`)
+    );
+}
+
+/**
  * Opciones de Wayfinder para mandar el `return_to` en la URL de una acción (guardar, cambiar el estado, aprobar): el
  * servidor vuelve a la ficha con él y la miga sigue llevando al listado con sus filtros. Sin `returnTo`, nada.
  */

@@ -71,7 +71,7 @@ export default function RawMaterialCategoriesEdit({
 
 RawMaterialCategoriesEdit.layout = (props: Props) => ({
     breadcrumbs: [
-        { title: 'Categorías de materia prima', href: categoriesIndex() },
+        { title: 'Categorías de MP', href: categoriesIndex() },
         {
             title: props.category.name,
             href: categoriesEdit(props.category.id),
