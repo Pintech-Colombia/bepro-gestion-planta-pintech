@@ -1,4 +1,4 @@
-import { useHttp } from '@inertiajs/react';
+import { router, useHttp } from '@inertiajs/react';
 import { useState } from 'react';
 
 import { ClientFields } from '@/components/clients/client-fields';
@@ -75,6 +75,9 @@ export function QuickClientDialog({ onCreated }: QuickClientDialogProps) {
         setFailure(null);
 
         http.post(clientsQuickStore().url, {
+            // `useHttp` no pasa por el router: el borrado de las páginas precargadas tras un envío (`app.tsx`) no lo ve.
+            // Se pide aquí, también si no hubo respuesta (el cliente pudo quedar creado).
+            onFinish: () => router.flushAll(),
             onSuccess: (client) => {
                 onCreated(client);
                 setOpen(false);

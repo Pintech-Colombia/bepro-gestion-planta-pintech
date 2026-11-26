@@ -80,7 +80,8 @@ router.on('error', (event) => {
 });
 
 // Tras cualquier envío que cambia datos, se borran las páginas precargadas por el menú: si no, al volver por el menú se
-// verían hasta 30 s sin el cambio.
+// verían hasta 30 s sin el cambio. Con `finish` y no `success`: si el servidor guardó pero la respuesta se perdió, también
+// se borran. Un envío con `useHttp` no pasa por aquí y lo pide él mismo (`quick-client-dialog.tsx`).
 router.on('finish', (event) => {
     const { method } = event.detail.visit;
 
