@@ -22,7 +22,6 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
- * @property string|null $code obsoleto: ya no se usa ni se escribe (se borra en una migración posterior)
  * @property string $name
  * @property string|null $description
  * @property int|null $family_id

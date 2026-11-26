@@ -205,7 +205,7 @@ test('la base rechaza el nombre que solo cambia en mayúsculas', function (strin
 })->with([
     'bodega' => ['warehouses', ['name' => 'PLANTA CALI', 'city' => 'Cali', 'type' => 'storage']],
     'categoría de producto' => ['product_categories', ['name' => 'esmaltes base']],
-    'categoría de MP' => ['raw_material_categories', ['code' => 'OTRA', 'name' => 'RESINAS', 'type' => 'chemical']],
+    'categoría de MP' => ['raw_material_categories', ['name' => 'RESINAS', 'type' => 'chemical']],
     'tipo de termoencogido' => ['shrink_wrap_types', ['name' => 'galón X4']],
     'proveedor' => ['suppliers', ['name' => 'RESINAS del valle']],
 ]);
