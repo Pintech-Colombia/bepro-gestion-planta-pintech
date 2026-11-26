@@ -23,6 +23,7 @@ use App\Models\SalesOrder;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Models\Warehouse;
+use Carbon\CarbonImmutable;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -325,4 +326,29 @@ test('users without the dashboard.view permission receive a 403', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertForbidden();
+});
+
+// «Hoy» es el día de planta: a las 8 p. m. del 14 en Bogotá ya es el 15 en UTC.
+test('completed today counts the plant day, not the UTC day', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-11-15 01:00:00', 'UTC'));
+
+    ProductionOrder::create([
+        'order_number' => 'OP-2026-0004',
+        'lot_number' => fake()->unique()->numberBetween(100000, 999999),
+        'product_id' => $this->product->id,
+        'formula_id' => Formula::query()->firstOrFail()->id,
+        'warehouse_id' => $this->warehouse->id,
+        'quantity' => 10,
+        'status' => ProductionOrderStatus::Completed,
+        'planned_date' => '2026-11-14',
+        'completion_date' => '2026-11-14',
+        'created_by' => User::query()->firstOrFail()->id,
+    ]);
+
+    actingAsRole(SystemRole::Admin, ['email_verified_at' => now()]);
+
+    $this->get(route('dashboard'))
+        ->assertSuccessful()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('stats.completed_today', 1));
 });

@@ -548,3 +548,21 @@ test('uploading after deleting the highest version does not reuse its file', fun
     expect($second->version)->toBe($first->version)
         ->and($second->file_path)->not->toBe($firstPath);
 });
+
+// Un documento subido de noche en Bogotá ya es del día siguiente en UTC: el detalle muestra el día de planta.
+test('show dates documents by plant day', function () {
+    Storage::fake('local');
+    $user = adminUser();
+    $qrCode = createQrFixture(['created_by' => $user->id]);
+    $document = currentCertificateFor($qrCode, $user);
+    // El 14 a las 9 p. m. en Bogotá.
+    $document->forceFill(['created_at' => '2026-11-15 02:00:00'])->saveQuietly();
+
+    $this->actingAs($user)
+        ->get(route('qr-codes.show', $qrCode))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('qrCode.documents', 1)
+            ->where('qrCode.documents.0.id', $document->id)
+            ->where('qrCode.documents.0.created_at', '2026-11-14'));
+});

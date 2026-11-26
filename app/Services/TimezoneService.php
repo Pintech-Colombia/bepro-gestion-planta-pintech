@@ -89,4 +89,22 @@ class TimezoneService
     {
         return $instant === null ? null : $this->toPlantTime($instant)?->toDateString();
     }
+
+    /**
+     * El instante en UTC en que empieza un día de planta (`Y-m-d`): las 00:00 de ese día en la planta. Es el límite
+     * inferior, inclusivo, para filtrar por día una columna `timestamp` guardada en UTC.
+     */
+    public function plantDayStartUtc(string $day): CarbonInterface
+    {
+        return Date::parse($day, $this->plantTimezone)->startOfDay()->utc();
+    }
+
+    /**
+     * El instante en UTC en que empieza el día de planta siguiente a `$day`: el límite superior, **exclusivo** (`<`), de
+     * ese día. Nunca las 23:59:59, que dejaría fuera las fracciones del último segundo.
+     */
+    public function nextPlantDayStartUtc(string $day): CarbonInterface
+    {
+        return Date::parse($day, $this->plantTimezone)->startOfDay()->addDay()->utc();
+    }
 }

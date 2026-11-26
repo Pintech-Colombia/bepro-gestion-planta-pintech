@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 
 /**
@@ -63,7 +64,7 @@ final class OperationalTimes
         try {
             $parsed = $hasZone
                 ? CarbonImmutable::parse($value)
-                : CarbonImmutable::parse($value, (string) config('app.plant_timezone'));
+                : CarbonImmutable::parse($value, app(TimezoneService::class)->getPlantTimezone());
         } catch (\Throwable) {
             return null;
         }

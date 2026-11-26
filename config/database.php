@@ -99,6 +99,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // La sesión en UTC, como la aplicación: sin esto depende de la zona del servidor de PostgreSQL.
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [

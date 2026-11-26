@@ -15,6 +15,7 @@ use App\Models\QrDocument;
 use App\Services\ProductionOrderQrCodeService;
 use App\Services\QrImageService;
 use App\Services\QualityInspectionCertificateService;
+use App\Services\TimezoneService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -29,6 +30,7 @@ class QrCodeController extends Controller
         private readonly ProductionOrderQrCodeService $qrCodeService,
         private readonly QualityInspectionCertificateService $certificateService,
         private readonly QrImageService $qrImageService,
+        private readonly TimezoneService $timezoneService,
     ) {}
 
     public function index(IndexQrCodeRequest $request): Response
@@ -124,7 +126,8 @@ class QrCodeController extends Controller
                     'file_name' => $document->file_name,
                     'version' => $document->version,
                     'is_current' => $document->is_current,
-                    'created_at' => $document->created_at?->toDateString(),
+                    // Día de planta: un documento subido de noche en Bogotá ya es del día siguiente en UTC.
+                    'created_at' => $this->timezoneService->plantDateOf($document->created_at),
                     'uploaded_by' => $document->uploadedBy ? [
                         'id' => $document->uploadedBy->id,
                         'name' => $document->uploadedBy->name,
