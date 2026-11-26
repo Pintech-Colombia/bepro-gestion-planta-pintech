@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filters;
 
+use App\Services\TimezoneService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -132,6 +133,10 @@ abstract class QueryFilter
         }
     }
 
+    /**
+     * Rango de días (`Y-m-d`, ambos incluidos) sobre una columna `date`, que ya guarda el día de planta
+     * (`movement_date`, `completion_date`…). Para una columna `timestamp` (`created_at`), `applyInstantDateRange()`.
+     */
     protected function applyDateRange(string $column, ?string $from, ?string $to): void
     {
         if ($from) {
@@ -139,6 +144,23 @@ abstract class QueryFilter
         }
         if ($to) {
             $this->builder->whereDate($column, '<=', $to);
+        }
+    }
+
+    /**
+     * Rango de días de planta (`Y-m-d`, ambos incluidos) sobre una columna `timestamp` guardada en UTC (`created_at`):
+     * de 7 p. m. a medianoche en Bogotá ya es el día siguiente en UTC, así que `whereDate` tomaría el día equivocado.
+     * El límite superior es exclusivo: el inicio del día de planta siguiente.
+     */
+    protected function applyInstantDateRange(string $column, ?string $from, ?string $to): void
+    {
+        $timezone = app(TimezoneService::class);
+
+        if ($from) {
+            $this->builder->where($column, '>=', $timezone->plantDayStartUtc($from));
+        }
+        if ($to) {
+            $this->builder->where($column, '<', $timezone->nextPlantDayStartUtc($to));
         }
     }
 

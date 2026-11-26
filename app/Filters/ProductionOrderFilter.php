@@ -35,12 +35,12 @@ class ProductionOrderFilter extends QueryFilter
 
     protected function dateFrom(string $value): void
     {
-        $this->applyDateRange('created_at', $value, null);
+        $this->applyInstantDateRange('created_at', $value, null);
     }
 
     protected function dateTo(string $value): void
     {
-        $this->applyDateRange('created_at', null, $value);
+        $this->applyInstantDateRange('created_at', null, $value);
     }
 
     protected function completedFrom(string $value): void

@@ -379,3 +379,28 @@ it('lists the product name with the order color', function (): void {
             ->where('orders.data.0.product_display_name', "{$this->productA->name} RAL 3020")
             ->where('orders.data.0.product.name', $this->productA->name));
 });
+
+// `created_at` es un instante en UTC: de 7 p. m. a medianoche en Bogotá ya es el día siguiente en UTC, y el filtro va
+// por día de planta.
+it('filters created dates by plant day, not by the UTC day', function (array $query, array $expected): void {
+    // El 14 a las 8:30 p. m. en Bogotá.
+    $this->orderA->forceFill(['created_at' => Carbon::parse('2026-11-15 01:30:00', 'UTC')])->saveQuietly();
+    // El 13 a las 11:59:59 p. m. en Bogotá.
+    $this->orderB->forceFill(['created_at' => Carbon::parse('2026-11-14 04:59:59', 'UTC')])->saveQuietly();
+
+    actingAs($this->admin);
+
+    get(route('production-orders.index', $query))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Production/Orders/Index')
+            ->where('orders.data', fn ($rows): bool => collect($rows)->pluck('id')->sort()->values()->all()
+                === collect($expected)->map(fn (string $order): int => $this->{$order}->id)->sort()->values()->all())
+        );
+})->with([
+    'hasta el 14 incluye la de la noche del 14' => [['date_to' => '2026-11-14'], ['orderA', 'orderB']],
+    'desde el 14 deja fuera la del 13' => [['date_from' => '2026-11-14'], ['orderA']],
+    'solo el 14' => [['date_from' => '2026-11-14', 'date_to' => '2026-11-14'], ['orderA']],
+    'desde el 15 no incluye la de la noche del 14' => [['date_from' => '2026-11-15'], []],
+    'hasta el 13 deja fuera la de la noche del 14' => [['date_to' => '2026-11-13'], ['orderB']],
+]);

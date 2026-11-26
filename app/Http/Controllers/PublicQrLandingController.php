@@ -61,7 +61,7 @@ class PublicQrLandingController extends Controller
                     'name' => $document->file_name,
                     'type' => $document->document_type->label(),
                     'size' => $this->formatFileSize($document->file_size),
-                    'date' => $document->created_at?->toDateString(),
+                    'date' => $this->timezoneService->plantDateOf($document->created_at),
                     'download_url' => route('qr.public.product-documents.download', [
                         'token' => $qrCode->token,
                         'document' => $document,
@@ -72,7 +72,7 @@ class PublicQrLandingController extends Controller
                     'name' => $document->file_name,
                     'type' => $document->document_type->label(),
                     'size' => $this->formatFileSize($document->file_size),
-                    'date' => $document->created_at?->toDateString(),
+                    'date' => $this->timezoneService->plantDateOf($document->created_at),
                     'download_url' => route('qr.public.documents.download', [
                         'token' => $qrCode->token,
                         'document' => $document,

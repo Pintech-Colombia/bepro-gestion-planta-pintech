@@ -233,3 +233,20 @@ test('public QR landing shows the product name with the order color', function (
         ->assertSuccessful()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('product.name', 'PINTURA PÚBLICA RAL 3020'));
 });
+
+// Un documento subido de noche en Bogotá ya es del día siguiente en UTC: la página muestra el día de planta.
+test('public QR landing dates documents by plant day', function () {
+    [$qrCode, $productDocument, $certificate] = createPublicQrFixture();
+    // El 14 a las 9 p. m. en Bogotá.
+    $productDocument->forceFill(['created_at' => '2026-11-15 02:00:00'])->saveQuietly();
+    $certificate->forceFill(['created_at' => '2026-11-15 02:00:00'])->saveQuietly();
+
+    $this->get(route('qr.public.show', $qrCode->token))
+        ->assertSuccessful()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('documents', 2)
+            ->where('documents.0.name', 'Hoja de Seguridad.pdf')
+            ->where('documents.0.date', '2026-11-14')
+            ->where('documents.1.name', 'Certificado de Calidad.pdf')
+            ->where('documents.1.date', '2026-11-14'));
+});

@@ -17,7 +17,6 @@ use App\Models\Quotation;
 use App\Models\SalesOrder;
 use App\Models\User;
 use App\Models\Warehouse;
-use Illuminate\Support\Carbon;
 
 class DashboardService
 {
@@ -33,6 +32,7 @@ class DashboardService
 
     public function __construct(
         private readonly AlertService $alertService,
+        private readonly TimezoneService $timezone,
     ) {}
 
     /**
@@ -70,7 +70,7 @@ class DashboardService
 
     private function buildForAdmin(User $user): array
     {
-        $today = Carbon::today((string) config('app.plant_timezone'))->format('Y-m-d');
+        $today = $this->timezone->todayInPlant();
         $canSeeOrders = $user->can(Permission::ProductionOrdersView->value);
 
         $stats = [
@@ -94,7 +94,7 @@ class DashboardService
 
     private function buildForProduction(User $user): array
     {
-        $today = Carbon::today((string) config('app.plant_timezone'))->format('Y-m-d');
+        $today = $this->timezone->todayInPlant();
         $canSeeOrders = $user->can(Permission::ProductionOrdersView->value);
 
         $stats = [
@@ -119,7 +119,7 @@ class DashboardService
      */
     private function buildForPlant(): array
     {
-        $today = Carbon::today((string) config('app.plant_timezone'))->format('Y-m-d');
+        $today = $this->timezone->todayInPlant();
 
         $stats = [
             'pending_orders' => $this->pendingOrdersCount(),

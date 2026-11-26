@@ -218,3 +218,30 @@ it('forbids users without audit_logs.view, including admin', function (): void {
     actingAs($admin);
     get(route('audit-logs.index'))->assertForbidden();
 });
+
+// `created_at` es un instante en UTC: el filtro va por día de planta.
+it('filters by plant day, not by the UTC day', function (array $query, bool $included): void {
+    $lateLog = Activity::create([
+        'log_name' => 'usuarios',
+        'description' => 'Registro de la noche',
+        'subject_type' => User::class,
+        'subject_id' => $this->operator->id,
+        'causer_type' => User::class,
+        'causer_id' => $this->admin->id,
+        // El 14 a las 8:30 p. m. en Bogotá.
+        'created_at' => '2026-11-15 01:30:00',
+    ]);
+
+    actingAs($this->admin);
+
+    get(route('audit-logs.index', $query))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Admin/AuditLogs/Index')
+            ->has('logs.data', $included ? 1 : 0)
+            ->when($included, fn ($page) => $page->where('logs.data.0.id', $lateLog->id))
+        );
+})->with([
+    'solo el 14' => [['date_from' => '2026-11-14', 'date_to' => '2026-11-14'], true],
+    'desde el 15' => [['date_from' => '2026-11-15'], false],
+]);
