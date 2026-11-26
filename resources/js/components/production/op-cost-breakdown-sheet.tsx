@@ -1,120 +1,52 @@
 import type { ReactNode } from 'react';
 
 import { FormattedNumber } from '@/components/formatted-number';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { formatPercent } from '@/lib/formatters';
+import {
+    Sheet,
+    SheetBody,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import type {
-    FormNumberValue,
-    ProductionOrder,
-    ProductionOrderCostSummary,
-} from '@/types/production-orders';
-
-type OrderInfoCardProps = {
-    order: ProductionOrder;
-    /** Lo envasado, en galones equivalentes; null mientras la orden está pendiente. */
-    packagedEquivalent: number | null;
-    /** Kilos pesados del sobrante; vacío si no hubo. */
-    remnantKg?: FormNumberValue | null;
-    /** Lo envasado más el sobrante: no se digita. */
-    realYield: number | null;
-    yieldPercentage: number | null;
-    remnantQuantityGallons?: FormNumberValue;
-    /** Resumen de costos del servidor (ProductionOrderCostSummary); null si la orden está cancelada. */
-    costSummary?: ProductionOrderCostSummary | null;
-    showCosts?: boolean;
-};
+import type { ProductionOrderCostSummary } from '@/types/production-orders';
 
 /**
- * Tarjeta de la OP en tres bloques: cantidades · costo (estimado o real) · comparación con la lista de hoy. Los costos
- * llegan calculados del servidor; aquí solo se pintan.
+ * «Ver desglose de costos»: el detalle completo que antes ocupaba la columna derecha de la OP (granel por componente,
+ * envasado, saldo y la comparación con la lista de hoy). Los costos llegan calculados del servidor; aquí solo se pintan.
  */
-export function OrderInfoCard({
-    order,
-    packagedEquivalent,
-    remnantKg,
-    realYield,
-    yieldPercentage,
-    remnantQuantityGallons,
-    costSummary,
-    showCosts = true,
-}: OrderInfoCardProps) {
-    const hasRemnant =
-        remnantQuantityGallons !== undefined &&
-        remnantQuantityGallons !== '' &&
-        Number(remnantQuantityGallons) > 0;
-
+export function OpCostBreakdownSheet({
+    summary,
+}: {
+    summary: ProductionOrderCostSummary;
+}) {
     return (
-        <Card className="bg-muted/40">
-            <CardContent className="space-y-2 p-4 text-xs">
-                <InfoRow label="Fórmula">
-                    v{order.formula?.version}
-                    {order.formula?.name && ` · ${order.formula.name}`}
-                </InfoRow>
-                <InfoRow label="Fecha plan">{order.planned_date}</InfoRow>
-                <InfoRow label="Bodega">{order.warehouse?.name}</InfoRow>
-                <Separator />
-                <InfoRow label="Envasado">
-                    <FormattedNumber
-                        value={packagedEquivalent}
-                        maxDecimals={2}
-                        trimTrailingZeros
-                    />
-                    {packagedEquivalent !== null && ' gal'}
-                </InfoRow>
-                {hasRemnant && (
-                    <InfoRow
-                        label={
-                            <>
-                                Sobrante
-                                {remnantKg !== null &&
-                                    remnantKg !== undefined &&
-                                    remnantKg !== '' && (
-                                        <>
-                                            {' ('}
-                                            <FormattedNumber
-                                                value={remnantKg}
-                                                kind="quantity"
-                                            />{' '}
-                                            kg)
-                                        </>
-                                    )}
-                            </>
-                        }
-                    >
-                        <FormattedNumber
-                            value={remnantQuantityGallons}
-                            maxDecimals={2}
-                            trimTrailingZeros
-                        />{' '}
-                        gal
-                    </InfoRow>
-                )}
-                <InfoRow label="Rendimiento real" strong>
-                    <FormattedNumber
-                        value={realYield}
-                        maxDecimals={2}
-                        trimTrailingZeros
-                    />
-                    {realYield !== null && ' gal'}
-                    {yieldPercentage !== null && (
-                        <span className="font-normal text-muted-foreground">
-                            {' ('}
-                            {formatPercent(yieldPercentage, 1)})
-                        </span>
-                    )}
-                </InfoRow>
-                {showCosts && costSummary && (
-                    <>
-                        <Separator />
-                        <CostBlock summary={costSummary} />
-                        <Separator />
-                        <ComparisonBlock summary={costSummary} />
-                    </>
-                )}
-            </CardContent>
-        </Card>
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button type="button" variant="outline" className="w-full">
+                    Ver desglose de costos
+                </Button>
+            </SheetTrigger>
+            <SheetContent>
+                <SheetHeader>
+                    <SheetTitle>Desglose de costos</SheetTitle>
+                    <SheetDescription>
+                        {summary.basis === 'actual'
+                            ? 'Costo real de la orden.'
+                            : 'Costo estimado con lo escrito hasta ahora.'}
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetBody className="space-y-4 text-sm">
+                    <CostBlock summary={summary} />
+                    <Separator />
+                    <ComparisonBlock summary={summary} />
+                </SheetBody>
+            </SheetContent>
+        </Sheet>
     );
 }
 
@@ -272,7 +204,7 @@ function BlockTitle({ children }: { children: ReactNode }) {
     return <p className="text-sm font-medium text-foreground">{children}</p>;
 }
 
-function InfoRow({
+export function InfoRow({
     label,
     children,
     strong = false,
@@ -298,7 +230,7 @@ function InfoRow({
     );
 }
 
-function Money({
+export function Money({
     value,
     emptyValue,
 }: {

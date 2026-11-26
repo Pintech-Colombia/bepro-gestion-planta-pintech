@@ -9,13 +9,15 @@ import {
     startProduction as productionOrderStartProduction,
     submitForReview as productionOrderSubmitForReview,
 } from '@/actions/App/Http/Controllers/ProductionOrderController';
-import { ControlCard } from '@/components/production/control-card';
 import type { ProductTableRow } from '@/components/production/ingredients-table';
+import { OpClosingSection } from '@/components/production/op-closing-section';
+import { OpConsumptionSection } from '@/components/production/op-consumption-section';
+import { OpPackagingSection } from '@/components/production/op-packaging-section';
+import { OpQualitySection } from '@/components/production/op-quality-section';
+import { OpSummaryPanel } from '@/components/production/op-summary-panel';
 import { OrderHeader } from '@/components/production/order-header';
-import { OrderInfoCard } from '@/components/production/order-info-card';
 import { ProductsToUseCard } from '@/components/production/products-to-use-card';
 import { QrCard } from '@/components/production/qr-card';
-import { ResultsCard } from '@/components/production/results-card';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -26,7 +28,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -386,6 +387,21 @@ export default function ProductionOrderShow({
     const showSubmit = can.submitForReview || can.complete;
     const showReject = can.rejectReview && isPendingReview;
 
+    // «Productos a usar» solo aparece si la orden lleva algo (líneas, fuentes o el saldo que dejó). Si no, y se puede
+    // planear, el botón «Agregar saldo o lote» de la sección de consumo abre el mismo selector.
+    const hasProductsToUse =
+        productLines.length > 0 ||
+        batchSources.length > 0 ||
+        (order.remnant_consumptions ?? []).length > 0 ||
+        Boolean(order.remnant);
+    const addProductSources =
+        !hasProductsToUse && can.planRemnant
+            ? {
+                  remnants: order.available_remnants ?? [],
+                  batches: order.available_batches ?? [],
+              }
+            : null;
+
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIsConfirmOpen(true);
@@ -467,63 +483,53 @@ export default function ProductionOrderShow({
     return (
         <>
             <Head title={`Orden ${order.order_number}`} />
-            <div className="mx-auto max-w-7xl space-y-6 p-6">
+            <div className="space-y-6 p-6">
                 <OrderHeader
                     order={order}
                     canUpdateColor={can.updateColor}
                     canCancel={can.cancel}
                 />
 
-                {can.startProduction && isPending && (
-                    <div className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
-                        <div>
-                            <p className="font-medium text-amber-900 dark:text-amber-100">
-                                Orden planificada
-                            </p>
-                            <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-                                Confirma el inicio cuando la mezcla comience en
-                                planta para registrar datos operativos y enviar
-                                a revisión.
-                            </p>
-                        </div>
-                        <Button
-                            type="button"
-                            onClick={() => setIsStartConfirmOpen(true)}
-                            disabled={isStartingProduction}
-                            className="shrink-0"
-                        >
-                            {isStartingProduction
-                                ? 'Iniciando...'
-                                : 'Iniciar producción'}
-                        </Button>
-                    </div>
-                )}
-
+                {/* PC primero: las secciones en el orden del proceso y, a la derecha, el resumen y los botones. En una
+                    pantalla angosta se apilan y el resumen queda al final. */}
                 <form
                     noValidate
                     onSubmit={handleSubmit}
-                    className="grid grid-cols-1 gap-6 lg:grid-cols-3"
+                    className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3"
                 >
-                    <div className="space-y-6 lg:col-span-2">
-                        <ResultsCard
+                    <div className="min-w-0 space-y-6 lg:col-span-2">
+                        {hasProductsToUse && (
+                            <ProductsToUseCard
+                                order={order}
+                                showCosts={can.previewCosts}
+                                canPlan={can.planRemnant}
+                                // Lo que quedó se escribe al entregar la orden (enviar o completar).
+                                canRecordUsage={!isFormReadOnly && showSubmit}
+                                usageRows={data.batch_consumptions}
+                                lineUsageRows={data.product_lines}
+                                onUsageChange={updateBatchUsage}
+                                // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya
+                                // no alcanza. Varias llaves no son campos del formulario.
+                                errors={
+                                    errors as Record<string, string | undefined>
+                                }
+                                previewProductCosts={previewProductCosts}
+                            />
+                        )}
+
+                        <OpConsumptionSection
                             orderId={order.id}
                             data={data}
                             setData={setData}
                             errors={errors}
                             ingredientRows={ingredientRows}
-                            packagingRows={packagingRows}
-                            packagingCosts={packagingCosts}
                             lineAdjustments={lineAdjustments}
                             rawMaterials={rawMaterials}
-                            labelMaterials={labelMaterials}
-                            availableVariants={availableVariants}
                             isCompleted={isCompleted}
                             isReadOnly={isFormReadOnly}
+                            showCosts={can.previewCosts}
                             previewLoading={previewLoading}
                             previewStale={previewStale}
-                            qualityRanges={qualityRanges}
-                            showCosts={can.previewCosts}
-                            canPrintLabels={can.printLabels}
                             overconsumption={order.overconsumption ?? []}
                             consumptionReasons={order.consumption_reasons ?? []}
                             productOverconsumption={
@@ -534,67 +540,80 @@ export default function ProductionOrderShow({
                             }
                             productRows={productRows}
                             onProductActualChange={updateProductActual}
-                        />
-                    </div>
-
-                    <div className="space-y-6">
-                        {isCompleted && order.qr_landing_url && (
-                            <QrCard
-                                order={order}
-                                landingFullUrl={landingFullUrl}
-                                landingLinkCopied={landingLinkCopied}
-                                onCopyLandingLink={handleCopyLandingLink}
-                            />
-                        )}
-
-                        <ProductsToUseCard
-                            order={order}
-                            showCosts={can.previewCosts}
-                            canPlan={can.planRemnant}
-                            // Lo que quedó se escribe al entregar la orden (enviar o completar).
-                            canRecordUsage={!isFormReadOnly && showSubmit}
-                            usageRows={data.batch_consumptions}
-                            lineUsageRows={data.product_lines}
-                            onUsageChange={updateBatchUsage}
-                            // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya no
-                            // alcanza. Varias llaves no son campos del formulario.
-                            errors={
-                                errors as Record<string, string | undefined>
-                            }
-                            previewProductCosts={previewProductCosts}
+                            addProductSources={addProductSources}
                         />
 
-                        <ControlCard
+                        <OpQualitySection
                             data={data}
                             setData={setData}
                             errors={errors}
                             isReadOnly={isFormReadOnly}
-                            processing={processing}
-                            hasOrderData={hasOrderData}
-                            showSubmit={showSubmit}
-                            submitLabel={submitLabel}
-                            processingLabel={processingLabel}
-                            showReject={showReject}
-                            onReject={() => setIsRejectOpen(true)}
-                            qualitySigners={qualitySigners}
-                            showQualitySigner={submitMode === 'complete'}
+                            qualityRanges={qualityRanges}
                         />
 
-                        <OrderInfoCard
+                        <OpPackagingSection
+                            orderId={order.id}
+                            data={data}
+                            setData={setData}
+                            errors={errors}
+                            packagingRows={packagingRows}
+                            packagingCosts={packagingCosts}
+                            labelMaterials={labelMaterials}
+                            availableVariants={availableVariants}
+                            isReadOnly={isFormReadOnly}
+                            showCosts={can.previewCosts}
+                            canPrintLabels={can.printLabels}
+                        />
+
+                        <OpClosingSection
+                            data={data}
+                            setData={setData}
+                            errors={errors}
+                            isReadOnly={isFormReadOnly}
+                        />
+                    </div>
+
+                    <aside className="min-w-0 lg:sticky lg:top-6">
+                        <OpSummaryPanel
                             order={order}
+                            data={data}
+                            setData={setData}
+                            errors={errors}
                             packagedEquivalent={packagedEquivalent}
                             remnantKg={
                                 isFormReadOnly
                                     ? order.remnant_quantity_kg
                                     : parseDecimal(data.remnant_quantity_kg)
                             }
+                            remnantGallons={remnantGallons}
                             realYield={realYield}
                             yieldPercentage={yieldPercentage}
-                            remnantQuantityGallons={remnantGallons}
                             costSummary={costSummary}
                             showCosts={can.previewCosts}
-                        />
-                    </div>
+                            isReadOnly={isFormReadOnly}
+                            showStart={can.startProduction && isPending}
+                            isStartingProduction={isStartingProduction}
+                            onStart={() => setIsStartConfirmOpen(true)}
+                            showSubmit={showSubmit}
+                            submitLabel={submitLabel}
+                            processing={processing}
+                            processingLabel={processingLabel}
+                            hasOrderData={hasOrderData}
+                            showReject={showReject}
+                            onReject={() => setIsRejectOpen(true)}
+                            qualitySigners={qualitySigners}
+                            showQualitySigner={submitMode === 'complete'}
+                        >
+                            {isCompleted && order.qr_landing_url && (
+                                <QrCard
+                                    order={order}
+                                    landingFullUrl={landingFullUrl}
+                                    landingLinkCopied={landingLinkCopied}
+                                    onCopyLandingLink={handleCopyLandingLink}
+                                />
+                            )}
+                        </OpSummaryPanel>
+                    </aside>
                 </form>
 
                 <AlertDialog

@@ -318,9 +318,9 @@ Same in all three:
 - Dates with the app calendar, never the native picker: `<PlantDateInput>` (`components/plant-date-input.tsx`), with
   month and year selectors. It holds the bounds (`notFuture`, `notPast`, `min`, `max`) against the plant's today and
   keeps an out-of-bounds saved date (`saved`); the form sets the default value, usually `plantToday`.
-  The only exception is a date with a time (`datetime-local`, the quality certificate in
-  `components/production/control-card.tsx`): `PlantDateInput` handles days only, so it keeps the native picker until
-  the production order redesign.
+  The only exception is a date with a time (`datetime-local`, the agitation and packaging times of the production
+  order in `components/production/op-closing-section.tsx`): `PlantDateInput` handles days only, so it keeps the native
+  picker until there is a common date-and-time field (C1.4).
 - **`Select` or `Combobox`:** `Select` (`ui/select.tsx`) for fixed lists (enums, options `{value, label}` from
   `EnumOptions::for()`) or lists that almost always have fewer than ~8 options. `Combobox` (`ui/combobox.tsx`) for
   business data that grows and where searching helps: clients, products, raw materials, suppliers, batches, production
@@ -348,8 +348,9 @@ Same in all three:
   which sets the padding: their wrapper is `space-y-6` with no padding.
 - A detail (`Show`) uses the same frame as a listing: full width, `space-y-6 p-6`, no `max-w-*`, no `mx-auto`. Its
   first child is the `<PageHeader>` (§5); each section below is a card (the record's data) or a `<section>` with its
-  title and a `<DetailTable>`. Only forms are centered and narrowed, with `<FormPage>` (§8). The production order keeps
-  its own frame until its redesign.
+  title and a `<DetailTable>`. Only forms are centered and narrowed, with `<FormPage>` (§8). The production order is a
+  detail with two columns on desktop: its sections in process order and, on the right, a sticky summary with the
+  actions.
 - **Sections are cards.** A section of a page (a block of a form, the totals, the data of a record) is a `<Card>`
   (`components/ui/card.tsx`), never a `div` with its recipe (`rounded-*` with `bg-card`, or `rounded-xl`/`rounded-2xl` with `border`).
   The title goes in `<CardHeader><CardTitle>` with no margin of its own (the card's gap separates it) and the description

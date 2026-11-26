@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Trash2 } from 'lucide-react';
 import { Fragment, useState } from 'react';
 
 import {
@@ -23,6 +23,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { variantPresentationLabel } from '@/lib/variant-label';
 import type {
     LabelMaterialOption,
+    ProductionOrderErrors,
     ProductionOrderFormData,
     ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
@@ -46,7 +47,17 @@ type PackagingSectionProps = {
     costs?: ReadonlyMap<number, ProductionOrderPackagingCost>;
     /** Estampitas de lote: también con la orden en solo lectura (reimprimir una completada). */
     canPrintLabels?: boolean;
+    /** Un error en envases o etiquetas abre su bloque plegado, para que el campo quede a la vista. */
+    errors?: ProductionOrderErrors;
 };
+
+/** Un valor escrito: vacío (o null) significa «tantos como unidades envasadas». */
+function isFilled(value: unknown): boolean {
+    return value !== '' && value !== null && value !== undefined;
+}
+
+const MATERIAL_ERROR_KEY =
+    /^packaging\.\d+\.(new_containers_used|label_raw_material_id|labels_used)$/;
 
 export function PackagingSection({
     orderId,
@@ -59,8 +70,22 @@ export function PackagingSection({
     showCosts = true,
     costs,
     canPrintLabels = false,
+    errors = {},
 }: PackagingSectionProps) {
     const confirm = useConfirm();
+    // Envases nuevos y etiquetas casi siempre son lo mismo que lo envasado: van plegados, salvo que alguna fila ya tenga
+    // un valor distinto (o una etiqueta cambiada) o un error.
+    const hasMaterialValues = rows.some(
+        (row) =>
+            isFilled(row.new_containers_used) ||
+            isFilled(row.labels_used) ||
+            row.label_raw_material_id !== row.saved_label_raw_material_id,
+    );
+    const hasMaterialErrors = Object.keys(errors).some((key) =>
+        MATERIAL_ERROR_KEY.test(key),
+    );
+    const [materialsOpen, setMaterialsOpen] = useState(hasMaterialValues);
+    const showMaterials = materialsOpen || hasMaterialErrors;
     const showActions = !isReadOnly || canPrintLabels;
     const columnCount = (showCosts ? 7 : 4) + (showActions ? 1 : 0);
 
@@ -75,14 +100,6 @@ export function PackagingSection({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <Label>Empaque Final (Unidades)</Label>
-                {!isReadOnly && (
-                    <span className="text-xs text-muted-foreground">
-                        Puedes agregar o eliminar presentaciones
-                    </span>
-                )}
-            </div>
             <div className="overflow-hidden rounded-md border">
                 <div className="relative overflow-x-auto">
                     <table className="w-full text-sm">
@@ -91,9 +108,9 @@ export function PackagingSection({
                                 <th className="p-3 text-left">Presentación</th>
                                 <th className="p-3 text-right">Planeado</th>
                                 <th className="w-32 p-3 text-right">
-                                    Real Producido
+                                    Envasado
                                 </th>
-                                <th className="p-3 text-right">Eq. Gal</th>
+                                <th className="p-3 text-right">Eq. gal</th>
                                 {showCosts && (
                                     <>
                                         <th className="p-3 text-right">
@@ -113,7 +130,14 @@ export function PackagingSection({
                         <tbody>
                             {rows.map((pack, index) => (
                                 <Fragment key={pack.id}>
-                                    <tr>
+                                    {/* Plegado, la línea entre presentaciones va en la fila; abierto, la lleva la de envases. */}
+                                    <tr
+                                        className={
+                                            showMaterials
+                                                ? undefined
+                                                : 'border-b last:border-0'
+                                        }
+                                    >
                                         <td className="p-3 font-medium">
                                             {pack.presentation}
                                         </td>
@@ -221,22 +245,24 @@ export function PackagingSection({
                                                                 }
                                                             }}
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Trash2 className="size-4" />
                                                         </Button>
                                                     )}
                                                 </div>
                                             </td>
                                         )}
                                     </tr>
-                                    <PackagingMaterialsRow
-                                        pack={pack}
-                                        columnCount={columnCount}
-                                        labelMaterials={labelMaterials}
-                                        isReadOnly={isReadOnly}
-                                        onChange={(patch) =>
-                                            updateRow(index, patch)
-                                        }
-                                    />
+                                    {showMaterials && (
+                                        <PackagingMaterialsRow
+                                            pack={pack}
+                                            columnCount={columnCount}
+                                            labelMaterials={labelMaterials}
+                                            isReadOnly={isReadOnly}
+                                            onChange={(patch) =>
+                                                updateRow(index, patch)
+                                            }
+                                        />
+                                    )}
                                 </Fragment>
                             ))}
                             {rows.length === 0 && (
@@ -255,6 +281,27 @@ export function PackagingSection({
                     </table>
                 </div>
             </div>
+
+            {rows.length > 0 && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2"
+                    aria-expanded={showMaterials}
+                    disabled={hasMaterialErrors}
+                    onClick={() => setMaterialsOpen((open) => !open)}
+                >
+                    <ChevronDown
+                        className={
+                            showMaterials
+                                ? 'size-4 rotate-180 transition-transform'
+                                : 'size-4 transition-transform'
+                        }
+                    />
+                    Envases y etiquetas distintos a lo envasado
+                </Button>
+            )}
 
             {/* Una presentación va una sola vez por orden: sin presentaciones por agregar, no hay formulario. */}
             {!isReadOnly &&
@@ -455,8 +502,8 @@ function PackagingPlanForm({
     };
 
     return (
-        <div className="space-y-3 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-950/10">
-            <p className="text-xs font-medium text-blue-700 dark:text-blue-400">
+        <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
                 Agregar presentación al plan de envasado
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -496,12 +543,10 @@ function PackagingPlanForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                 onClick={handleAdd}
                 disabled={submitting}
             >
-                <Plus className="mr-1 h-4 w-4" />
-                {submitting ? 'Guardando...' : 'Agregar Presentación'}
+                {submitting ? 'Guardando...' : 'Agregar presentación'}
             </Button>
         </div>
     );
