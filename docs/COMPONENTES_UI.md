@@ -201,6 +201,45 @@ módulo, lo envía el controlador en `can` y sin él se pinta el texto solo.
 
 ---
 
+## NavTabs (pestañas que son páginas)
+
+**Ubicación:** `resources/js/components/nav-tabs.tsx`.
+
+Barra de pestañas horizontal para secciones de un área que son páginas distintas (como Configuración), con el mismo
+aspecto que `ui/tabs.tsx` usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link>` de Inertia (Wayfinder)
+dentro de un `<nav aria-label=…>` con `aria-current="page"` en la activa (usando `isCurrentOrParentUrl`, así las
+pantallas de crear y editar mantienen marcada su sección). Para paneles dentro de una misma página se usa Radix `<Tabs>`
+(`ui/tabs.tsx`); `design-contract.test.ts` rechaza `<Link>` dentro de `TabsList`/`TabsTrigger` en `pages/`.
+
+- **Grupos:** recibe `groups: NavGroup[]` y pinta un separador vertical entre grupos; sin rótulos visibles y sin
+  separador cuando solo queda un grupo.
+- **Desplazamiento lateral:** cuando no caben todas las pestañas se desplaza dentro de la barra (sin barra de scroll
+  visible y sin empujar la página), lleva la pestaña activa a la vista sin mover la página y muestra un desvanecido solo
+  en el borde donde queda más contenido.
+- **Objetivo táctil:** cada enlace lleva `data-touch-target="default"` (44 px de alto en pantallas táctiles).
+
+```tsx
+<NavTabs groups={groups} label="Configuración" />
+```
+
+---
+
+## useHorizontalOverflow (desborde lateral)
+
+**Ubicación:** `resources/js/hooks/use-horizontal-overflow.ts` y la lógica pura en
+`resources/js/lib/horizontal-overflow.ts` (con sus pruebas de Vitest).
+
+Fuente única para saber si una caja con `overflow-x-auto` se desborda a lo ancho (`overflows`) y si queda contenido
+oculto a la izquierda (`canScrollLeft`) o a la derecha (`canScrollRight`). Observa con un `ResizeObserver` tanto la
+caja como su contenido y escucha `scroll` (desactivable con `trackScroll: false`).
+
+- `NavTabs` lo usa directamente sobre la caja desplazable para los desvanecidos laterales y `scrollLeftToRevealItem`
+  para dejar a la vista la pestaña activa.
+- `DetailTable` pasa `{ observeParent: true, trackScroll: false }` porque el `ref` va en `<table>` y quien se desplaza
+  es el contenedor padre de `ui/table.tsx`.
+
+---
+
 ## CountPopover (recuento que abre su lista)
 
 **Ubicación:** `resources/js/components/count-popover.tsx`.

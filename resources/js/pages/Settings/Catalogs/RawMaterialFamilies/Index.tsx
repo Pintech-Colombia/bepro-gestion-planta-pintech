@@ -131,12 +131,12 @@ export default function RawMaterialFamiliesIndex({
 
     return (
         <>
-            <Head title="Familias de materia prima" />
+            <Head title="Familias de MP" />
 
             <div className="space-y-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <Heading
-                        title="Familias de materia prima"
+                        title="Familias de MP"
                         description="Agrupan las categorías de materia prima (Aditivo, Pigmento, Resina…)."
                     />
                     {can.create && (

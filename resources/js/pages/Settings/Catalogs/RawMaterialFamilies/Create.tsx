@@ -59,7 +59,7 @@ export default function RawMaterialFamiliesCreate({ generalTolerance }: Props) {
 
 RawMaterialFamiliesCreate.layout = {
     breadcrumbs: [
-        { title: 'Familias de materia prima', href: familiesIndex() },
+        { title: 'Familias de MP', href: familiesIndex() },
         { title: 'Nueva familia de materia prima', href: familiesCreate() },
     ],
 };

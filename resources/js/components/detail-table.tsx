@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { useCallback, useState } from 'react';
 
 import { EmptyCell } from '@/components/empty-cell';
 import { EmptyState } from '@/components/empty-state';
@@ -12,6 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { useHorizontalOverflow } from '@/hooks/use-horizontal-overflow';
 import { isEmptyCell } from '@/lib/data-listing';
 import { cn } from '@/lib/utils';
 
@@ -63,23 +63,12 @@ export function DetailTable<T>({
     caption,
 }: DetailTableProps<T>) {
     // La línea a la derecha de la columna fija solo sale cuando la tabla no cabe en su caja y se puede desplazar.
-    const [overflows, setOverflows] = useState(false);
-    const tableRef = useCallback((table: HTMLTableElement | null) => {
-        // La caja que se desplaza es el contenedor que pone `<Table>` alrededor de la tabla.
-        const box = table?.parentElement;
-
-        if (!table || !box) {
-            return;
-        }
-
-        const observer = new ResizeObserver(() =>
-            setOverflows(box.scrollWidth > box.clientWidth),
-        );
-        observer.observe(box);
-        observer.observe(table);
-
-        return () => observer.disconnect();
-    }, []);
+    // La caja que se desplaza es el contenedor que pone `<Table>` alrededor de la tabla.
+    const { ref: tableRef, overflows } =
+        useHorizontalOverflow<HTMLTableElement>({
+            observeParent: true,
+            trackScroll: false,
+        });
 
     if (rows.length === 0) {
         return <EmptyState>{empty}</EmptyState>;
