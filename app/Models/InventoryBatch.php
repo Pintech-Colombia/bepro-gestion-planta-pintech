@@ -117,6 +117,14 @@ class InventoryBatch extends Model
     }
 
     /**
+     * Lotes agotados (sin saldo): el complemento exacto de `available()`.
+     */
+    public function scopeExhausted(Builder $query): void
+    {
+        $query->where('remaining_quantity', '<=', 0);
+    }
+
+    /**
      * Orden FIFO: el lote que primero entró va primero, y el id desempata los del mismo día. Lo usan el consumo de la
      * OP (`InventoryBatchService`) y el cajón de movimientos, donde la salida manual la elige el usuario (INV-04).
      */

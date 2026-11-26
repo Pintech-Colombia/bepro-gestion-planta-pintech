@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { buildUrlTabHref } from '@/lib/url-tab';
 
 type UseUrlTabOptions<T extends string> = {
-    /** Nombre del parámetro en la query string (p. ej. `lotes`). */
+    /** Nombre del parámetro en la query string (p. ej. `batches`). */
     param: string;
     /** Pestañas disponibles; un valor fuera de esta lista se ignora. */
     tabs: readonly T[];
@@ -12,7 +12,7 @@ type UseUrlTabOptions<T extends string> = {
     defaultTab: T;
     /** Pestaña activa validada por el servidor (la prop que devuelve el controlador). */
     value: T;
-    /** Parámetros a limpiar al cambiar de pestaña (p. ej. `['lotes_page']`). */
+    /** Parámetros a limpiar al cambiar de pestaña (p. ej. `['batches_page']`). */
     clearParams?: readonly string[];
     /** Props de Inertia que se recargan al cambiar de pestaña (`only`). */
     reloadOnly: string[];

@@ -48,7 +48,7 @@ it('lists active batches in FIFO order with id tiebreaker, excludes exhausted on
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Inventory/RawMaterials/Show')
-            ->where('batchesTab', 'existencia')
+            ->where('batchesTab', 'active')
             ->where('activeBatchCount', 3)
             ->where('exhaustedBatchCount', 1)
             ->where('exhaustedBatches', null)
@@ -60,7 +60,7 @@ it('lists active batches in FIFO order with id tiebreaker, excludes exhausted on
             ]));
 });
 
-it('paginates exhausted batches newest first with id tiebreaker only when historial tab is requested', function (): void {
+it('paginates exhausted batches newest first with id tiebreaker only when the exhausted tab is requested', function (): void {
     // Un lote activo que nunca debe aparecer en el historial.
     makeShowBatch(['lot_number' => 'L-ACTIVE', 'entry_date' => '2026-11-25', 'remaining_quantity' => '12.0000']);
 
@@ -80,11 +80,11 @@ it('paginates exhausted batches newest first with id tiebreaker only when histor
 
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
-        'lotes' => 'historial',
+        'batches' => 'exhausted',
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('batchesTab', 'historial')
+            ->where('batchesTab', 'exhausted')
             ->where('activeBatchCount', 1)
             ->where('exhaustedBatchCount', 16)
             ->where('exhaustedBatches.total', 16)
@@ -96,12 +96,12 @@ it('paginates exhausted batches newest first with id tiebreaker only when histor
 
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
-        'lotes' => 'historial',
-        'lotes_page' => 2,
+        'batches' => 'exhausted',
+        'batches_page' => 2,
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('batchesTab', 'historial')
+            ->where('batchesTab', 'exhausted')
             ->where('exhaustedBatches.current_page', 2)
             ->has('exhaustedBatches.data', 1)
             ->where('exhaustedBatches.data.0.id', $oldest->id));
@@ -148,7 +148,7 @@ it('hides unit_price in both active and exhausted batch lists for users without 
 
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
-        'lotes' => 'historial',
+        'batches' => 'exhausted',
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
@@ -162,7 +162,7 @@ it('hides unit_price in both active and exhausted batch lists for users without 
 
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
-        'lotes' => 'historial',
+        'batches' => 'exhausted',
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
@@ -171,15 +171,15 @@ it('hides unit_price in both active and exhausted batch lists for users without 
             ->where('exhaustedBatches.data.0.unit_price', '2900.2500'));
 });
 
-it('validates lotes and lotes_page query parameters', function (array $query, string $errorKey): void {
+it('validates batches and batches_page query parameters', function (array $query, string $errorKey): void {
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
         ...$query,
     ]))->assertSessionHasErrors($errorKey);
 })->with([
-    'pestaña desconocida' => [['lotes' => 'otra'], 'lotes'],
-    'página cero' => [['lotes_page' => 0], 'lotes_page'],
-    'página no numérica' => [['lotes_page' => 'abc'], 'lotes_page'],
+    'pestaña desconocida' => [['batches' => 'otra'], 'batches'],
+    'página cero' => [['batches_page' => 0], 'batches_page'],
+    'página no numérica' => [['batches_page' => 'abc'], 'batches_page'],
 ]);
 
 it('handles a raw material without inventory tracking and without batches', function (): void {
@@ -197,14 +197,31 @@ it('handles a raw material without inventory tracking and without batches', func
             ->where('hasAvailableStock', false));
 });
 
-it('preserves returnTo when switching to the historial tab', function (): void {
+it('keeps the batch history of a raw material that stopped tracking inventory', function (): void {
+    // Dejar de controlar inventario solo se permite sin saldo (UpdateRawMaterialAction): conserva los lotes agotados.
+    makeShowBatch(['lot_number' => 'L-OLD', 'remaining_quantity' => '0.0000']);
+    $this->rawMaterial->update(['tracks_inventory' => false]);
+
     $this->get(route('raw-materials.show', [
         'raw_material' => $this->rawMaterial,
-        'lotes' => 'historial',
+        'batches' => 'exhausted',
+    ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rawMaterial.tracks_inventory', false)
+            ->where('activeBatchCount', 0)
+            ->where('exhaustedBatchCount', 1)
+            ->where('exhaustedBatches.data.0.lot_number', 'L-OLD'));
+});
+
+it('preserves returnTo when switching to the exhausted tab', function (): void {
+    $this->get(route('raw-materials.show', [
+        'raw_material' => $this->rawMaterial,
+        'batches' => 'exhausted',
         'return_to' => '/raw-materials?search=MP-01',
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('batchesTab', 'historial')
+            ->where('batchesTab', 'exhausted')
             ->where('returnTo', '/raw-materials?search=MP-01'));
 });

@@ -197,13 +197,13 @@ class RawMaterialController extends Controller
 
         $activeBatchCount = $activeBatchModels->count();
         $exhaustedBatchCount = $rawMaterial->inventoryBatches()
-            ->where('remaining_quantity', '<=', 0)
+            ->exhausted()
             ->count();
 
         // El historial de lotes agotados solo se consulta cuando se abre esa pestaña.
-        $exhaustedBatches = $batchesTab === 'historial'
+        $exhaustedBatches = $batchesTab === 'exhausted'
             ? $rawMaterial->inventoryBatches()
-                ->where('remaining_quantity', '<=', 0)
+                ->exhausted()
                 ->select(
                     'id',
                     'raw_material_id',
@@ -217,7 +217,7 @@ class RawMaterialController extends Controller
                 ->with('supplier:id,name')
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
-                ->paginate(15, ['*'], 'lotes_page')
+                ->paginate(15, ['*'], 'batches_page')
                 ->withQueryString()
                 ->through(fn (InventoryBatch $batch): array => [
                     'id' => $batch->id,
@@ -368,7 +368,7 @@ class RawMaterialController extends Controller
             }
 
             $hasAvailableBatches = $lockedRawMaterial->inventoryBatches()
-                ->where('remaining_quantity', '>', 0)
+                ->available()
                 ->exists();
 
             if ($hasAvailableBatches) {

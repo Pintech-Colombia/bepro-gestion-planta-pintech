@@ -258,11 +258,11 @@ selector segmentado de 2–3 modos dentro de un control pequeño (campana, selec
 ```tsx
 <Tabs value={tab} onValueChange={setTab}>
     <SectionTabsList>
-        <SectionTabsTrigger value="existencia">Con existencia (3)</SectionTabsTrigger>
-        <SectionTabsTrigger value="historial">Historial (12)</SectionTabsTrigger>
+        <SectionTabsTrigger value="active">Con existencia (3)</SectionTabsTrigger>
+        <SectionTabsTrigger value="exhausted">Historial (12)</SectionTabsTrigger>
     </SectionTabsList>
-    <TabsContent value="existencia">…</TabsContent>
-    <TabsContent value="historial">…</TabsContent>
+    <TabsContent value="active">…</TabsContent>
+    <TabsContent value="exhausted">…</TabsContent>
 </Tabs>
 ```
 
@@ -277,7 +277,7 @@ Sincroniza Radix `<Tabs>` dentro de una misma página con un parámetro de la UR
 directo, recarga y botón Atrás), conservando otros parámetros como `return_to` y omitiendo el parámetro cuando equivale
 a la pestaña por defecto. Al hacer clic cambia la pestaña al instante (`isLoading` mientras responde el servidor), pide
 solo las props de `reloadOnly` vía `router.get` con `preserveState` y `preserveScroll`, y limpia parámetros auxiliares
-(`clearParams`, p. ej. `lotes_page`). Lo usa la ficha de MP (`Inventory/RawMaterials/Show`). Un modo sin recarga (todas
+(`clearParams`, p. ej. `batches_page`). Lo usa la ficha de MP (`Inventory/RawMaterials/Show`). Un modo sin recarga (todas
 las pestañas ya llegan en la carga) se agrega con su primera pantalla, con el router de Inertia y nunca
 `history.pushState` directo.
 

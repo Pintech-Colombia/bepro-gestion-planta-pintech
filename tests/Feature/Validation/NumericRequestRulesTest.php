@@ -48,7 +48,7 @@ function numericRequestFields(): array
         ],
         // Parámetro de paginación del historial de lotes en la ficha (sin columna en BD; lleva tope `max`).
         'ShowRawMaterialRequest' => [
-            'lotes_page' => null,
+            'batches_page' => null,
         ],
         'StoreProductionOrderRequest' => [
             'quantity' => 'production_orders.quantity',

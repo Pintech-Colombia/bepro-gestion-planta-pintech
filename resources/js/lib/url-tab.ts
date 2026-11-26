@@ -2,7 +2,7 @@ type BuildUrlTabHrefOptions = {
     param: string;
     value: string;
     defaultValue: string;
-    /** Parámetros a limpiar al cambiar de pestaña (p. ej. `lotes_page`). */
+    /** Parámetros a limpiar al cambiar de pestaña (p. ej. `batches_page`). */
     clearParams?: readonly string[];
 };
 

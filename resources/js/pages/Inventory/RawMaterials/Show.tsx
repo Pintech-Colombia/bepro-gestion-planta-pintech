@@ -23,8 +23,8 @@ import { breadcrumbHref } from '@/lib/navigation';
 import { DeleteRawMaterialDialog } from '@/pages/Inventory/RawMaterials/DeleteRawMaterialDialog';
 import type { Paginated } from '@/types/ui';
 
-const BATCHES_TABS = ['existencia', 'historial'] as const;
-const BATCHES_CLEAR_PARAMS = ['lotes_page'] as const;
+const BATCHES_TABS = ['active', 'exhausted'] as const;
+const BATCHES_CLEAR_PARAMS = ['batches_page'] as const;
 const BATCHES_RELOAD_ONLY = [
     'batchesTab',
     'activeBatches',
@@ -115,9 +115,9 @@ export default function RawMaterialsShow({
         setTab: setActiveTab,
         isLoading: batchesLoading,
     } = useUrlTab({
-        param: 'lotes',
+        param: 'batches',
         tabs: BATCHES_TABS,
-        defaultTab: 'existencia',
+        defaultTab: 'active',
         value: batchesTab,
         clearParams: BATCHES_CLEAR_PARAMS,
         reloadOnly: BATCHES_RELOAD_ONLY,
@@ -239,8 +239,8 @@ export default function RawMaterialsShow({
 
     const hasAnyBatch = activeBatchCount > 0 || exhaustedBatchCount > 0;
     const showBatchesTabs = rawMaterial.tracks_inventory || hasAnyBatch;
-    const loadingHistorial =
-        batchesLoading && activeTab === 'historial' && !exhaustedBatches;
+    const loadingExhausted =
+        batchesLoading && activeTab === 'exhausted' && !exhaustedBatches;
 
     return (
         <>
@@ -414,7 +414,9 @@ export default function RawMaterialsShow({
                     {!rawMaterial.tracks_inventory && (
                         <Alert>
                             <AlertDescription>
-                                Esta MP no controla inventario: no tiene lotes.
+                                {hasAnyBatch
+                                    ? 'Esta MP ya no controla inventario: estos lotes son de cuando sí lo controlaba.'
+                                    : 'Esta MP no controla inventario: no tiene lotes.'}
                             </AlertDescription>
                         </Alert>
                     )}
@@ -426,17 +428,17 @@ export default function RawMaterialsShow({
                             className="space-y-4"
                         >
                             <SectionTabsList>
-                                <SectionTabsTrigger value="existencia">
+                                <SectionTabsTrigger value="active">
                                     Con existencia (
                                     {formatKind(activeBatchCount, 'units')})
                                 </SectionTabsTrigger>
-                                <SectionTabsTrigger value="historial">
+                                <SectionTabsTrigger value="exhausted">
                                     Historial (
                                     {formatKind(exhaustedBatchCount, 'units')})
                                 </SectionTabsTrigger>
                             </SectionTabsList>
 
-                            <TabsContent value="existencia">
+                            <TabsContent value="active">
                                 <DetailTable
                                     rows={activeBatches}
                                     rowKey={(batch) => batch.id}
@@ -447,10 +449,10 @@ export default function RawMaterialsShow({
                             </TabsContent>
 
                             <TabsContent
-                                value="historial"
+                                value="exhausted"
                                 className="space-y-4"
                             >
-                                {loadingHistorial ? (
+                                {loadingExhausted ? (
                                     <div
                                         aria-busy="true"
                                         className="space-y-2 rounded-lg border border-border p-4"

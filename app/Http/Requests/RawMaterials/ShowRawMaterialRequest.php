@@ -23,8 +23,8 @@ class ShowRawMaterialRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'lotes' => ['nullable', 'string', 'in:existencia,historial'],
-            'lotes_page' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'batches' => ['nullable', 'string', 'in:active,exhausted'],
+            'batches_page' => ['nullable', 'integer', 'min:1', 'max:100000'],
         ];
     }
 
@@ -34,8 +34,8 @@ class ShowRawMaterialRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'lotes' => 'pestaña de lotes',
-            'lotes_page' => 'página del historial de lotes',
+            'batches' => 'pestaña de lotes',
+            'batches_page' => 'página del historial de lotes',
         ];
     }
 
@@ -44,8 +44,8 @@ class ShowRawMaterialRequest extends FormRequest
      */
     public function batchesTab(): string
     {
-        $tab = $this->validated('lotes');
+        $tab = $this->validated('batches');
 
-        return is_string($tab) && $tab !== '' ? $tab : 'existencia';
+        return is_string($tab) && $tab !== '' ? $tab : 'active';
     }
 }

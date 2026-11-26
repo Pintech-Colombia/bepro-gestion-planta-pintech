@@ -8,26 +8,26 @@ describe('buildUrlTabHref', () => {
             buildUrlTabHref(
                 '/raw-materials/5?return_to=%2Fraw-materials%3Fsearch%3DMP',
                 {
-                    param: 'lotes',
-                    value: 'historial',
-                    defaultValue: 'existencia',
-                    clearParams: ['lotes_page'],
+                    param: 'batches',
+                    value: 'exhausted',
+                    defaultValue: 'active',
+                    clearParams: ['batches_page'],
                 },
             ),
         ).toBe(
-            '/raw-materials/5?return_to=%2Fraw-materials%3Fsearch%3DMP&lotes=historial',
+            '/raw-materials/5?return_to=%2Fraw-materials%3Fsearch%3DMP&batches=exhausted',
         );
     });
 
     it('omite el parámetro y limpia clearParams al volver a la pestaña por defecto', () => {
         expect(
             buildUrlTabHref(
-                '/raw-materials/5?lotes=historial&lotes_page=2&return_to=%2Fraw-materials',
+                '/raw-materials/5?batches=exhausted&batches_page=2&return_to=%2Fraw-materials',
                 {
-                    param: 'lotes',
-                    value: 'existencia',
-                    defaultValue: 'existencia',
-                    clearParams: ['lotes_page'],
+                    param: 'batches',
+                    value: 'active',
+                    defaultValue: 'active',
+                    clearParams: ['batches_page'],
                 },
             ),
         ).toBe('/raw-materials/5?return_to=%2Fraw-materials');
@@ -35,12 +35,15 @@ describe('buildUrlTabHref', () => {
 
     it('devuelve solo el pathname cuando no quedan parámetros', () => {
         expect(
-            buildUrlTabHref('/raw-materials/5?lotes=historial&lotes_page=3', {
-                param: 'lotes',
-                value: 'existencia',
-                defaultValue: 'existencia',
-                clearParams: ['lotes_page'],
-            }),
+            buildUrlTabHref(
+                '/raw-materials/5?batches=exhausted&batches_page=3',
+                {
+                    param: 'batches',
+                    value: 'active',
+                    defaultValue: 'active',
+                    clearParams: ['batches_page'],
+                },
+            ),
         ).toBe('/raw-materials/5');
     });
 });
