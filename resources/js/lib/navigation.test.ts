@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breadcrumbHref } from './navigation';
+import { breadcrumbHref, matchesUrlPath } from './navigation';
 
 describe('breadcrumbHref', () => {
     it('keeps the filters when returnTo is the same screen', () => {
@@ -31,5 +31,37 @@ describe('breadcrumbHref', () => {
                 '/products/5',
             ),
         ).toBe('/products/5');
+    });
+});
+
+describe('matchesUrlPath', () => {
+    it('exige coincidencia exacta cuando matchChildren es false', () => {
+        expect(matchesUrlPath('/settings/profile', '/settings/profile')).toBe(
+            true,
+        );
+        expect(
+            matchesUrlPath('/settings/profile', '/settings/profile/edit'),
+        ).toBe(false);
+    });
+
+    it('coincide con subrutas respetando límite de segmento cuando matchChildren es true', () => {
+        expect(
+            matchesUrlPath(
+                '/settings/catalogs/raw-material-categories',
+                '/settings/catalogs/raw-material-categories',
+                true,
+            ),
+        ).toBe(true);
+        expect(
+            matchesUrlPath(
+                '/settings/catalogs/raw-material-categories',
+                '/settings/catalogs/raw-material-categories/create',
+                true,
+            ),
+        ).toBe(true);
+        expect(
+            matchesUrlPath('/settings/profile', '/settings/profile-2fa', true),
+        ).toBe(false);
+        expect(matchesUrlPath('/', '/settings/profile', true)).toBe(false);
     });
 });

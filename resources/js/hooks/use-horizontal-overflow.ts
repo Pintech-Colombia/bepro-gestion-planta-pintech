@@ -22,6 +22,9 @@ const initialOverflowState: HorizontalOverflowState = {
 /**
  * Detecta si una caja con desplazamiento lateral se desborda y hacia qué lados queda contenido.
  * Comparte un único `ResizeObserver` (caja + contenido) entre `DetailTable` y `NavTabs`.
+ *
+ * Nota: con `observeParent = false` (por defecto), observa `node` y `node.firstElementChild`, por lo que
+ * la caja desplazable debe envolver sus elementos dentro de un único hijo (p. ej. un contenedor `w-max`).
  */
 export function useHorizontalOverflow<T extends HTMLElement = HTMLElement>({
     observeParent = false,

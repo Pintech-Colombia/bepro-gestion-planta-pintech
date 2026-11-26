@@ -206,17 +206,20 @@ módulo, lo envía el controlador en `can` y sin él se pinta el texto solo.
 **Ubicación:** `resources/js/components/nav-tabs.tsx`.
 
 Barra de pestañas horizontal con línea inferior para secciones de un área que son páginas distintas (como
-Configuración), usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link>` de Inertia (Wayfinder) dentro de un
-`<nav aria-label=…>` con `aria-current="page"` en la activa (usando `isCurrentOrParentUrl`, así las pantallas de crear y
-editar mantienen marcada su sección). Para paneles dentro de una misma página se usa Radix `<Tabs>` (`ui/tabs.tsx`);
-`design-contract.test.ts` rechaza `<Link>` dentro de `TabsList`/`TabsTrigger` en `pages/`.
+Configuración), usando solo tokens (`DESIGN.md` §10). Cada pestaña es un `<Link prefetch>` de Inertia (Wayfinder)
+dentro de una lista (`<ul>`/`<li>`) en un `<nav aria-label=…>` con `aria-current="page"` en la activa (usando
+`isCurrentOrParentUrl`, con límite de segmento, así las pantallas de crear y editar mantienen marcada su sección). Para
+paneles dentro de una misma página se usa Radix `<Tabs>` (`ui/tabs.tsx`); `design-contract.test.ts` rechaza combinar
+`<Link>` con `TabsList`/`TabsTrigger` en `pages/`, `components/` y `layouts/`.
 
 - **Grupos:** recibe `groups: NavGroup[]` y pinta un separador vertical entre grupos; sin rótulos visibles y sin
   separador cuando solo queda un grupo.
 - **Desplazamiento lateral:** cuando no caben todas las pestañas se desplaza dentro de la barra (sin barra de scroll
-  visible y sin empujar la página), lleva la pestaña activa a la vista sin mover la página y muestra un desvanecido solo
-  en el borde donde queda más contenido.
-- **Objetivo táctil:** cada enlace lleva `data-touch-target="default"` (44 px de alto en pantallas táctiles).
+  visible y sin empujar la página), lleva la pestaña activa a la vista sin mover la página, aplica un desvanecido con
+  `mask-image` (independiente del color de fondo) solo del lado donde hay más contenido y muestra botones `<` / `>`
+  discretos en punteros de precisión (`pointer: fine`) para usuarios con mouse.
+- **Objetivo táctil y teclado:** cada enlace lleva `data-touch-target="default"` (44 px de alto en pantallas táctiles)
+  y `scroll-mx-8` para que el foco por `Tab` no quede bajo el desvanecido.
 
 ```tsx
 <NavTabs groups={groups} label="Configuración" />
@@ -233,8 +236,10 @@ Fuente única para saber si una caja con `overflow-x-auto` se desborda a lo anch
 oculto a la izquierda (`canScrollLeft`) o a la derecha (`canScrollRight`). Observa con un `ResizeObserver` tanto la
 caja como su contenido y escucha `scroll` (desactivable con `trackScroll: false`).
 
-- `NavTabs` lo usa directamente sobre la caja desplazable para los desvanecidos laterales y `scrollLeftToRevealItem`
-  para dejar a la vista la pestaña activa.
+- Con `observeParent: false` (por defecto), observa `node.firstElementChild` como contenido: la caja desplazable debe
+  envolver sus ítems en un único elemento hijo (p. ej. `w-max`), como hace `NavTabs`.
+- `NavTabs` lo usa directamente sobre la caja desplazable para los desvanecidos y flechas laterales, y
+  `scrollLeftToRevealItem` para dejar a la vista la pestaña activa.
 - `DetailTable` pasa `{ observeParent: true, trackScroll: false }` porque el `ref` va en `<table>` y quien se desplaza
   es el contenedor padre de `ui/table.tsx`.
 

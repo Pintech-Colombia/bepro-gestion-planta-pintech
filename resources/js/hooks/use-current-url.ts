@@ -1,5 +1,6 @@
 import type { InertiaLinkProps } from '@inertiajs/react';
 import { usePage } from '@inertiajs/react';
+import { matchesUrlPath } from '@/lib/navigation';
 import { toUrl } from '@/lib/utils';
 
 export type IsCurrentUrlFn = (
@@ -44,7 +45,7 @@ export function useCurrentUrl(): UseCurrentUrlReturn {
         const urlString = toUrl(urlToCheck);
 
         const comparePath = (path: string): boolean =>
-            startsWith ? urlToCompare.startsWith(path) : path === urlToCompare;
+            matchesUrlPath(path, urlToCompare, startsWith);
 
         if (!urlString.startsWith('http')) {
             return comparePath(urlString);

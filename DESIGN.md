@@ -526,8 +526,8 @@ they open nothing.
   it); on the phone the breadcrumb collapses to the previous level, e.g. «← Productos». _(pending)_
 - **Page tabs vs. in-page panels:** sections of an area that are separate pages (Settings) use `<NavTabs>`
   (`components/nav-tabs.tsx`, Inertia `<Link>` items inside `<nav>` with `aria-current="page"`). Radix `<Tabs>`
-  (`ui/tabs.tsx`) is only for panels within the same page (`design-contract.test.ts` checks that `pages/` never puts
-  `<Link>` inside `TabsList`/`TabsTrigger`).
+  (`ui/tabs.tsx`) is only for panels within the same page (`design-contract.test.ts` rejects combining `<Link>` with
+  `TabsList`/`TabsTrigger` across `pages/`, `components/` and `layouts/`).
 - The sidebar toggle uses the panel icon (`PanelLeftClose`/`PanelLeftOpen`), never arrows; on the phone, `Menu` (☰).
 - Navigation links use Wayfinder (`@/routes`, `@/actions`), never hardcoded URLs.
 

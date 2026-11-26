@@ -428,12 +428,19 @@ describe('contrato de DESIGN.md', () => {
             expect(staleExceptions).toEqual([]);
         });
 
-        it('usa <NavTabs> para pestañas que son páginas, nunca <Link> dentro de TabsList o TabsTrigger', () => {
-            const found = violationsAcrossLines(pageFiles, [
+        it('usa <NavTabs> para pestañas que son páginas, nunca <Link> con TabsList o TabsTrigger', () => {
+            const rule =
+                'DESIGN.md §10: las pestañas que navegan a otra página usan <NavTabs>, no <Link> con Radix Tabs';
+            const found = violationsAcrossLines(screenFiles, [
                 {
                     pattern:
                         /<(TabsList|TabsTrigger)\b(?:(?!<\/\1>)[\s\S])*?<Link\b(?:(?!<\/\1>)[\s\S])*?<\/\1>/g,
-                    rule: 'DESIGN.md §10: las pestañas que navegan a otra página usan <NavTabs>, no <Link> dentro de Radix Tabs',
+                    rule,
+                },
+                {
+                    pattern:
+                        /<Link\b(?:(?!<\/Link>)[\s\S])*?<TabsTrigger\b(?:(?!<\/Link>)[\s\S])*?<\/Link>/g,
+                    rule,
                 },
             ]);
 

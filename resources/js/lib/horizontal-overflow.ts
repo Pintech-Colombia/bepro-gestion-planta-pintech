@@ -80,12 +80,19 @@ export function scrollLeftToRevealItem({
     }
 
     const clamp = (value: number) => Math.min(Math.max(0, value), maxScroll);
+
+    // Si el elemento supera el ancho de la caja (p. ej. zoom alto), prioriza siempre el inicio del texto.
+    if (itemWidth >= clientWidth) {
+        return clamp(itemStart);
+    }
+
+    const currentScroll = clamp(scrollLeft);
     const effectivePadding = Math.min(
         Math.max(0, padding),
         Math.max(0, (clientWidth - itemWidth) / 2),
     );
-    const visibleStart = scrollLeft + effectivePadding;
-    const visibleEnd = scrollLeft + clientWidth - effectivePadding;
+    const visibleStart = currentScroll + effectivePadding;
+    const visibleEnd = currentScroll + clientWidth - effectivePadding;
     const itemEnd = itemStart + itemWidth;
 
     if (itemStart < visibleStart) {
@@ -96,5 +103,5 @@ export function scrollLeftToRevealItem({
         return clamp(itemEnd - clientWidth + effectivePadding);
     }
 
-    return clamp(scrollLeft);
+    return currentScroll;
 }

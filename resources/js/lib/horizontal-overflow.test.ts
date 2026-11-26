@@ -195,4 +195,41 @@ describe('scrollLeftToRevealItem', () => {
             }),
         ).toBe(0);
     });
+
+    it('alinea al inicio del elemento cuando es más ancho que la caja', () => {
+        expect(
+            scrollLeftToRevealItem({
+                scrollLeft: 0,
+                clientWidth: 200,
+                scrollWidth: 1000,
+                itemStart: 120,
+                itemWidth: 260,
+                padding: 32,
+            }),
+        ).toBe(120);
+    });
+
+    it('acota scrollLeft fuera de rango (rebote iOS) y recorta padding excesivo', () => {
+        expect(
+            scrollLeftToRevealItem({
+                scrollLeft: -25,
+                clientWidth: 360,
+                scrollWidth: 1000,
+                itemStart: 40,
+                itemWidth: 100,
+                padding: 32,
+            }),
+        ).toBe(0);
+
+        expect(
+            scrollLeftToRevealItem({
+                scrollLeft: 0,
+                clientWidth: 200,
+                scrollWidth: 1000,
+                itemStart: 180,
+                itemWidth: 180,
+                padding: 32,
+            }),
+        ).toBe(170);
+    });
 });
