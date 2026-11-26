@@ -25,6 +25,8 @@ declare module '@inertiajs/core' {
             sidebarOpen: boolean;
             /** Hoy en la planta (`Y-m-d`): valor por defecto y límite de los campos de fecha. Lo valida PlantDate. */
             plantToday: string;
+            /** Zona IANA de la planta (`America/Bogota`): las horas se muestran con su reloj, no con el del navegador. */
+            plantTimezone: string;
             /** `null` sin sesión. */
             warehouseContext: WarehouseContext | null;
             unresolvedAlertsCount: number;

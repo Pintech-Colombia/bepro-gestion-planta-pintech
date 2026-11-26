@@ -19,6 +19,7 @@ import {
     plantDateMonthRange,
     toPlantDate,
 } from '@/lib/plant-date';
+import { plantClockToday } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 type PlantDateInputProps = {
@@ -88,7 +89,7 @@ export function PlantDateInput({
         () =>
             parsePlantDate(
                 `${plantDateInitialMonth(value, bounds, plantToday)}-01`,
-            ) ?? new Date(),
+            ) ?? plantClockToday(),
     );
     const canPickToday = isPlantDateSelectable(plantToday, bounds, saved);
 
@@ -98,7 +99,7 @@ export function PlantDateInput({
             setMonth(
                 parsePlantDate(
                     `${plantDateInitialMonth(value, bounds, plantToday)}-01`,
-                ) ?? new Date(),
+                ) ?? plantClockToday(),
             );
         }
 

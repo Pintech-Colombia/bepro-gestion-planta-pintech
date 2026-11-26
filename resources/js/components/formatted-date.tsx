@@ -2,6 +2,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 import { EmptyCell } from '@/components/empty-cell';
+import { hasTimeZone, toPlantWallClockDate } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 export interface FormattedDateProps {
@@ -56,7 +57,7 @@ export function parseSafeDate(value: string | null | undefined): Date | null {
         return new Date(year, month, day, hours, minutes, seconds);
     }
 
-    // 3. Timestamp ISO 8601 (con T o Z)
+    // 3. Timestamp ISO 8601 (con T o Z). Es el instante real: `formatSafeDate` lo muestra en hora de planta.
     const date = new Date(trimmed);
 
     if (isNaN(date.getTime())) {
@@ -83,8 +84,11 @@ export function formatSafeDate(
         }
 
         const pattern = formatPatterns[formatType];
+        // Un instante con zona (caso 3) se muestra con el reloj de la planta, no con el del navegador. Los casos 1 y 2
+        // (sin zona) ya son día u hora de planta.
+        const shown = hasTimeZone(value) ? toPlantWallClockDate(date) : date;
 
-        return format(date, pattern, { locale: es });
+        return format(shown, pattern, { locale: es });
     } catch {
         return value;
     }

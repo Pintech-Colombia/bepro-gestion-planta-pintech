@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { toLocalDateTimeInput, toUtcIsoString } from '@/lib/date-time-helpers';
+import { toLocalDateTimeInput } from '@/lib/date-time-helpers';
 import { formErrorMessages } from '@/lib/form-errors';
 import { formatQuantity } from '@/lib/formatters';
 import { parseDecimal } from '@/lib/numeric-input';
@@ -308,7 +308,7 @@ export function ControlCard({
                             onChange={(event) =>
                                 setData(
                                     'agitation_start_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -324,7 +324,7 @@ export function ControlCard({
                             onChange={(event) =>
                                 setData(
                                     'agitation_end_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -340,7 +340,7 @@ export function ControlCard({
                             onChange={(event) =>
                                 setData(
                                     'packaging_start_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}
@@ -356,7 +356,7 @@ export function ControlCard({
                             onChange={(event) =>
                                 setData(
                                     'packaging_end_time',
-                                    toUtcIsoString(event.target.value),
+                                    event.target.value,
                                 )
                             }
                             disabled={isReadOnly}

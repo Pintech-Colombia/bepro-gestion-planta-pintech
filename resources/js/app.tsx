@@ -6,6 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/Settings/layout';
 import { focusFirstError } from '@/lib/focus-first-error';
+import { setPlantTimezone } from '@/lib/plant-time';
 
 let appName = import.meta.env.VITE_APP_NAME || 'Pintech Colombia S.A.S';
 
@@ -24,6 +25,12 @@ if (typeof window !== 'undefined') {
         }
     }
 }
+
+// La zona de planta para mostrar las horas (`lib/plant-time`). Se registra antes de arrancar para recibir también la
+// página inicial (`navigate` de tipo `initial`); una recarga parcial sin la prop deja la zona que ya estaba.
+router.on('navigate', (event) => {
+    setPlantTimezone(event.detail.page.props.plantTimezone);
+});
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

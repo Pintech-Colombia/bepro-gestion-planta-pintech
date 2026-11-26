@@ -998,4 +998,45 @@ describe('contrato de DESIGN.md', () => {
 
         expect(staleExceptions).toEqual([]);
     });
+
+    it('formatea las fechas con FormattedDate y formatRelativeTime: sin format de date-fns fuera de los permitidos', () => {
+        // Un instante formateado con `format` sale en la hora del navegador; `formatSafeDate` lo pasa a hora de planta.
+        // Los permitidos, con su motivo. Al resolver uno, se quita.
+        const dateFormattingExceptions = [
+            // La pieza única: aplica la zona de planta antes de formatear.
+            'resources/js/components/formatted-date.tsx',
+            // Nombres de mes del calendario: días de planta, no instantes.
+            'resources/js/components/ui/calendar.tsx',
+            // El texto del rango elegido: días de planta, no instantes.
+            'resources/js/components/ui/date-range-picker.tsx',
+        ];
+        const rules = [
+            {
+                pattern:
+                    /import\s*\{[^}]*\b(?:format|formatDistanceToNow)\b[^}]*\}\s*from\s*['"]date-fns['"]|from\s*['"]date-fns\/(?:format|formatDistanceToNow)['"]/g,
+                rule: 'Una fecha se muestra con <FormattedDate>, formatSafeDate o formatRelativeTime (components/formatted-date.tsx), en hora de planta',
+            },
+        ];
+        const matchesIn = (file: string) =>
+            violationsAcrossLines([file], rules);
+
+        const found = filesUnder(join(root, 'resources/js'), ['.ts', '.tsx'])
+            .filter((file) => {
+                const path = relativePath(file);
+
+                return (
+                    !path.endsWith('.test.ts') &&
+                    !dateFormattingExceptions.includes(path)
+                );
+            })
+            .flatMap(matchesIn);
+
+        expect(report(found)).toEqual([]);
+
+        const staleExceptions = dateFormattingExceptions.filter((path) =>
+            exceptionIsStale(path, matchesIn),
+        );
+
+        expect(staleExceptions).toEqual([]);
+    });
 });

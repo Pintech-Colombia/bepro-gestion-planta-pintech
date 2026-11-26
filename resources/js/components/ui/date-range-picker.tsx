@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import * as React from 'react';
 import {
     endOfMonth,
@@ -7,7 +8,6 @@ import {
     isValid,
     parseISO,
     startOfMonth,
-    startOfToday,
     startOfWeek,
     startOfYear,
     subDays,
@@ -26,7 +26,8 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
-import { toPlantDate } from '@/lib/plant-date';
+import { parsePlantDate, toPlantDate } from '@/lib/plant-date';
+import { plantClockToday } from '@/lib/plant-time';
 import { cn } from '@/lib/utils';
 
 export type DateRangePickerProps = {
@@ -43,14 +44,14 @@ export type DateRangePickerProps = {
 
 type Preset = {
     label: string;
-    getValue: () => { from: Date; to: Date };
+    /** `today` es hoy en la planta (`plantToday`), no el reloj del navegador. */
+    getValue: (today: Date) => { from: Date; to: Date };
 };
 
 const PRESETS: Preset[] = [
     {
         label: 'Hoy',
-        getValue: () => {
-            const today = startOfToday();
+        getValue: (today) => {
             return {
                 from: today,
                 to: today,
@@ -59,8 +60,8 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Ayer',
-        getValue: () => {
-            const yesterday = subDays(startOfToday(), 1);
+        getValue: (today) => {
+            const yesterday = subDays(today, 1);
             return {
                 from: yesterday,
                 to: yesterday,
@@ -69,8 +70,7 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Esta semana',
-        getValue: () => {
-            const today = startOfToday();
+        getValue: (today) => {
             return {
                 from: startOfWeek(today, { weekStartsOn: 1 }),
                 to: endOfWeek(today, { weekStartsOn: 1 }),
@@ -79,8 +79,8 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Semana anterior',
-        getValue: () => {
-            const lastWeek = subWeeks(startOfToday(), 1);
+        getValue: (today) => {
+            const lastWeek = subWeeks(today, 1);
             return {
                 from: startOfWeek(lastWeek, { weekStartsOn: 1 }),
                 to: endOfWeek(lastWeek, { weekStartsOn: 1 }),
@@ -89,8 +89,7 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Este mes',
-        getValue: () => {
-            const today = startOfToday();
+        getValue: (today) => {
             return {
                 from: startOfMonth(today),
                 to: endOfMonth(today),
@@ -99,8 +98,8 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Mes anterior',
-        getValue: () => {
-            const lastMonth = subMonths(startOfToday(), 1);
+        getValue: (today) => {
+            const lastMonth = subMonths(today, 1);
             return {
                 from: startOfMonth(lastMonth),
                 to: endOfMonth(lastMonth),
@@ -109,15 +108,14 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Últimos 30 días',
-        getValue: () => ({
-            from: subDays(startOfToday(), 29),
-            to: startOfToday(),
+        getValue: (today) => ({
+            from: subDays(today, 29),
+            to: today,
         }),
     },
     {
         label: 'Este año',
-        getValue: () => {
-            const today = startOfToday();
+        getValue: (today) => {
             return {
                 from: startOfYear(today),
                 to: endOfYear(today),
@@ -126,8 +124,8 @@ const PRESETS: Preset[] = [
     },
     {
         label: 'Año anterior',
-        getValue: () => {
-            const lastYear = subYears(startOfToday(), 1);
+        getValue: (today) => {
+            const lastYear = subYears(today, 1);
             return {
                 from: startOfYear(lastYear),
                 to: endOfYear(lastYear),
@@ -162,6 +160,12 @@ export function DateRangePicker({
     showPresets = true,
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false);
+    const { plantToday } = usePage().props;
+    // Hoy en la planta: los atajos («Hoy», «Este mes»…) y el mes que abre el calendario sin valor.
+    const today = React.useMemo(
+        () => parsePlantDate(plantToday) ?? plantClockToday(),
+        [plantToday],
+    );
 
     const fromDate = React.useMemo(
         () => safeParseDate(valueFrom),
@@ -179,7 +183,7 @@ export function DateRangePicker({
 
     // Current displayed calendar month (positioned on `to` or `from` or today)
     const [calendarMonth, setCalendarMonth] = React.useState<Date>(
-        () => toDate ?? fromDate ?? new Date(),
+        () => toDate ?? fromDate ?? today,
     );
 
     // When popover opens or external values change, sync local state
@@ -198,7 +202,7 @@ export function DateRangePicker({
     const hasValue = Boolean(fromDate || toDate);
 
     const handleApplyPreset = (preset: Preset) => {
-        const { from, to } = preset.getValue();
+        const { from, to } = preset.getValue(today);
         const fromStr = toPlantDate(from);
         const toStr = toPlantDate(to);
         setDraftRange({ from, to });
@@ -212,7 +216,7 @@ export function DateRangePicker({
         const activeTo = draftRange?.to ?? toDate;
         if (!activeFrom || !activeTo) return false;
 
-        const { from: pFrom, to: pTo } = preset.getValue();
+        const { from: pFrom, to: pTo } = preset.getValue(today);
         return (
             toPlantDate(activeFrom) === toPlantDate(pFrom) &&
             toPlantDate(activeTo) === toPlantDate(pTo)

@@ -1,6 +1,4 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { formatDistanceToNow } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Activity, Trash2 } from 'lucide-react';
 import type { FC } from 'react';
 
@@ -8,6 +6,7 @@ import { ActiveBadge } from '@/components/active-badge';
 import { DataListing } from '@/components/data-listing';
 import type { DataListingColumn } from '@/components/data-listing';
 import { DataTableFilters } from '@/components/data-table-filters';
+import { formatRelativeTime } from '@/components/formatted-date';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
 import { Badge } from '@/components/ui/badge';
@@ -98,13 +97,7 @@ const UsersIndex: FC<Props> = ({ users, recentActivities, filters, can }) => {
         {
             key: 'last_login_at',
             header: 'Último acceso',
-            cell: (user) =>
-                user.last_login_at
-                    ? formatDistanceToNow(new Date(user.last_login_at), {
-                          addSuffix: true,
-                          locale: es,
-                      })
-                    : 'Nunca',
+            cell: (user) => formatRelativeTime(user.last_login_at) ?? 'Nunca',
             mobile: 'meta',
             className: 'whitespace-nowrap text-muted-foreground',
         },
@@ -204,14 +197,8 @@ const UsersIndex: FC<Props> = ({ users, recentActivities, filters, can }) => {
                                     {recentActivities.map((activity) => (
                                         <div key={activity.id} className="mb-4">
                                             <p className="text-xs text-muted-foreground">
-                                                {formatDistanceToNow(
-                                                    new Date(
-                                                        activity.created_at,
-                                                    ),
-                                                    {
-                                                        addSuffix: true,
-                                                        locale: es,
-                                                    },
+                                                {formatRelativeTime(
+                                                    activity.created_at,
                                                 )}
                                             </p>
                                             <p className="text-sm font-semibold">

@@ -1,6 +1,4 @@
 import { Head, router } from '@inertiajs/react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import {
     CheckCircle2,
     Clock,
@@ -14,6 +12,7 @@ import type { ComponentProps } from 'react';
 import { DataListing } from '@/components/data-listing';
 import type { DataListingColumn } from '@/components/data-listing';
 import { DataTableFilters } from '@/components/data-table-filters';
+import { formatSafeDate } from '@/components/formatted-date';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
 import { StatusBadge } from '@/components/status-badge';
@@ -178,9 +177,7 @@ export default function AlertsIndex({
             header: 'Fecha',
             cell: (alert) =>
                 alert.created_at
-                    ? format(new Date(alert.created_at), 'dd MMM yyyy HH:mm', {
-                          locale: es,
-                      })
+                    ? formatSafeDate(alert.created_at, 'datetime')
                     : null,
             mobile: 'meta',
             className: 'whitespace-nowrap text-muted-foreground',

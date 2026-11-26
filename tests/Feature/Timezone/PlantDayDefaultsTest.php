@@ -97,10 +97,12 @@ it('refreshes today in the plant on the partial reload that opens a movement dra
         ->and($response->json('props.oldestEntryDate'))->toBe('2026-09-13');
 });
 
-it('shares today in the plant with every page', function (): void {
+it('shares today in the plant and its timezone with every page', function (): void {
     $this->actingAs($this->admin)
         ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page->where('plantToday', '2026-10-13'));
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('plantToday', '2026-10-13')
+            ->where('plantTimezone', 'America/Bogota'));
 });
 
 it('gives the sales order page the plant day the order was created (D-PV3)', function (): void {
