@@ -1,30 +1,55 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import RawMaterialController from '@/actions/App/Http/Controllers/Inventory/RawMaterialController';
-
 import { ActiveBadge } from '@/components/active-badge';
 import { DetailItem, DetailList } from '@/components/detail-list';
 import { DetailTable } from '@/components/detail-table';
+import type { DetailTableColumn } from '@/components/detail-table';
+import { EmptyCell } from '@/components/empty-cell';
 import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
+import Pagination from '@/components/pagination';
+import { SectionTabsList, SectionTabsTrigger } from '@/components/section-tabs';
+import { ToneBadge } from '@/components/tone-badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { useUrlTab } from '@/hooks/use-url-tab';
+import { formatKind } from '@/lib/formatters';
 import { breadcrumbHref } from '@/lib/navigation';
 import { DeleteRawMaterialDialog } from '@/pages/Inventory/RawMaterials/DeleteRawMaterialDialog';
+import type { Paginated } from '@/types/ui';
 
-/**
- * Tipos
- */
-type InventoryBatch = {
+const BATCHES_TABS = ['active', 'exhausted'] as const;
+const BATCHES_CLEAR_PARAMS = ['batches_page'] as const;
+const BATCHES_RELOAD_ONLY = [
+    'batchesTab',
+    'activeBatches',
+    'exhaustedBatches',
+    'activeBatchCount',
+    'exhaustedBatchCount',
+    'totalAvailableQuantity',
+    'hasAvailableStock',
+];
+
+type BatchesTab = (typeof BATCHES_TABS)[number];
+
+type BatchSummary = {
     id: number;
     lot_number: string | null;
     supplier: string | null;
     initial_quantity: string;
-    remaining_quantity: string;
     unit_price?: string;
     entry_date: string;
     expiry_date: string | null;
+};
+
+type ActiveBatch = BatchSummary & {
+    remaining_quantity: string;
+    consumes_first: boolean;
 };
 
 type Props = {
@@ -46,8 +71,13 @@ type Props = {
             family_name: string | null;
             type_label: string;
         } | null;
-        inventory_batches: InventoryBatch[];
     };
+    batchesTab: BatchesTab;
+    activeBatches: ActiveBatch[];
+    exhaustedBatches: Paginated<BatchSummary> | null;
+    activeBatchCount: number;
+    exhaustedBatchCount: number;
+    totalAvailableQuantity: string;
     can: {
         update: boolean;
         delete: boolean;
@@ -60,10 +90,16 @@ type Props = {
 };
 
 /**
- * Raw materials show page displaying detail, batch inventory, and deletion/reactivation controls.
+ * Raw materials show page displaying detail, batch inventory tabs, and deletion/reactivation controls.
  */
 export default function RawMaterialsShow({
     rawMaterial,
+    batchesTab,
+    activeBatches,
+    exhaustedBatches,
+    activeBatchCount,
+    exhaustedBatchCount,
+    totalAvailableQuantity,
     can,
     hasAvailableStock,
     hasActivity,
@@ -71,13 +107,21 @@ export default function RawMaterialsShow({
     // El servidor decide si «eliminar» borra o desactiva (permiso de borrado y sin historial).
     const deactivates = !can.deletePermanently;
 
-    const totalAvailableQuantity = rawMaterial.inventory_batches.reduce(
-        (sum, batch) => sum + (Number(batch.remaining_quantity) || 0),
-        0,
-    );
-
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteProcessing, setDeleteProcessing] = useState(false);
+
+    const {
+        tab: activeTab,
+        setTab: setActiveTab,
+        isLoading: batchesLoading,
+    } = useUrlTab({
+        param: 'batches',
+        tabs: BATCHES_TABS,
+        defaultTab: 'active',
+        value: batchesTab,
+        clearParams: BATCHES_CLEAR_PARAMS,
+        reloadOnly: BATCHES_RELOAD_ONLY,
+    });
 
     const handleDeleteConfirm = () => {
         setDeleteProcessing(true);
@@ -93,6 +137,110 @@ export default function RawMaterialsShow({
     const handleReactivate = () => {
         router.patch(RawMaterialController.reactivate.url(rawMaterial.id));
     };
+
+    // Columnas iguales en las dos tablas de lotes; cada tabla agrega su Lote y la de existencia, Disponible.
+    const sharedBatchColumns: DetailTableColumn<BatchSummary>[] = [
+        {
+            key: 'supplier',
+            header: 'Proveedor',
+            cell: (batch) => batch.supplier,
+        },
+        {
+            key: 'entry',
+            header: 'Entrada',
+            cell: (batch) => <FormattedDate value={batch.entry_date} />,
+            className: 'whitespace-nowrap',
+        },
+        {
+            key: 'expiry',
+            header: 'Vence',
+            cell: (batch) =>
+                batch.expiry_date ? (
+                    <FormattedDate value={batch.expiry_date} />
+                ) : null,
+            className: 'whitespace-nowrap',
+        },
+        ...(can.viewCosts
+            ? [
+                  {
+                      key: 'price',
+                      header: 'Precio unitario',
+                      cell: (batch: BatchSummary) => (
+                          <FormattedNumber
+                              value={batch.unit_price}
+                              kind="unitCost"
+                          />
+                      ),
+                      align: 'right' as const,
+                  },
+              ]
+            : []),
+        {
+            key: 'initial',
+            header: 'Cantidad inicial',
+            cell: (batch) => (
+                <FormattedNumber
+                    value={batch.initial_quantity}
+                    kind="quantity"
+                />
+            ),
+            align: 'right',
+        },
+    ];
+
+    const activeBatchColumns: DetailTableColumn<ActiveBatch>[] = [
+        {
+            key: 'lot',
+            header: 'Lote',
+            cell: (batch) => {
+                if (!batch.lot_number && !batch.consumes_first) {
+                    return null;
+                }
+
+                return (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono">
+                            {batch.lot_number ?? <EmptyCell />}
+                        </span>
+                        {batch.consumes_first && (
+                            <ToneBadge tone="info">
+                                Se consume primero
+                            </ToneBadge>
+                        )}
+                    </div>
+                );
+            },
+        },
+        ...sharedBatchColumns,
+        {
+            key: 'remaining',
+            header: 'Disponible',
+            cell: (batch) => (
+                <FormattedNumber
+                    value={batch.remaining_quantity}
+                    kind="quantity"
+                    bold
+                    colorize
+                />
+            ),
+            align: 'right',
+        },
+    ];
+
+    const exhaustedBatchColumns: DetailTableColumn<BatchSummary>[] = [
+        {
+            key: 'lot',
+            header: 'Lote',
+            cell: (batch) => batch.lot_number,
+            className: 'font-mono',
+        },
+        ...sharedBatchColumns,
+    ];
+
+    const hasAnyBatch = activeBatchCount > 0 || exhaustedBatchCount > 0;
+    const showBatchesTabs = rawMaterial.tracks_inventory || hasAnyBatch;
+    const loadingExhausted =
+        batchesLoading && activeTab === 'exhausted' && !exhaustedBatches;
 
     return (
         <>
@@ -263,83 +411,80 @@ export default function RawMaterialsShow({
                 <section className="space-y-4">
                     <h2 className="text-lg font-semibold">Lotes asociados</h2>
 
-                    <DetailTable
-                        rows={rawMaterial.inventory_batches}
-                        rowKey={(batch) => batch.id}
-                        caption="Lotes asociados"
-                        columns={[
-                            {
-                                key: 'lot',
-                                header: 'Lote',
-                                cell: (batch) => batch.lot_number,
-                                className: 'font-mono',
-                            },
-                            {
-                                key: 'supplier',
-                                header: 'Proveedor',
-                                cell: (batch) => batch.supplier,
-                            },
-                            {
-                                key: 'entry',
-                                header: 'Entrada',
-                                cell: (batch) => (
-                                    <FormattedDate value={batch.entry_date} />
-                                ),
-                                className: 'whitespace-nowrap',
-                            },
-                            {
-                                key: 'expiry',
-                                header: 'Vence',
-                                cell: (batch) =>
-                                    batch.expiry_date ? (
-                                        <FormattedDate
-                                            value={batch.expiry_date}
+                    {!rawMaterial.tracks_inventory && (
+                        <Alert>
+                            <AlertDescription>
+                                {hasAnyBatch
+                                    ? 'Esta MP ya no controla inventario: estos lotes son de cuando sí lo controlaba.'
+                                    : 'Esta MP no controla inventario: no tiene lotes.'}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {showBatchesTabs && (
+                        <Tabs
+                            value={activeTab}
+                            onValueChange={setActiveTab}
+                            className="space-y-4"
+                        >
+                            <SectionTabsList>
+                                <SectionTabsTrigger value="active">
+                                    Con existencia (
+                                    {formatKind(activeBatchCount, 'units')})
+                                </SectionTabsTrigger>
+                                <SectionTabsTrigger value="exhausted">
+                                    Historial (
+                                    {formatKind(exhaustedBatchCount, 'units')})
+                                </SectionTabsTrigger>
+                            </SectionTabsList>
+
+                            <TabsContent value="active">
+                                <DetailTable
+                                    rows={activeBatches}
+                                    rowKey={(batch) => batch.id}
+                                    caption="Lotes con existencia"
+                                    columns={activeBatchColumns}
+                                    empty="No hay lotes con existencia."
+                                />
+                            </TabsContent>
+
+                            <TabsContent
+                                value="exhausted"
+                                className="space-y-4"
+                            >
+                                {loadingExhausted ? (
+                                    <div
+                                        aria-busy="true"
+                                        className="space-y-2 rounded-lg border border-border p-4"
+                                    >
+                                        <Skeleton className="h-4 w-1/3" />
+                                        <Skeleton className="h-4 w-full" />
+                                        <Skeleton className="h-4 w-5/6" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <DetailTable
+                                            rows={exhaustedBatches?.data ?? []}
+                                            rowKey={(batch) => batch.id}
+                                            caption="Historial de lotes agotados"
+                                            columns={exhaustedBatchColumns}
+                                            empty="No hay lotes agotados."
                                         />
-                                    ) : null,
-                                className: 'whitespace-nowrap',
-                            },
-                            ...(can.viewCosts
-                                ? [
-                                      {
-                                          key: 'price',
-                                          header: 'Precio unitario',
-                                          cell: (batch: InventoryBatch) => (
-                                              <FormattedNumber
-                                                  value={batch.unit_price}
-                                                  kind="unitCost"
-                                              />
-                                          ),
-                                          align: 'right' as const,
-                                      },
-                                  ]
-                                : []),
-                            {
-                                key: 'initial',
-                                header: 'Cantidad inicial',
-                                cell: (batch) => (
-                                    <FormattedNumber
-                                        value={batch.initial_quantity}
-                                        kind="quantity"
-                                    />
-                                ),
-                                align: 'right',
-                            },
-                            {
-                                key: 'remaining',
-                                header: 'Disponible',
-                                cell: (batch) => (
-                                    <FormattedNumber
-                                        value={batch.remaining_quantity}
-                                        kind="quantity"
-                                        bold
-                                        colorize
-                                    />
-                                ),
-                                align: 'right',
-                            },
-                        ]}
-                        empty="No hay lotes registrados para esta materia prima."
-                    />
+
+                                        {exhaustedBatches && (
+                                            <Pagination
+                                                paginator={exhaustedBatches}
+                                                noun={{
+                                                    one: 'lote',
+                                                    other: 'lotes',
+                                                }}
+                                            />
+                                        )}
+                                    </>
+                                )}
+                            </TabsContent>
+                        </Tabs>
+                    )}
                 </section>
             </div>
 
