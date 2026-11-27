@@ -1,42 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 
-import { formatForInput } from '@/lib/formatters';
-
+import { mapPackagingPlanToFormRow } from '@/lib/production-order-form';
 import type {
     ProductionOrderPackagingFormRow,
     ProductionOrderPackagingPlan,
     ProductionOrderSetData,
 } from '@/types/production-orders';
-
-/**
- * Fila del formulario a partir del plan guardado. Lo que el operario ya escribió (`edited`) se conserva; lo demás viene
- * del plan. Una sola fuente para el estado inicial de la página y para la sincronización al agregar o quitar filas.
- */
-export function mapPackagingPlanToFormRow(
-    pack: ProductionOrderPackagingPlan,
-    edited?: ProductionOrderPackagingFormRow,
-): ProductionOrderPackagingFormRow {
-    return {
-        id: pack.id,
-        presentation: pack.product_variant?.presentation_label ?? 'Unidad',
-        presentation_value: pack.product_variant?.presentation_value ?? 1,
-        planned_units: pack.planned_units,
-        actual_units: edited
-            ? edited.actual_units
-            : formatForInput(pack.actual_units ?? pack.planned_units),
-        package_code: pack.package_code ?? null,
-        new_containers_used: edited
-            ? edited.new_containers_used
-            : formatForInput(pack.new_containers_used),
-        label_raw_material_id: edited
-            ? edited.label_raw_material_id
-            : (pack.label_raw_material_id ?? null),
-        saved_label_raw_material_id: pack.label_raw_material_id ?? null,
-        labels_used: edited
-            ? edited.labels_used
-            : formatForInput(pack.labels_used),
-    };
-}
 
 type UsePackagingSyncProps = {
     packagingPlans: ProductionOrderPackagingPlan[];

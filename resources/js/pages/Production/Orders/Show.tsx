@@ -1,19 +1,21 @@
 import { Head, router, useForm } from '@inertiajs/react';
-
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import {
     complete as productionOrderComplete,
-    rejectReview as productionOrderRejectReview,
     startProduction as productionOrderStartProduction,
     submitForReview as productionOrderSubmitForReview,
 } from '@/actions/App/Http/Controllers/ProductionOrderController';
-import type { ProductTableRow } from '@/components/production/ingredients-table';
 import { OpClosingRead } from '@/components/production/op-closing-read';
 import { OpClosingSection } from '@/components/production/op-closing-section';
 import { OpConsumptionRead } from '@/components/production/op-consumption-read';
 import { OpConsumptionSection } from '@/components/production/op-consumption-section';
+import {
+    OpRejectDialog,
+    OpStartDialog,
+    OpSubmitDialog,
+} from '@/components/production/op-dialogs';
 import { OpKeyFigures } from '@/components/production/op-key-figures';
 import { OpPackagingRead } from '@/components/production/op-packaging-read';
 import { OpPackagingSection } from '@/components/production/op-packaging-section';
@@ -24,45 +26,25 @@ import { OrderHeader } from '@/components/production/order-header';
 import { ProductsToUseCard } from '@/components/production/products-to-use-card';
 import { QrLine } from '@/components/production/qr-line';
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-    mapBatchSourceToUsageRow,
-    mapProductLineToUsageRow,
     useBatchUsageSync,
     useProductLineUsageSync,
 } from '@/hooks/use-batch-usage-sync';
-import {
-    mapPackagingPlanToFormRow,
-    usePackagingSync,
-} from '@/hooks/use-packaging-sync';
+import { usePackagingSync } from '@/hooks/use-packaging-sync';
 import { useProductionCostPreview } from '@/hooks/use-production-cost-preview';
-import {
-    formatForInput,
-    formatPercent,
-    formatQualityRange,
-    formatQuantity,
-} from '@/lib/formatters';
+import { useProductionOrderFigures } from '@/hooks/use-production-order-figures';
+import { formatQualityRange } from '@/lib/formatters';
 import { breadcrumbHref } from '@/lib/navigation';
-import { parseDecimal, toDecimalPayload } from '@/lib/numeric-input';
-import { remnantGallonsForDisplay } from '@/lib/remnant-quantity';
+import { parseDecimal } from '@/lib/numeric-input';
+import {
+    initialProductionOrderFormData,
+    normalizeProductionOrderFormData,
+} from '@/lib/production-order-form';
 import {
     index as productionOrdersIndex,
     show as productionOrdersShow,
 } from '@/routes/production-orders';
 import type {
-    PreviewCostData,
     ProductionOrderBatchUsageRow,
-    ProductionOrderDetail,
     ProductionOrderFormData,
     ProductionOrderShowProps,
 } from '@/types/production-orders';
@@ -142,61 +124,7 @@ export default function ProductionOrderShow({
             : 'Esta acción actualizará los inventarios de forma irreversible. Una vez finalizada, no se podrán realizar más ajustes a la orden.';
 
     const { data, setData, post, processing, errors, transform } =
-        useForm<ProductionOrderFormData>({
-            viscosity_ku: order.viscosity_ku ?? '',
-            grinding_hg: order.grinding_hg ?? '',
-            quality_solids: order.quality_solids ?? '',
-            agitation_start_time: order.agitation_start_time ?? '',
-            agitation_end_time: order.agitation_end_time ?? '',
-            packaging_start_time: order.packaging_start_time ?? '',
-            packaging_end_time: order.packaging_end_time ?? '',
-            responsible_name: order.responsible_name ?? '',
-            quality_responsible_user_id:
-                order.quality_responsible_user_id ?? null,
-            spillage_quantity: order.spillage_quantity ?? 0,
-            density_kg_per_gallon: order.density_kg_per_gallon ?? '',
-            // Lo que la planta informó al enviar a revisión: quien aprueba lo ve y lo confirma.
-            remnant_quantity_kg: formatForInput(order.remnant_quantity_kg),
-            remnant_notes: order.remnant_notes ?? '',
-            notes: order.notes ?? '',
-            ingredients: orderDetails.map(mapDetailToIngredientFormRow),
-            packaging: orderPackagingPlans.map((pack) =>
-                mapPackagingPlanToFormRow(pack),
-            ),
-            // Los motivos guardados (si la orden volvió de revisión, se editan); el servidor dice cuáles faltan.
-            overconsumption_reasons: Object.fromEntries(
-                (order.consumption_reasons ?? []).map((reason) => [
-                    String(reason.raw_material_id),
-                    reason.reason,
-                ]),
-            ),
-            product_overconsumption_reasons: Object.fromEntries(
-                (order.product_consumption_reasons ?? []).map((reason) => [
-                    String(reason.product_id),
-                    reason.reason,
-                ]),
-            ),
-            // Por lote de PT usado: lo que la planta registró al enviar a revisión (quien aprueba lo ve y lo corrige).
-            batch_consumptions: batchSources.map((source) =>
-                mapBatchSourceToUsageRow(source),
-            ),
-            // Por producto usado: lo gastado que la planta registró al enviar a revisión.
-            product_lines: productLines.map((line) =>
-                mapProductLineToUsageRow(line),
-            ),
-        });
-
-    const {
-        data: rejectData,
-        setData: setRejectData,
-        post: postReject,
-        processing: rejectProcessing,
-        errors: rejectErrors,
-        reset: resetRejectForm,
-    } = useForm({ reason: '' });
-    // La orden cambió de estado mientras se escribía el motivo (RejectsStaleOrderWrites): el diálogo sigue abierto.
-    const rejectStaleError = (rejectErrors as Partial<Record<string, string>>)
-        .production_order;
+        useForm<ProductionOrderFormData>(initialProductionOrderFormData(order));
 
     const [landingLinkCopied, setLandingLinkCopied] = useState(false);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -275,126 +203,26 @@ export default function ProductionOrderShow({
         ),
     };
 
-    const previewIngredientsById = useMemo(() => {
-        if (!previewCosts) {
-            return new Map<number, PreviewCostData['ingredients'][number]>();
-        }
-
-        return new Map(
-            previewCosts.ingredients.map((ingredient) => [
-                ingredient.id,
-                ingredient,
-            ]),
-        );
-    }, [previewCosts]);
-
-    // Una sola cuenta, la del servidor: la vista previa mientras se digita y, si aún no llega (o la orden está
-    // completada), el resumen que trajo la página. Cancelada: null.
-    const costSummary =
-        isCompleted || isCancelled
-            ? (order.cost_summary ?? null)
-            : (previewCosts?.summary ?? order.cost_summary ?? null);
-
-    // El costo de cada lote con lo que quedó tal como se escribe; completada o cancelada, el de la página.
-    const previewProductCosts = useMemo(
-        () =>
-            isCompleted || isCancelled || !previewCosts
-                ? null
-                : new Map(
-                      (previewCosts.products ?? []).map((product) => [
-                          product.id,
-                          product.cost,
-                      ]),
-                  ),
-        [isCompleted, isCancelled, previewCosts],
-    );
-
-    // El costo de cada producto (renglón de la tabla) con lo que quedó tal como se escribe; si no, el de la página.
-    const previewProductLineCosts = useMemo(
-        () =>
-            isCompleted || isCancelled || !previewCosts
-                ? null
-                : new Map(
-                      (previewCosts.product_lines ?? []).map((line) => [
-                          line.id,
-                          line,
-                      ]),
-                  ),
-        [isCompleted, isCancelled, previewCosts],
-    );
-
-    // Cada producto como un renglón más de la tabla de consumo, en su paso; de dónde sale está en «Productos a usar».
-    const productRows: ProductTableRow[] = productLines.map((line) => {
-        const index = data.product_lines.findIndex((row) => row.id === line.id);
-        const previewLine = previewProductLineCosts?.get(line.id);
-
-        return {
-            line,
-            index,
-            actualKg:
-                isFormReadOnly || index < 0
-                    ? formatForInput(line.actual_kg)
-                    : data.product_lines[index].actual_kg,
-            unitCost: previewLine ? previewLine.unit_cost : line.unit_cost,
-            totalCost: previewLine ? previewLine.cost : line.cost,
-        };
+    const {
+        costSummary,
+        previewProductCosts,
+        productRows,
+        packagingCosts,
+        ingredientRows,
+        packagingRows,
+        packagedEquivalent,
+        remnantGallons,
+        realYield,
+        yieldPercentage,
+    } = useProductionOrderFigures({
+        order,
+        data,
+        previewCosts,
+        isPending,
+        isCompleted,
+        isCancelled,
+        isFormReadOnly,
     });
-
-    const packagingCosts = useMemo(
-        () =>
-            new Map(
-                (costSummary?.packaging ?? []).map((pack) => [pack.id, pack]),
-            ),
-        [costSummary],
-    );
-
-    const ingredientRows = isFormReadOnly
-        ? orderDetails.map(mapDetailToIngredientFormRow)
-        : data.ingredients.map((ingredient) => ({
-              ...ingredient,
-              unit_cost:
-                  previewIngredientsById.get(ingredient.id)?.unit_cost ??
-                  ingredient.unit_cost ??
-                  0,
-              total_cost:
-                  previewIngredientsById.get(ingredient.id)?.total_cost ??
-                  ingredient.total_cost ??
-                  0,
-          }));
-
-    const packagingRows = isFormReadOnly
-        ? orderPackagingPlans.map((pack) => mapPackagingPlanToFormRow(pack))
-        : data.packaging;
-
-    // Solo para mostrar: el rendimiento real que se guarda lo calcula el servidor (lo envasado más el sobrante). Con la
-    // orden cerrada a la edición se muestra el guardado. Lo digitado se lee con parseDecimal, como en el resto de los
-    // formularios: llega como texto y con coma («2,5»). Pendiente, nada se ha producido: las filas traen lo planeado.
-    const packagedEquivalent = isPending
-        ? null
-        : packagingRows.reduce(
-              (sum, pack) =>
-                  sum +
-                  (parseDecimal(pack.actual_units) ?? 0) *
-                      (parseDecimal(pack.presentation_value) ?? 0),
-              0,
-          );
-    const remnantGallons = isFormReadOnly
-        ? (parseDecimal(order.remnant_quantity_gallons) ?? 0)
-        : (remnantGallonsForDisplay(
-              data.remnant_quantity_kg,
-              data.density_kg_per_gallon,
-          ) ?? 0);
-    const realYield =
-        packagedEquivalent === null
-            ? null
-            : isFormReadOnly && order.actual_quantity != null
-              ? (parseDecimal(order.actual_quantity) ?? 0)
-              : packagedEquivalent + remnantGallons;
-    const plannedQuantity = parseDecimal(order.quantity) ?? 0;
-    const yieldPercentage =
-        realYield !== null && plannedQuantity > 0
-            ? (realYield / plannedQuantity) * 100
-            : null;
 
     const showSubmit = can.submitForReview || can.complete;
     const showReject = can.rejectReview && isPendingReview;
@@ -436,35 +264,10 @@ export default function ProductionOrderShow({
             remnant_consumption_ids: (order.remnant_consumptions ?? []).map(
                 (consumption) => consumption.id,
             ),
-            product_lines: formData.product_lines.map((row) => ({
-                id: row.id,
-                actual_kg: toDecimalPayload(row.actual_kg),
-            })),
-            // Lo que quedó solo viaja con «sí»; con «no», nada (el servidor lo toma como que no quedó producto).
-            batch_consumptions: formData.batch_consumptions.map((row) => ({
-                id: row.id,
-                has_leftover: row.has_leftover,
-                leftover_kg: row.has_leftover
-                    ? toDecimalPayload(row.leftover_kg)
-                    : null,
-            })),
         }));
         post(action.url, {
             preserveScroll: true,
         });
-    };
-
-    const confirmReject = () => {
-        postReject(
-            productionOrderRejectReview({ production_order: order.id }).url,
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setIsRejectOpen(false);
-                    resetRejectForm();
-                },
-            },
-        );
     };
 
     const confirmStartProduction = () => {
@@ -702,185 +505,32 @@ export default function ProductionOrderShow({
                     </aside>
                 </form>
 
-                <AlertDialog
+                <OpSubmitDialog
                     open={isConfirmOpen}
                     onOpenChange={setIsConfirmOpen}
-                >
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                {confirmDescription} Rendimiento real:{' '}
-                                {formatQuantity(realYield, {
-                                    maxDecimals: 2,
-                                    trimTrailingZeros: true,
-                                })}{' '}
-                                gal
-                                {yieldPercentage !== null &&
-                                    ` (${formatPercent(yieldPercentage, 1)} de lo proyectado)`}
-                                .
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel disabled={processing}>
-                                Cancelar
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={confirmAction}
-                                disabled={processing}
-                            >
-                                {processing ? processingLabel : 'Confirmar'}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-
-                <AlertDialog
+                    title={confirmTitle}
+                    description={confirmDescription}
+                    realYield={realYield}
+                    yieldPercentage={yieldPercentage}
+                    processing={processing}
+                    processingLabel={processingLabel}
+                    onConfirm={confirmAction}
+                />
+                <OpStartDialog
                     open={isStartConfirmOpen}
                     onOpenChange={setIsStartConfirmOpen}
-                >
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>
-                                ¿Iniciar producción?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                                La orden {order.order_number} pasará a estado En
-                                proceso. Podrás registrar datos de planta y
-                                enviarla a revisión cuando esté lista.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isStartingProduction}>
-                                Cancelar
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={confirmStartProduction}
-                                disabled={isStartingProduction}
-                            >
-                                {isStartingProduction
-                                    ? 'Iniciando...'
-                                    : 'Iniciar producción'}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-
-                <AlertDialog open={isRejectOpen} onOpenChange={setIsRejectOpen}>
-                    <AlertDialogContent>
-                        <form
-                            noValidate
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                confirmReject();
-                            }}
-                        >
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                    ¿Devolver orden a planta?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Indica el motivo del rechazo para que el
-                                    operador pueda corregirlo.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <div className="py-4">
-                                <Label htmlFor="reject-reason">
-                                    Motivo del rechazo
-                                </Label>
-                                <Textarea
-                                    id="reject-reason"
-                                    maxLength={2000}
-                                    className="mt-2"
-                                    placeholder="Describe qué debe corregirse..."
-                                    value={rejectData.reason}
-                                    onChange={(e) =>
-                                        setRejectData('reason', e.target.value)
-                                    }
-                                />
-                                {rejectErrors.reason && (
-                                    <p className="mt-1 text-sm text-destructive">
-                                        {rejectErrors.reason}
-                                    </p>
-                                )}
-                                {rejectStaleError && (
-                                    <p className="mt-1 text-sm text-destructive">
-                                        {rejectStaleError}
-                                    </p>
-                                )}
-                            </div>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel disabled={rejectProcessing}>
-                                    Cancelar
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                    disabled={rejectProcessing}
-                                    onClick={(event) => {
-                                        // Sin esto Radix cierra el diálogo al hacer clic, antes de que responda el
-                                        // servidor, y un error del motivo queda oculto hasta reabrirlo.
-                                        event.preventDefault();
-                                        confirmReject();
-                                    }}
-                                >
-                                    {rejectProcessing
-                                        ? 'Devolviendo...'
-                                        : 'Devolver a planta'}
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </form>
-                    </AlertDialogContent>
-                </AlertDialog>
+                    orderNumber={order.order_number}
+                    starting={isStartingProduction}
+                    onConfirm={confirmStartProduction}
+                />
+                <OpRejectDialog
+                    orderId={order.id}
+                    open={isRejectOpen}
+                    onOpenChange={setIsRejectOpen}
+                />
             </div>
         </>
     );
-}
-
-function mapDetailToIngredientFormRow(detail: ProductionOrderDetail) {
-    return {
-        id: detail.id,
-        raw_material_id: detail.raw_material_id,
-        step_order: detail.step_order ?? null,
-        raw_material_name: detail.raw_material?.code,
-        raw_material_unit: detail.raw_material?.unit_symbol,
-        planned_quantity: detail.planned_quantity,
-        display_quantity: detail.display_quantity ?? null,
-        display_unit: detail.display_unit ?? null,
-        // Lo real en la unidad en que se digita o, si aún no hay, lo planeado. Llegan como texto con 4 decimales.
-        actual_quantity: formatForInput(
-            detail.actual_display_quantity ??
-                detail.display_quantity ??
-                detail.planned_quantity,
-        ),
-        unit_cost: detail.unit_cost ?? 0,
-        total_cost: detail.total_cost ?? 0,
-    };
-}
-
-function normalizeProductionOrderFormData(data: ProductionOrderFormData) {
-    return {
-        ...data,
-        viscosity_ku: toDecimalPayload(data.viscosity_ku),
-        grinding_hg: toDecimalPayload(data.grinding_hg),
-        quality_solids: toDecimalPayload(data.quality_solids),
-        spillage_quantity: toDecimalPayload(data.spillage_quantity),
-        density_kg_per_gallon: toDecimalPayload(data.density_kg_per_gallon),
-        remnant_quantity_kg: toDecimalPayload(data.remnant_quantity_kg),
-        ingredients: data.ingredients.map((ingredient) => ({
-            id: ingredient.id,
-            actual_quantity: toDecimalPayload(ingredient.actual_quantity),
-        })),
-        packaging: data.packaging.map((pack) => ({
-            id: pack.id,
-            actual_units: pack.actual_units,
-            // Vacío = tantos como unidades envasadas (lo resuelve el servidor).
-            new_containers_used:
-                pack.new_containers_used === ''
-                    ? null
-                    : pack.new_containers_used,
-            label_raw_material_id: pack.label_raw_material_id,
-            labels_used: pack.labels_used === '' ? null : pack.labels_used,
-        })),
-    };
 }
 
 // Las migas son la única forma de volver al listado (DESIGN.md §10); el listado conserva sus filtros con `returnTo`.
