@@ -1,240 +1,35 @@
-import { Head, router } from '@inertiajs/react';
-import { useCallback, useEffect, useReducer } from 'react';
+import { Head, Link } from '@inertiajs/react';
 
 import { DataTableFilters } from '@/components/data-table-filters';
-import { DecimalInput } from '@/components/decimal-input';
 import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
+import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
-import { NUMBER_TYPES } from '@/lib/number-types';
-import { parseDecimal, toDecimalPayload } from '@/lib/numeric-input';
-import {
-    index as adminCostsIndex,
-    update as adminCostsUpdate,
-} from '@/routes/admin/costs';
+import { index as adminCostsIndex } from '@/routes/admin/costs';
+import { index as pricesIndex } from '@/routes/prices';
 import type { Paginated } from '@/types/ui';
 
 type ProductRow = {
     id: number;
     name: string;
-    current_cost: number | null;
-    cif_percentage: number | null;
-    current_price: number | null;
-    sales_margin: number | null;
+    current_cost: string | number | null;
+    cif_percentage: string | number | null;
+    current_price: string | number | null;
+    sales_margin: string | number | null;
+    sales_price: number | null;
 };
 
 type Props = {
     products: Paginated<ProductRow>;
     can: {
         update_margin: boolean;
+        view_prices: boolean;
     };
     filters: {
         search?: string;
     };
 };
-
-type MarginState = {
-    margin: string;
-    price: string;
-    lastEdited: 'margin' | 'price' | null;
-};
-
-function calculateSalesPrice(
-    currentPrice: number | null,
-    salesMargin: number | null,
-): number | null {
-    if (currentPrice === null || currentPrice === undefined) {
-        return null;
-    }
-
-    const margin = salesMargin ?? 0;
-    const divisor = 1 - margin / 100;
-
-    if (divisor <= 0) {
-        return null;
-    }
-
-    return parseFloat((currentPrice / divisor).toFixed(2));
-}
-
-function calculateMargin(
-    currentPrice: number,
-    salesPrice: number,
-): number | null {
-    if (salesPrice <= 0) {
-        return null;
-    }
-
-    return parseFloat(((1 - currentPrice / salesPrice) * 100).toFixed(2));
-}
-
-function buildInitialMargins(
-    products: ProductRow[],
-): Record<number, MarginState> {
-    const initial: Record<number, MarginState> = {};
-
-    products.forEach((product) => {
-        const margin = product.sales_margin ?? '';
-        const price =
-            calculateSalesPrice(product.current_price, product.sales_margin) ??
-            '';
-
-        initial[product.id] = {
-            margin: margin === '' ? '' : String(margin),
-            price: price === '' ? '' : String(price),
-            lastEdited: null,
-        };
-    });
-
-    return initial;
-}
-
-type CostsState = {
-    margins: Record<number, MarginState>;
-    errors: Record<number, string | null>;
-    savingIds: Set<number>;
-};
-
-type CostsAction =
-    | { type: 'SYNC_PRODUCTS'; products: ProductRow[] }
-    | {
-          type: 'SET_MARGIN';
-          productId: number;
-          margin: string;
-          price: string;
-      }
-    | {
-          type: 'SET_PRICE';
-          productId: number;
-          margin: string;
-          price: string;
-      }
-    | { type: 'SET_ERROR'; productId: number; error: string | null }
-    | { type: 'START_SAVING'; productId: number }
-    | { type: 'FINISH_SAVING'; productId: number }
-    | { type: 'RESET_EDITED'; productId: number };
-
-function costsReducer(state: CostsState, action: CostsAction): CostsState {
-    switch (action.type) {
-        case 'SYNC_PRODUCTS': {
-            const visibleIds = new Set(action.products.map((p) => p.id));
-            const nextMargins = { ...state.margins };
-
-            action.products.forEach((product) => {
-                if (!nextMargins[product.id]) {
-                    const margin = product.sales_margin ?? '';
-                    const price =
-                        calculateSalesPrice(
-                            product.current_price,
-                            product.sales_margin,
-                        ) ?? '';
-
-                    nextMargins[product.id] = {
-                        margin: margin === '' ? '' : String(margin),
-                        price: price === '' ? '' : String(price),
-                        lastEdited: null,
-                    };
-                }
-            });
-
-            const nextErrors: Record<number, string | null> = {};
-
-            for (const [id, error] of Object.entries(state.errors)) {
-                if (visibleIds.has(Number(id))) {
-                    nextErrors[Number(id)] = error;
-                }
-            }
-
-            const nextSavingIds = new Set(state.savingIds);
-
-            for (const id of state.savingIds) {
-                if (!visibleIds.has(id)) {
-                    nextSavingIds.delete(id);
-                }
-            }
-
-            return {
-                ...state,
-                margins: nextMargins,
-                errors: nextErrors,
-                savingIds: nextSavingIds,
-            };
-        }
-
-        case 'SET_MARGIN':
-            return {
-                ...state,
-                margins: {
-                    ...state.margins,
-                    [action.productId]: {
-                        margin: action.margin,
-                        price: action.price,
-                        lastEdited: 'margin',
-                    },
-                },
-                errors: {
-                    ...state.errors,
-                    [action.productId]: null,
-                },
-            };
-
-        case 'SET_PRICE':
-            return {
-                ...state,
-                margins: {
-                    ...state.margins,
-                    [action.productId]: {
-                        margin: action.margin,
-                        price: action.price,
-                        lastEdited: 'price',
-                    },
-                },
-                errors: {
-                    ...state.errors,
-                    [action.productId]: null,
-                },
-            };
-
-        case 'SET_ERROR':
-            return {
-                ...state,
-                errors: {
-                    ...state.errors,
-                    [action.productId]: action.error,
-                },
-            };
-
-        case 'START_SAVING': {
-            const next = new Set(state.savingIds);
-            next.add(action.productId);
-
-            return { ...state, savingIds: next };
-        }
-
-        case 'FINISH_SAVING': {
-            const next = new Set(state.savingIds);
-            next.delete(action.productId);
-
-            return { ...state, savingIds: next };
-        }
-
-        case 'RESET_EDITED':
-            return {
-                ...state,
-                margins: {
-                    ...state.margins,
-                    [action.productId]: {
-                        ...state.margins[action.productId],
-                        lastEdited: null,
-                    },
-                },
-            };
-
-        default:
-            return state;
-    }
-}
 
 export default function CostsIndex({
     products: productsData,
@@ -252,208 +47,6 @@ export default function CostsIndex({
         },
     });
 
-    const [state, dispatch] = useReducer(
-        costsReducer,
-        productsData.data,
-        (products) => ({
-            margins: buildInitialMargins(products),
-            errors: {} as Record<number, string | null>,
-            savingIds: new Set<number>(),
-        }),
-    );
-
-    const { margins, errors, savingIds } = state;
-
-    // Sync state when productsData changes (e.g. pagination)
-    useEffect(() => {
-        dispatch({ type: 'SYNC_PRODUCTS', products: productsData.data });
-    }, [productsData.data]);
-
-    const syncMargin = useCallback(
-        (productId: number, marginValue: string) => {
-            const product = productsData.data.find((p) => p.id === productId);
-
-            if (!product) {
-                return;
-            }
-
-            const numericValue = parseDecimal(marginValue);
-            const price =
-                numericValue === null
-                    ? ''
-                    : String(
-                          calculateSalesPrice(
-                              product.current_price,
-                              numericValue,
-                          ) ?? '',
-                      );
-
-            dispatch({
-                type: 'SET_MARGIN',
-                productId,
-                margin: marginValue,
-                price,
-            });
-        },
-        [productsData.data],
-    );
-
-    const syncPrice = useCallback(
-        (productId: number, priceValue: string) => {
-            const product = productsData.data.find((p) => p.id === productId);
-
-            if (
-                !product ||
-                !product.current_price ||
-                product.current_price <= 0
-            ) {
-                return;
-            }
-
-            // El texto siempre queda en el campo (vacío, «0,» a medio escribir o con un separador de más): si se
-            // descartara la tecla, no se podría borrar ni escribir un precio menor que 1. Se valida al guardar.
-            const price = parseDecimal(priceValue);
-            const margin =
-                price === null || price <= 0
-                    ? ''
-                    : String(calculateMargin(product.current_price, price));
-
-            dispatch({
-                type: 'SET_PRICE',
-                productId,
-                margin,
-                price: priceValue,
-            });
-        },
-        [productsData.data],
-    );
-
-    const handleSave = useCallback(
-        (productId: number) => {
-            const state = margins[productId];
-
-            if (!state || !state.lastEdited) {
-                return;
-            }
-
-            const product = productsData.data.find((p) => p.id === productId);
-
-            if (!product) {
-                return;
-            }
-
-            let payload: Record<string, string> = {};
-
-            if (state.lastEdited === 'margin') {
-                const numericValue = parseDecimal(state.margin);
-
-                if (numericValue === null) {
-                    dispatch({
-                        type: 'SET_ERROR',
-                        productId,
-                        error: 'El margen debe ser un número válido.',
-                    });
-
-                    return;
-                }
-
-                if (numericValue < 0 || numericValue >= 100) {
-                    dispatch({
-                        type: 'SET_ERROR',
-                        productId,
-                        error: 'El margen debe estar entre 0% y 99.99%.',
-                    });
-
-                    return;
-                }
-
-                payload = { sales_margin: toDecimalPayload(state.margin) };
-            } else {
-                const numericValue = parseDecimal(state.price);
-
-                if (numericValue === null) {
-                    dispatch({
-                        type: 'SET_ERROR',
-                        productId,
-                        error:
-                            state.price === ''
-                                ? 'Escribe el precio de venta.'
-                                : 'El precio debe ser un número válido.',
-                    });
-
-                    return;
-                }
-
-                if (numericValue <= 0) {
-                    dispatch({
-                        type: 'SET_ERROR',
-                        productId,
-                        error: 'El precio de venta debe ser mayor a 0.',
-                    });
-
-                    return;
-                }
-
-                payload = { sales_price: toDecimalPayload(state.price) };
-            }
-
-            // Clear error before attempting save
-            dispatch({ type: 'SET_ERROR', productId, error: null });
-
-            dispatch({ type: 'START_SAVING', productId });
-
-            router.patch(
-                adminCostsUpdate({ product: productId }).url,
-                payload,
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
-                        dispatch({ type: 'FINISH_SAVING', productId });
-                        dispatch({ type: 'RESET_EDITED', productId });
-                    },
-                    onError: (errorBag) => {
-                        dispatch({ type: 'FINISH_SAVING', productId });
-
-                        const serverError =
-                            errorBag?.sales_price ||
-                            errorBag?.sales_margin ||
-                            'Error al guardar. Intente nuevamente.';
-
-                        dispatch({
-                            type: 'SET_ERROR',
-                            productId,
-                            error: Array.isArray(serverError)
-                                ? serverError[0]
-                                : serverError,
-                        });
-                    },
-                },
-            );
-        },
-        [margins, productsData.data],
-    );
-
-    const handleBlur = useCallback(
-        (productId: number) => {
-            handleSave(productId);
-        },
-        [handleSave],
-    );
-
-    const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') {
-                (e.target as HTMLInputElement).blur();
-            }
-        },
-        [],
-    );
-
-    const hasCurrentPrice = (product: ProductRow): boolean => {
-        return product.current_price !== null && product.current_price > 0;
-    };
-
     return (
         <>
             <Head title="Costos" />
@@ -461,7 +54,16 @@ export default function CostsIndex({
             <div className="space-y-4 p-6">
                 <PageHeader
                     title="Costos"
-                    description="Gestión de costos y márgenes de venta por producto."
+                    description="Consulta de costos actuales, CIF, precio interno y margen por producto."
+                    actions={
+                        can.update_margin && can.view_prices ? (
+                            <Button variant="outline" asChild>
+                                <Link href={pricesIndex().url}>
+                                    Editar en la lista de precios
+                                </Link>
+                            </Button>
+                        ) : undefined
+                    }
                 />
 
                 <DataTableFilters
@@ -496,7 +98,7 @@ export default function CostsIndex({
                                         Precio Interno
                                     </th>
                                     <th className="p-4 text-right font-medium">
-                                        Margen Venta % (s/ venta)
+                                        Margen Venta %
                                     </th>
                                     <th className="p-4 text-right font-medium">
                                         Precio Venta
@@ -514,157 +116,54 @@ export default function CostsIndex({
                                         </td>
                                     </tr>
                                 ) : (
-                                    productsData.data.map((product) => {
-                                        const state = margins[product.id] ?? {
-                                            margin: '',
-                                            price: '',
-                                            lastEdited: null,
-                                        };
-
-                                        return (
-                                            <tr
-                                                key={product.id}
-                                                className="border-b border-border/50 transition-colors hover:bg-muted/30"
-                                            >
-                                                <td className="p-4">
-                                                    <div className="font-medium text-foreground">
-                                                        {product.name}
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <FormattedNumber
-                                                        value={
-                                                            product.current_cost
-                                                        }
-                                                        kind="cost"
-                                                    />
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <FormattedNumber
-                                                        value={
-                                                            product.cif_percentage
-                                                        }
-                                                        kind="percent"
-                                                    />
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <FormattedNumber
-                                                        value={
-                                                            product.current_price
-                                                        }
-                                                        kind="cost"
-                                                    />
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    {can.update_margin ? (
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            <div className="flex items-start justify-end gap-2">
-                                                                <DecimalInput
-                                                                    {...NUMBER_TYPES.percentage}
-                                                                    value={
-                                                                        state.margin
-                                                                    }
-                                                                    onValueChange={(
-                                                                        value,
-                                                                    ) =>
-                                                                        syncMargin(
-                                                                            product.id,
-                                                                            value,
-                                                                        )
-                                                                    }
-                                                                    onBlur={() =>
-                                                                        handleBlur(
-                                                                            product.id,
-                                                                        )
-                                                                    }
-                                                                    onKeyDown={
-                                                                        handleKeyDown
-                                                                    }
-                                                                    className="w-20 text-right"
-                                                                />
-                                                                <span className="text-xs leading-9 text-muted-foreground">
-                                                                    %
-                                                                </span>
-                                                                {savingIds.has(
-                                                                    product.id,
-                                                                ) && (
-                                                                    <span className="animate-pulse text-xs leading-9 text-muted-foreground">
-                                                                        Guardando...
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            {errors[
-                                                                product.id
-                                                            ] && (
-                                                                <span className="text-xs text-red-500">
-                                                                    {
-                                                                        errors[
-                                                                            product
-                                                                                .id
-                                                                        ]
-                                                                    }
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <FormattedNumber
-                                                            value={
-                                                                product.sales_margin
-                                                            }
-                                                            kind="percent"
-                                                        />
-                                                    )}
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    {can.update_margin &&
-                                                    hasCurrentPrice(product) ? (
-                                                        <div className="flex items-start justify-end gap-2">
-                                                            <DecimalInput
-                                                                {...NUMBER_TYPES.money}
-                                                                value={
-                                                                    state.price
-                                                                }
-                                                                onValueChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    syncPrice(
-                                                                        product.id,
-                                                                        value,
-                                                                    )
-                                                                }
-                                                                onBlur={() =>
-                                                                    handleBlur(
-                                                                        product.id,
-                                                                    )
-                                                                }
-                                                                onKeyDown={
-                                                                    handleKeyDown
-                                                                }
-                                                                className="w-28 text-right"
-                                                            />
-                                                            {savingIds.has(
-                                                                product.id,
-                                                            ) && (
-                                                                <span className="animate-pulse text-xs leading-9 text-muted-foreground">
-                                                                    Guardando...
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <FormattedNumber
-                                                            value={calculateSalesPrice(
-                                                                product.current_price,
-                                                                product.sales_margin,
-                                                            )}
-                                                            currency
-                                                            maxDecimals={2}
-                                                            bold
-                                                        />
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
+                                    productsData.data.map((product) => (
+                                        <tr
+                                            key={product.id}
+                                            className="border-b border-border/50 transition-colors hover:bg-muted/30"
+                                        >
+                                            <td className="p-4">
+                                                <div className="font-medium text-foreground">
+                                                    {product.name}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <FormattedNumber
+                                                    value={product.current_cost}
+                                                    kind="cost"
+                                                />
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <FormattedNumber
+                                                    value={
+                                                        product.cif_percentage
+                                                    }
+                                                    kind="percent"
+                                                />
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <FormattedNumber
+                                                    value={
+                                                        product.current_price
+                                                    }
+                                                    kind="cost"
+                                                />
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <FormattedNumber
+                                                    value={product.sales_margin}
+                                                    kind="percent"
+                                                />
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <FormattedNumber
+                                                    value={product.sales_price}
+                                                    kind="clientPrice"
+                                                    emptyValue="Sin precio"
+                                                    bold
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
                             </tbody>
                         </table>

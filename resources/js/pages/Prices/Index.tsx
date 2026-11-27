@@ -1,42 +1,21 @@
 import { Head } from '@inertiajs/react';
 import type { ComponentProps } from 'react';
 
-import { DataListing } from '@/components/data-listing';
-import type { DataListingColumn } from '@/components/data-listing';
 import { DataTableFilters } from '@/components/data-table-filters';
-import { FormattedNumber } from '@/components/formatted-number';
 import { PageHeader } from '@/components/page-header';
 import Pagination from '@/components/pagination';
+import { PriceListProductSection } from '@/components/pricing/price-list-product-section';
+import type { PriceListProductRow } from '@/components/pricing/price-list-product-section';
 import { useFilters } from '@/hooks/use-filters';
 import { index as pricesIndex } from '@/routes/prices';
 import type { Paginated } from '@/types/ui';
 
-type VariantRow = {
-    id: number;
-    code: string | null;
-    presentation_label: string;
-    presentation_value: number | null;
-    current_price?: number | null;
-    sales_price: number | null;
-    available_stock: number;
-};
-
-type ProductRow = {
-    id: number;
-    name: string;
-    current_cost?: number | null;
-    cif_percentage?: number | null;
-    current_price?: number | null;
-    sales_margin?: number | null;
-    sales_price: number | null;
-    variants: VariantRow[];
-};
-
 type Props = {
-    products: Paginated<ProductRow>;
+    products: Paginated<PriceListProductRow>;
     can: {
         view_costs: boolean;
         view_prices: boolean;
+        update_margin: boolean;
     };
     filters: {
         search?: string;
@@ -69,68 +48,6 @@ export default function PricesIndex({
         },
     ];
 
-    const variantColumns: DataListingColumn<VariantRow>[] = [
-        {
-            key: 'presentation',
-            header: 'Presentación',
-            cell: (variant) => variant.presentation_label,
-            mobile: 'title',
-        },
-        {
-            key: 'code',
-            header: 'Código',
-            cell: (variant) => variant.code,
-            mobile: 'subtitle',
-            className: 'font-mono text-muted-foreground',
-            cardClassName: 'font-mono',
-        },
-        ...(can.view_costs
-            ? [
-                  {
-                      // Costo con CIF: no es el «Costo» de la línea del producto.
-                      key: 'internal_price',
-                      header: 'Precio interno',
-                      // Sin precio es un dato que falta (aún sin costear), como el de venta.
-                      cell: (variant: VariantRow) => (
-                          <FormattedNumber
-                              value={variant.current_price}
-                              kind="cost"
-                              emptyValue="Sin precio"
-                          />
-                      ),
-                      mobile: 'meta' as const,
-                      align: 'right' as const,
-                      className: 'text-muted-foreground',
-                  },
-              ]
-            : []),
-        {
-            key: 'sales_price',
-            header: 'Precio de venta',
-            // Sin precio es un dato que falta, no un vacío: se dice en vez de omitirlo.
-            cell: (variant) => (
-                <FormattedNumber
-                    value={variant.sales_price}
-                    currency
-                    maxDecimals={2}
-                    emptyValue="Sin precio"
-                />
-            ),
-            mobile: 'primary',
-            align: 'right',
-            className: 'font-medium',
-        },
-        {
-            key: 'stock',
-            header: 'Stock disponible',
-            cell: (variant) => (
-                <FormattedNumber value={variant.available_stock} kind="units" />
-            ),
-            mobile: 'meta',
-            align: 'right',
-        },
-    ];
-
     return (
         <>
             <Head title="Lista de precios" />
@@ -155,46 +72,14 @@ export default function PricesIndex({
                     </div>
                 ) : (
                     productsData.data.map((product) => (
-                        <section key={product.id} className="space-y-3">
-                            <div className="space-y-1">
-                                <h2 className="text-lg font-semibold">
-                                    {product.name}
-                                </h2>
-                                {/* En el celular, Costo y Margen pasan a dos líneas. */}
-                                {can.view_costs && (
-                                    <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
-                                        <span className="whitespace-nowrap">
-                                            Costo:{' '}
-                                            <FormattedNumber
-                                                value={product.current_cost}
-                                                kind="cost"
-                                            />
-                                        </span>
-                                        <span
-                                            aria-hidden="true"
-                                            className="hidden sm:inline"
-                                        >
-                                            ·
-                                        </span>
-                                        <span className="whitespace-nowrap">
-                                            Margen de venta:{' '}
-                                            <FormattedNumber
-                                                value={product.sales_margin}
-                                                kind="percent"
-                                            />{' '}
-                                            (s/ venta)
-                                        </span>
-                                    </p>
-                                )}
-                            </div>
-
-                            <DataListing
-                                rows={product.variants}
-                                rowKey={(variant) => variant.id}
-                                columns={variantColumns}
-                                empty="No hay presentaciones registradas."
-                            />
-                        </section>
+                        <PriceListProductSection
+                            key={product.id}
+                            product={product}
+                            can={{
+                                view_costs: can.view_costs,
+                                update_margin: can.update_margin,
+                            }}
+                        />
                     ))
                 )}
 

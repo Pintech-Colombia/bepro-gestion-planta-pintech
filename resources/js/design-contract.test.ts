@@ -898,9 +898,6 @@ describe('contrato de DESIGN.md', () => {
             // Orden de producción: se rediseña aparte.
             'resources/js/components/production/',
             'resources/js/pages/Production/Orders/',
-            // El precio de venta espera a decidir si manda el precio o el margen: con su tipo se vería redondeado.
-            'resources/js/pages/Costs/Index.tsx',
-            'resources/js/pages/Prices/Index.tsx',
             // Medidas, con los decimales de su columna: no tienen tipo.
             'resources/js/pages/Production/Remnants/Index.tsx',
             'resources/js/components/catalogs/unit-of-measure-form.tsx',
@@ -943,8 +940,6 @@ describe('contrato de DESIGN.md', () => {
     it('formatea los números con lib/formatters: sin toFixed ni Intl.NumberFormat fuera de lib/', () => {
         // Excepciones con su motivo. Al resolver una, se quita.
         const numberFormattingExceptions = [
-            // Calcula el precio de venta con float en el navegador: espera a decidir si manda el precio o el margen.
-            'resources/js/pages/Costs/Index.tsx',
             // Orden de producción: se rediseña aparte.
             'resources/js/pages/Production/Orders/',
             // Se retoma con el rediseño del dashboard.
