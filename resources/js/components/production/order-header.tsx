@@ -29,7 +29,7 @@ export function OrderHeader({
 }: OrderHeaderProps) {
     return (
         <PageHeader
-            title={`Orden ${order.order_number} (Lote ${order.lot_number})`}
+            title={order.order_number}
             badge={
                 <StatusBadge
                     enum="ProductionOrderStatus"
@@ -47,13 +47,23 @@ export function OrderHeader({
                             color={order.color ?? null}
                         />
                     )}
+                    {/* Los datos del plan de la orden solo van aquí (antes se repetían en la columna derecha). */}
                     <span>
-                        • {order.warehouse?.name ?? 'Sin bodega'} •{' '}
+                        · Lote {order.lot_number} ·{' '}
+                        {order.warehouse?.name ?? 'Sin bodega'} ·{' '}
                         <FormattedNumber
                             value={order.quantity}
-                            maxDecimals={2}
+                            kind="quantity"
                         />{' '}
                         gal proyectados
+                        {order.formula?.version != null && (
+                            <>
+                                {' · Fórmula v'}
+                                {order.formula.version}
+                                {order.formula.name &&
+                                    ` (${order.formula.name})`}
+                            </>
+                        )}
                     </span>
                 </span>
             }
@@ -96,7 +106,7 @@ export function OrderHeader({
             )}
             {order.status === 'pending_review' && order.submitted_by && (
                 <p className="mt-2 flex items-center gap-1 text-sm text-info-text">
-                    <Send className="h-4 w-4" />
+                    <Send className="size-4" />
                     Enviada por {order.submitted_by.name}
                     {order.submitted_at && (
                         <>

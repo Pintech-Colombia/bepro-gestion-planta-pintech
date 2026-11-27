@@ -483,9 +483,10 @@ describe('contrato de DESIGN.md', () => {
                 name: 'pide fechas con <PlantDateInput>, no con el selector nativo',
                 pattern: /\btype=["'](?:date|datetime-local)["']/g,
                 rule: 'DESIGN.md §8: las fechas usan <PlantDateInput> (el calendario de la app)',
-                // Fecha con hora (`datetime-local`): `PlantDateInput` solo maneja días. Hasta el rediseño de la OP.
+                // Fecha con hora (`datetime-local`): `PlantDateInput` solo maneja días. Las horas de la OP, plegadas en
+                // «Más datos», hasta tener un campo de fecha y hora común (C1.4, PR C del rediseño de la OP).
                 exceptions: [
-                    'resources/js/components/production/control-card.tsx',
+                    'resources/js/components/production/op-closing-section.tsx',
                 ],
             },
         ];
@@ -543,10 +544,7 @@ describe('contrato de DESIGN.md', () => {
         // `FormField`, `FormCheckbox` y `FormError` (form-field.tsx) ponen la etiqueta, la ayuda y el error, enlazados
         // para el lector de pantalla. Excepciones por archivo, con su motivo; al migrar una, se quita de aquí.
         const fieldExceptions = [
-            // Tarjetas internas de la orden de producción: se rehacen en su rediseño.
-            'resources/js/components/production/control-card.tsx',
-            'resources/js/components/production/packaging-section.tsx',
-            'resources/js/components/production/results-card.tsx',
+            // Orden de producción: el diálogo de devolver a planta; con el PR C de su rediseño.
             'resources/js/pages/Production/Orders/Show.tsx',
             // Formularios dentro del detalle del producto: con el rediseño del producto.
             'resources/js/pages/Products/Show.tsx',
@@ -765,10 +763,7 @@ describe('contrato de DESIGN.md', () => {
 
     it('pinta los avisos con <Alert>, sin recuadros a mano', () => {
         // Excepciones con su motivo (`components/ui/` ya queda fuera en `screenFiles`). Al resolver una, se quita.
-        const handMadeAlertExceptions = [
-            // Orden de producción: sus avisos se quitan al rediseñarla.
-            'resources/js/pages/Production/Orders/',
-        ];
+        const handMadeAlertExceptions: string[] = [];
         // La misma clase es lo que hay entre dos comillas. El lookbehind ignora las variantes (`hover:bg-*`, `dark:*`).
         const tones = 'destructive|warning|success|info|emerald|amber|red';
         const borderTone = new RegExp(

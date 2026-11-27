@@ -594,8 +594,8 @@ la pantalla.
 devuelve una función que abre el diálogo y espera la respuesta (`true` al confirmar, `false` al cancelar o cerrar).
 `destructive` pone el botón en rojo. Si empieza una navegación de Inertia con la pregunta abierta, se da por
 cancelada. `<ConfirmDialog>` sirve cuando el diálogo se controla con estado propio. `confirm()` y los campos
-`type="date"`/`"datetime-local"` los prohíbe `design-contract.test.ts` (única excepción: la fecha con hora del
-certificado de calidad, en `production/control-card.tsx`), que también exige `noValidate` en todo `<form>` y `<Form>`.
+`type="date"`/`"datetime-local"` los prohíbe `design-contract.test.ts` (única excepción: las horas de agitación y
+envasado de la OP, en `production/op-closing-section.tsx`), que también exige `noValidate` en todo `<form>` y `<Form>`.
 
 ```tsx
 const confirm = useConfirm();

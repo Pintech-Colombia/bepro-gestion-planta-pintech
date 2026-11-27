@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import {
@@ -11,7 +11,6 @@ import { FormattedNumber } from '@/components/formatted-number';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/hooks/use-confirm';
 import { toDecimalPayload } from '@/lib/numeric-input';
 import type {
@@ -25,7 +24,10 @@ type LineAdjustmentsPanelProps = {
     rawMaterials: RawMaterialOption[];
     isCompleted: boolean;
     isReadOnly: boolean;
-    showCosts?: boolean;
+    /** El formulario para agregar un ajuste: lo abre el botón del encabezado de la sección de consumo. */
+    showForm?: boolean;
+    /** Al guardar un ajuste, el formulario se cierra. */
+    onFormDone?: () => void;
 };
 
 export function LineAdjustmentsPanel({
@@ -34,31 +36,29 @@ export function LineAdjustmentsPanel({
     rawMaterials,
     isCompleted,
     isReadOnly,
+    showForm = false,
+    onFormDone,
 }: LineAdjustmentsPanelProps) {
     const confirm = useConfirm();
+    const showFormBlock = !isReadOnly && showForm;
+
+    // Sin ajustes ni formulario abierto, la sección no muestra nada (el botón está en su encabezado).
+    if (adjustments.length === 0 && !showFormBlock && !isCompleted) {
+        return null;
+    }
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-1.5">
-                    <Plus className="h-4 w-4 text-orange-500" />
-                    Ajustes de Línea
-                </Label>
-                {!isReadOnly && (
-                    <span className="text-xs text-muted-foreground">
-                        MPs adicionales fuera de fórmula
-                    </span>
-                )}
-            </div>
+        <div className="space-y-3">
+            <p className="text-sm font-medium">Ajustes de línea</p>
 
             {adjustments.length > 0 && (
                 <div className="overflow-hidden rounded-md border">
                     <div className="relative overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="border-b bg-orange-50 dark:bg-orange-950/20">
+                            <thead className="border-b bg-muted/50">
                                 <tr>
                                     <th className="p-3 text-left">
-                                        Materia Prima
+                                        Materia prima
                                     </th>
                                     <th className="p-3 text-right">Cantidad</th>
                                     <th className="p-3 text-left">Motivo</th>
@@ -118,7 +118,7 @@ export function LineAdjustmentsPanel({
                                                         }
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 className="size-4" />
                                                 </Button>
                                             </td>
                                         )}
@@ -130,10 +130,11 @@ export function LineAdjustmentsPanel({
                 </div>
             )}
 
-            {!isReadOnly && (
+            {showFormBlock && (
                 <LineAdjustmentForm
                     orderId={orderId}
                     rawMaterials={rawMaterials}
+                    onAdded={onFormDone}
                 />
             )}
 
@@ -149,9 +150,11 @@ export function LineAdjustmentsPanel({
 function LineAdjustmentForm({
     orderId,
     rawMaterials,
+    onAdded,
 }: {
     orderId: number;
     rawMaterials: RawMaterialOption[];
+    onAdded?: () => void;
 }) {
     const [rawMaterialId, setRawMaterialId] = useState<number | null>(null);
     const [quantity, setQuantity] = useState('');
@@ -201,6 +204,7 @@ function LineAdjustmentForm({
                     setRawMaterialId(null);
                     setQuantity('');
                     setReason('');
+                    onAdded?.();
                 },
                 onError: (errors) => {
                     setFormErrors(errors as Record<string, string>);
@@ -211,9 +215,9 @@ function LineAdjustmentForm({
     };
 
     return (
-        <div className="space-y-3 rounded-md border border-dashed border-orange-300 bg-orange-50/50 p-3 dark:border-orange-800 dark:bg-orange-950/10">
-            <p className="text-xs font-medium text-orange-700 dark:text-orange-400">
-                Agregar ajuste de línea
+        <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
+                Materia prima adicional, fuera de la fórmula.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
@@ -277,12 +281,10 @@ function LineAdjustmentForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30"
                 onClick={handleAdd}
                 disabled={submitting}
             >
-                <Plus className="mr-1 h-4 w-4" />
-                {submitting ? 'Guardando...' : 'Agregar'}
+                {submitting ? 'Guardando...' : 'Guardar ajuste'}
             </Button>
         </div>
     );

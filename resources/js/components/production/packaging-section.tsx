@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 import {
     destroy as destroyPackagingPlan,
@@ -11,7 +11,6 @@ import { IntegerInput } from '@/components/integer-input';
 import { PresentationSelect } from '@/components/presentation-select';
 import { PrintLabelsButton } from '@/components/production/print-labels-button';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -23,6 +22,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { variantPresentationLabel } from '@/lib/variant-label';
 import type {
     LabelMaterialOption,
+    ProductionOrderErrors,
     ProductionOrderFormData,
     ProductionOrderPackagingCost,
     ProductionOrderPackagingFormRow,
@@ -46,7 +46,26 @@ type PackagingSectionProps = {
     costs?: ReadonlyMap<number, ProductionOrderPackagingCost>;
     /** Estampitas de lote: también con la orden en solo lectura (reimprimir una completada). */
     canPrintLabels?: boolean;
+    /** Un error en envases o etiquetas abre su bloque plegado, para que el campo quede a la vista. */
+    errors?: ProductionOrderErrors;
 };
+
+/** Un valor escrito: vacío (o null) significa «tantos como unidades envasadas». */
+function isFilled(value: unknown): boolean {
+    return value !== '' && value !== null && value !== undefined;
+}
+
+/** Una presentación con envases o etiquetas distintos a lo envasado (o con la etiqueta cambiada). */
+function hasMaterialChanges(row: ProductionOrderPackagingFormRow): boolean {
+    return (
+        isFilled(row.new_containers_used) ||
+        isFilled(row.labels_used) ||
+        row.label_raw_material_id !== row.saved_label_raw_material_id
+    );
+}
+
+const MATERIAL_ERROR_KEY =
+    /^packaging\.\d+\.(new_containers_used|label_raw_material_id|labels_used)$/;
 
 export function PackagingSection({
     orderId,
@@ -59,8 +78,18 @@ export function PackagingSection({
     showCosts = true,
     costs,
     canPrintLabels = false,
+    errors = {},
 }: PackagingSectionProps) {
     const confirm = useConfirm();
+    // Envases nuevos y etiquetas casi siempre son lo mismo que lo envasado: van plegados, salvo que alguna fila ya tenga
+    // un valor distinto (o una etiqueta cambiada) o un error.
+    const changedRows = rows.filter(hasMaterialChanges).length;
+    const hasMaterialValues = changedRows > 0;
+    const hasMaterialErrors = Object.keys(errors).some((key) =>
+        MATERIAL_ERROR_KEY.test(key),
+    );
+    const [materialsOpen, setMaterialsOpen] = useState(hasMaterialValues);
+    const showMaterials = materialsOpen || hasMaterialErrors;
     const showActions = !isReadOnly || canPrintLabels;
     const columnCount = (showCosts ? 7 : 4) + (showActions ? 1 : 0);
 
@@ -75,14 +104,6 @@ export function PackagingSection({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <Label>Empaque Final (Unidades)</Label>
-                {!isReadOnly && (
-                    <span className="text-xs text-muted-foreground">
-                        Puedes agregar o eliminar presentaciones
-                    </span>
-                )}
-            </div>
             <div className="overflow-hidden rounded-md border">
                 <div className="relative overflow-x-auto">
                     <table className="w-full text-sm">
@@ -91,9 +112,9 @@ export function PackagingSection({
                                 <th className="p-3 text-left">Presentación</th>
                                 <th className="p-3 text-right">Planeado</th>
                                 <th className="w-32 p-3 text-right">
-                                    Real Producido
+                                    Envasado
                                 </th>
-                                <th className="p-3 text-right">Eq. Gal</th>
+                                <th className="p-3 text-right">Eq. gal</th>
                                 {showCosts && (
                                     <>
                                         <th className="p-3 text-right">
@@ -112,132 +133,121 @@ export function PackagingSection({
                         </thead>
                         <tbody>
                             {rows.map((pack, index) => (
-                                <Fragment key={pack.id}>
-                                    <tr>
-                                        <td className="p-3 font-medium">
-                                            {pack.presentation}
-                                        </td>
-                                        <td className="p-3 text-right text-muted-foreground">
-                                            <FormattedNumber
-                                                value={pack.planned_units}
-                                                maxDecimals={0}
-                                            />
-                                        </td>
-                                        <td className="p-3">
-                                            <IntegerInput
-                                                className="h-8 text-right"
-                                                value={pack.actual_units}
-                                                onValueChange={(value) =>
-                                                    updateRow(index, {
-                                                        actual_units: value,
-                                                    })
-                                                }
-                                                disabled={isReadOnly}
-                                            />
-                                        </td>
-                                        <td className="p-3 text-right text-muted-foreground">
-                                            <FormattedNumber
-                                                value={
-                                                    (Number(
-                                                        pack.actual_units,
-                                                    ) || 0) *
-                                                    (Number(
-                                                        pack.presentation_value,
-                                                    ) || 0)
-                                                }
-                                                maxDecimals={2}
-                                            />
-                                        </td>
-                                        {showCosts && (
-                                            <>
-                                                {/* La misma cuenta que la tarjeta de costos: nada se calcula aquí. */}
-                                                <td className="p-3 text-right text-muted-foreground tabular-nums">
-                                                    <FormattedNumber
-                                                        value={
-                                                            costs?.get(pack.id)
-                                                                ?.unit_cost
-                                                        }
-                                                        kind="cost"
-                                                    />
-                                                </td>
-                                                <td className="p-3 text-right text-muted-foreground tabular-nums">
-                                                    <FormattedNumber
-                                                        value={
-                                                            costs?.get(pack.id)
-                                                                ?.unit_cost_with_cif
-                                                        }
-                                                        kind="cost"
-                                                    />
-                                                </td>
-                                                <td className="p-3 text-right font-medium tabular-nums">
-                                                    <FormattedNumber
-                                                        value={
-                                                            costs?.get(pack.id)
-                                                                ?.total_cost
-                                                        }
-                                                        kind="cost"
-                                                    />
-                                                </td>
-                                            </>
-                                        )}
-                                        {showActions && (
-                                            <td className="p-3">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {canPrintLabels && (
-                                                        <PrintLabelsButton
-                                                            orderId={orderId}
-                                                            planId={pack.id}
-                                                        />
-                                                    )}
-                                                    {!isReadOnly && (
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-7 w-7 text-destructive hover:text-destructive"
-                                                            onClick={async () => {
-                                                                if (
-                                                                    await confirm(
-                                                                        {
-                                                                            title: '¿Eliminar esta presentación del plan de envasado?',
-                                                                            confirmLabel:
-                                                                                'Eliminar',
-                                                                            destructive: true,
-                                                                        },
-                                                                    )
-                                                                ) {
-                                                                    router.delete(
-                                                                        destroyPackagingPlan(
-                                                                            {
-                                                                                production_order:
-                                                                                    orderId,
-                                                                                plan: pack.id,
-                                                                            },
-                                                                        ).url,
-                                                                        {
-                                                                            preserveScroll: true,
-                                                                        },
-                                                                    );
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
+                                <tr
+                                    key={pack.id}
+                                    className="border-b last:border-0"
+                                >
+                                    <td className="p-3 font-medium">
+                                        {pack.presentation}
+                                    </td>
+                                    <td className="p-3 text-right text-muted-foreground">
+                                        <FormattedNumber
+                                            value={pack.planned_units}
+                                            maxDecimals={0}
+                                        />
+                                    </td>
+                                    <td className="p-3">
+                                        <IntegerInput
+                                            className="h-8 text-right"
+                                            value={pack.actual_units}
+                                            onValueChange={(value) =>
+                                                updateRow(index, {
+                                                    actual_units: value,
+                                                })
+                                            }
+                                            disabled={isReadOnly}
+                                        />
+                                    </td>
+                                    <td className="p-3 text-right text-muted-foreground">
+                                        <FormattedNumber
+                                            value={
+                                                (Number(pack.actual_units) ||
+                                                    0) *
+                                                (Number(
+                                                    pack.presentation_value,
+                                                ) || 0)
+                                            }
+                                            maxDecimals={2}
+                                        />
+                                    </td>
+                                    {showCosts && (
+                                        <>
+                                            {/* La misma cuenta que la tarjeta de costos: nada se calcula aquí. */}
+                                            <td className="p-3 text-right text-muted-foreground tabular-nums">
+                                                <FormattedNumber
+                                                    value={
+                                                        costs?.get(pack.id)
+                                                            ?.unit_cost
+                                                    }
+                                                    kind="cost"
+                                                />
                                             </td>
-                                        )}
-                                    </tr>
-                                    <PackagingMaterialsRow
-                                        pack={pack}
-                                        columnCount={columnCount}
-                                        labelMaterials={labelMaterials}
-                                        isReadOnly={isReadOnly}
-                                        onChange={(patch) =>
-                                            updateRow(index, patch)
-                                        }
-                                    />
-                                </Fragment>
+                                            <td className="p-3 text-right text-muted-foreground tabular-nums">
+                                                <FormattedNumber
+                                                    value={
+                                                        costs?.get(pack.id)
+                                                            ?.unit_cost_with_cif
+                                                    }
+                                                    kind="cost"
+                                                />
+                                            </td>
+                                            <td className="p-3 text-right font-medium tabular-nums">
+                                                <FormattedNumber
+                                                    value={
+                                                        costs?.get(pack.id)
+                                                            ?.total_cost
+                                                    }
+                                                    kind="cost"
+                                                />
+                                            </td>
+                                        </>
+                                    )}
+                                    {showActions && (
+                                        <td className="p-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {canPrintLabels && (
+                                                    <PrintLabelsButton
+                                                        orderId={orderId}
+                                                        planId={pack.id}
+                                                    />
+                                                )}
+                                                {!isReadOnly && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        onClick={async () => {
+                                                            if (
+                                                                await confirm({
+                                                                    title: '¿Eliminar esta presentación del plan de envasado?',
+                                                                    confirmLabel:
+                                                                        'Eliminar',
+                                                                    destructive: true,
+                                                                })
+                                                            ) {
+                                                                router.delete(
+                                                                    destroyPackagingPlan(
+                                                                        {
+                                                                            production_order:
+                                                                                orderId,
+                                                                            plan: pack.id,
+                                                                        },
+                                                                    ).url,
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Trash2 className="size-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
                             ))}
                             {rows.length === 0 && (
                                 <tr>
@@ -255,6 +265,41 @@ export function PackagingSection({
                     </table>
                 </div>
             </div>
+
+            {rows.length > 0 && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2"
+                    aria-expanded={showMaterials}
+                    disabled={hasMaterialErrors}
+                    onClick={() => setMaterialsOpen((open) => !open)}
+                >
+                    <ChevronDown
+                        className={
+                            showMaterials
+                                ? 'size-4 rotate-180 transition-transform'
+                                : 'size-4 transition-transform'
+                        }
+                    />
+                    Envases y etiquetas distintos a lo envasado
+                    {changedRows > 0 && (
+                        <span className="text-muted-foreground">
+                            ({changedRows} con cambios)
+                        </span>
+                    )}
+                </Button>
+            )}
+
+            {rows.length > 0 && showMaterials && (
+                <PackagingMaterialsTable
+                    rows={rows}
+                    labelMaterials={labelMaterials}
+                    isReadOnly={isReadOnly}
+                    onChange={updateRow}
+                />
+            )}
 
             {/* Una presentación va una sola vez por orden: sin presentaciones por agregar, no hay formulario. */}
             {!isReadOnly &&
@@ -274,126 +319,179 @@ export function PackagingSection({
 }
 
 /**
- * Envase y etiqueta de una presentación (3.7). Vacío = tantos como unidades envasadas; los envases reutilizados no se
- * descuentan ni cuestan. Sin tope: la merma (envase dañado, etiqueta mal pegada) es costo del lote.
+ * Envase y etiqueta de cada presentación (3.7), en una tabla aparte de lo envasado: una fila por presentación y la
+ * ayuda una sola vez. Vacío = tantos como unidades envasadas (el gris lo muestra); los envases reutilizados no se
+ * descuentan ni cuestan. Sin tope: la merma (envase dañado, etiqueta mal pegada) es costo del lote. El `id` de cada
+ * campo es la llave de su error, para que el foco llegue a él.
  */
-function PackagingMaterialsRow({
-    pack,
-    columnCount,
+function PackagingMaterialsTable({
+    rows,
     labelMaterials,
     isReadOnly,
     onChange,
 }: {
-    pack: ProductionOrderPackagingFormRow;
-    columnCount: number;
+    rows: ProductionOrderPackagingFormRow[];
     labelMaterials: LabelMaterialOption[];
     isReadOnly: boolean;
-    onChange: (patch: Partial<ProductionOrderPackagingFormRow>) => void;
+    onChange: (
+        index: number,
+        patch: Partial<ProductionOrderPackagingFormRow>,
+    ) => void;
 }) {
-    // Una etiqueta inactiva solo se ofrece al plan que la tiene guardada, aunque el operario elija otra y quiera volver.
-    const labelOptions = labelMaterials.filter(
-        (label) =>
-            label.is_active ||
-            label.id === pack.saved_label_raw_material_id ||
-            label.id === pack.label_raw_material_id,
-    );
-    const unitsPlaceholder = `= ${pack.actual_units || 0} (unidades)`;
-
     return (
-        <tr className="border-b last:border-0">
-            <td colSpan={columnCount} className="px-3 pt-0 pb-3">
-                <div className="grid gap-3 rounded-md bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-1">
-                        <span className="text-muted-foreground">Envase</span>
-                        <p className="font-mono text-sm">
-                            {pack.package_code ?? 'Sin envase'}
-                        </p>
-                    </div>
-                    <div className="space-y-1">
-                        <Label htmlFor={`new-containers-${pack.id}`}>
-                            Envases nuevos usados
-                        </Label>
-                        <IntegerInput
-                            id={`new-containers-${pack.id}`}
-                            className="h-8 text-right"
-                            value={pack.new_containers_used}
-                            placeholder={unitsPlaceholder}
-                            onValueChange={(value) =>
-                                onChange({ new_containers_used: value })
-                            }
-                            disabled={isReadOnly || !pack.package_code}
-                        />
-                        <p className="text-muted-foreground">
-                            Los reutilizados no se descuentan ni cuestan.
-                        </p>
-                    </div>
-                    <div className="space-y-1">
-                        <Label htmlFor={`label-${pack.id}`}>Etiqueta</Label>
-                        <Select
-                            value={
-                                pack.label_raw_material_id != null
-                                    ? String(pack.label_raw_material_id)
-                                    : NO_LABEL
-                            }
-                            onValueChange={(value) =>
-                                // Sin etiqueta tampoco hay etiquetas usadas: el campo se deshabilita y se vacía.
-                                onChange(
-                                    value === NO_LABEL
-                                        ? {
-                                              label_raw_material_id: null,
-                                              labels_used: '',
-                                          }
-                                        : {
-                                              label_raw_material_id:
-                                                  Number(value),
-                                          },
-                                )
-                            }
-                            disabled={isReadOnly}
-                        >
-                            <SelectTrigger
-                                id={`label-${pack.id}`}
-                                className="h-8"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={NO_LABEL}>
-                                    Sin etiqueta
-                                </SelectItem>
-                                {labelOptions.map((label) => (
-                                    <SelectItem
-                                        key={label.id}
-                                        value={String(label.id)}
+        <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+                Vacío = igual a lo envasado. Los envases reutilizados no se
+                descuentan ni cuestan.
+            </p>
+            <div className="overflow-hidden rounded-md border">
+                <div className="relative overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="border-b bg-muted/50">
+                            <tr>
+                                <th className="p-3 text-left">Presentación</th>
+                                <th className="p-3 text-left">Envase</th>
+                                <th className="w-36 p-3 text-right">
+                                    Envases nuevos
+                                </th>
+                                <th className="w-48 p-3 text-left">Etiqueta</th>
+                                <th className="w-36 p-3 text-right">
+                                    Etiquetas usadas
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((pack, index) => {
+                                // Una etiqueta inactiva solo se ofrece al plan que la tiene guardada, aunque el operario
+                                // elija otra y quiera volver.
+                                const labelOptions = labelMaterials.filter(
+                                    (label) =>
+                                        label.is_active ||
+                                        label.id ===
+                                            pack.saved_label_raw_material_id ||
+                                        label.id === pack.label_raw_material_id,
+                                );
+                                const unitsPlaceholder = `= ${pack.actual_units || 0}`;
+
+                                return (
+                                    <tr
+                                        key={pack.id}
+                                        className="border-b last:border-0"
                                     >
-                                        {label.is_active
-                                            ? label.code
-                                            : `${label.code} (inactiva)`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-1">
-                        <Label htmlFor={`labels-used-${pack.id}`}>
-                            Etiquetas usadas
-                        </Label>
-                        <IntegerInput
-                            id={`labels-used-${pack.id}`}
-                            className="h-8 text-right"
-                            value={pack.labels_used}
-                            placeholder={unitsPlaceholder}
-                            onValueChange={(value) =>
-                                onChange({ labels_used: value })
-                            }
-                            disabled={
-                                isReadOnly || pack.label_raw_material_id == null
-                            }
-                        />
-                    </div>
+                                        <td className="p-3 font-medium">
+                                            {pack.presentation}
+                                        </td>
+                                        <td className="p-3 font-mono text-muted-foreground">
+                                            {pack.package_code ?? 'Sin envase'}
+                                        </td>
+                                        <td className="p-3">
+                                            <IntegerInput
+                                                id={`packaging.${index}.new_containers_used`}
+                                                aria-label={`Envases nuevos de ${pack.presentation}`}
+                                                className="h-8 text-right"
+                                                value={pack.new_containers_used}
+                                                placeholder={unitsPlaceholder}
+                                                onValueChange={(value) =>
+                                                    onChange(index, {
+                                                        new_containers_used:
+                                                            value,
+                                                    })
+                                                }
+                                                disabled={
+                                                    isReadOnly ||
+                                                    !pack.package_code
+                                                }
+                                            />
+                                        </td>
+                                        <td className="p-3">
+                                            <Select
+                                                value={
+                                                    pack.label_raw_material_id !=
+                                                    null
+                                                        ? String(
+                                                              pack.label_raw_material_id,
+                                                          )
+                                                        : NO_LABEL
+                                                }
+                                                onValueChange={(value) =>
+                                                    // Sin etiqueta tampoco hay etiquetas usadas: el campo se
+                                                    // deshabilita y se vacía.
+                                                    onChange(
+                                                        index,
+                                                        value === NO_LABEL
+                                                            ? {
+                                                                  label_raw_material_id:
+                                                                      null,
+                                                                  labels_used:
+                                                                      '',
+                                                              }
+                                                            : {
+                                                                  label_raw_material_id:
+                                                                      Number(
+                                                                          value,
+                                                                      ),
+                                                              },
+                                                    )
+                                                }
+                                                disabled={isReadOnly}
+                                            >
+                                                <SelectTrigger
+                                                    id={`packaging.${index}.label_raw_material_id`}
+                                                    aria-label={`Etiqueta de ${pack.presentation}`}
+                                                    className="h-8"
+                                                >
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem
+                                                        value={NO_LABEL}
+                                                    >
+                                                        Sin etiqueta
+                                                    </SelectItem>
+                                                    {labelOptions.map(
+                                                        (label) => (
+                                                            <SelectItem
+                                                                key={label.id}
+                                                                value={String(
+                                                                    label.id,
+                                                                )}
+                                                            >
+                                                                {label.is_active
+                                                                    ? label.code
+                                                                    : `${label.code} (inactiva)`}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        </td>
+                                        <td className="p-3">
+                                            <IntegerInput
+                                                id={`packaging.${index}.labels_used`}
+                                                aria-label={`Etiquetas usadas de ${pack.presentation}`}
+                                                className="h-8 text-right"
+                                                value={pack.labels_used}
+                                                placeholder={unitsPlaceholder}
+                                                onValueChange={(value) =>
+                                                    onChange(index, {
+                                                        labels_used: value,
+                                                    })
+                                                }
+                                                disabled={
+                                                    isReadOnly ||
+                                                    pack.label_raw_material_id ==
+                                                        null
+                                                }
+                                            />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
-            </td>
-        </tr>
+            </div>
+        </div>
     );
 }
 
@@ -455,8 +553,8 @@ function PackagingPlanForm({
     };
 
     return (
-        <div className="space-y-3 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-950/10">
-            <p className="text-xs font-medium text-blue-700 dark:text-blue-400">
+        <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
                 Agregar presentación al plan de envasado
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -496,12 +594,10 @@ function PackagingPlanForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                 onClick={handleAdd}
                 disabled={submitting}
             >
-                <Plus className="mr-1 h-4 w-4" />
-                {submitting ? 'Guardando...' : 'Agregar Presentación'}
+                {submitting ? 'Guardando...' : 'Agregar presentación'}
             </Button>
         </div>
     );
