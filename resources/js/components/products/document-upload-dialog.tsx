@@ -90,7 +90,15 @@ export function DocumentUploadDialog({
                     className="space-y-4"
                 >
                     <div className="space-y-2">
-                        <Label htmlFor="document_type">Tipo de documento</Label>
+                        <Label htmlFor="document_type">
+                            Tipo de documento
+                            <span
+                                className="ml-0.5 text-destructive"
+                                aria-hidden="true"
+                            >
+                                *
+                            </span>
+                        </Label>
                         <Select
                             value={documentForm.data.document_type}
                             onValueChange={(value) =>
@@ -100,7 +108,13 @@ export function DocumentUploadDialog({
                                 )
                             }
                         >
-                            <SelectTrigger id="document_type">
+                            <SelectTrigger
+                                id="document_type"
+                                aria-required
+                                aria-invalid={
+                                    !!documentForm.errors.document_type
+                                }
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -121,11 +135,21 @@ export function DocumentUploadDialog({
                         )}
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="document">Archivo PDF</Label>
+                        <Label htmlFor="document">
+                            Archivo PDF
+                            <span
+                                className="ml-0.5 text-destructive"
+                                aria-hidden="true"
+                            >
+                                *
+                            </span>
+                        </Label>
                         <Input
                             id="document"
                             type="file"
                             accept="application/pdf,.pdf"
+                            aria-required
+                            aria-invalid={!!documentForm.errors.document}
                             className="cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary"
                             onChange={(event) =>
                                 documentForm.setData(

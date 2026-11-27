@@ -196,6 +196,12 @@ export function VariantFormDialog({
                         <div className="space-y-2">
                             <Label htmlFor="presentation_label">
                                 Presentación
+                                <span
+                                    className="ml-0.5 text-destructive"
+                                    aria-hidden="true"
+                                >
+                                    *
+                                </span>
                             </Label>
                             <Input
                                 id="presentation_label"
@@ -216,7 +222,15 @@ export function VariantFormDialog({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="code">Código</Label>
+                            <Label htmlFor="code">
+                                Código
+                                <span
+                                    className="ml-0.5 text-destructive"
+                                    aria-hidden="true"
+                                >
+                                    *
+                                </span>
+                            </Label>
                             <Input
                                 id="code"
                                 value={form.data.code}
@@ -224,6 +238,8 @@ export function VariantFormDialog({
                                     form.setData('code', e.target.value)
                                 }
                                 maxLength={80}
+                                aria-required
+                                aria-invalid={!!form.errors.code}
                                 className="uppercase placeholder:normal-case"
                                 placeholder="Ej: 77709808"
                             />
@@ -236,6 +252,12 @@ export function VariantFormDialog({
                         <div className="space-y-2">
                             <Label htmlFor="unit_of_measure_id">
                                 Unidad de Medida
+                                <span
+                                    className="ml-0.5 text-destructive"
+                                    aria-hidden="true"
+                                >
+                                    *
+                                </span>
                             </Label>
                             <Select
                                 value={form.data.unit_of_measure_id}
@@ -243,7 +265,13 @@ export function VariantFormDialog({
                                     form.setData('unit_of_measure_id', v)
                                 }
                             >
-                                <SelectTrigger id="unit_of_measure_id">
+                                <SelectTrigger
+                                    id="unit_of_measure_id"
+                                    aria-required
+                                    aria-invalid={
+                                        !!form.errors.unit_of_measure_id
+                                    }
+                                >
                                     <SelectValue placeholder="Selecciona..." />
                                 </SelectTrigger>
                                 <SelectContent>
