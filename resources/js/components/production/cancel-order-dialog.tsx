@@ -60,7 +60,7 @@ export function CancelOrderDialog({
                 className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={openDialog}
             >
-                <Ban className="h-4 w-4" />
+                <Ban className="size-4" />
                 Cancelar orden
             </Button>
 

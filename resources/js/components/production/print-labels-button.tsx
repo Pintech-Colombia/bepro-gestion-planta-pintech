@@ -25,7 +25,7 @@ export function PrintLabelsButton({ orderId, planId }: PrintLabelsButtonProps) {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-7 w-7"
+                    className="size-7"
                     onClick={() =>
                         window.open(
                             printLabels.url({
@@ -37,7 +37,7 @@ export function PrintLabelsButton({ orderId, planId }: PrintLabelsButtonProps) {
                         )
                     }
                 >
-                    <Printer className="h-4 w-4" />
+                    <Printer className="size-4" />
                     <span className="sr-only">Imprimir estampita</span>
                 </Button>
             </TooltipTrigger>
