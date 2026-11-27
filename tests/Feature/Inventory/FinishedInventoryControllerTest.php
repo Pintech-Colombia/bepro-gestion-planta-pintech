@@ -98,13 +98,14 @@ it('forbids unauthenticated access to finished inventory', function (): void {
         ->assertRedirect(route('login'));
 });
 
-it('includes finished inventory on product show', function (): void {
+it('no longer sends finished inventory rows on product show, only the permission to open the module', function (): void {
+    // El stock vive en Inventario de PT; la ficha solo enlaza al módulo filtrado por el producto.
     $this->actingAs($this->comercial)
         ->get(route('products.show', $this->product))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('finishedInventory', 1)
-            ->where('finishedInventory.0.quantity', 120)
+            ->missing('finishedInventory')
+            ->where('can.viewFinishedInventory', true)
         );
 });
 

@@ -544,8 +544,10 @@ describe('contrato de DESIGN.md', () => {
         // `FormField`, `FormCheckbox` y `FormError` (form-field.tsx) ponen la etiqueta, la ayuda y el error, enlazados
         // para el lector de pantalla. Excepciones por archivo, con su motivo; al migrar una, se quita de aquí.
         const fieldExceptions = [
-            // Formularios dentro del detalle del producto: con el rediseño del producto.
-            'resources/js/pages/Products/Show.tsx',
+            // Formularios del detalle del producto (diálogos de presentación y de documento): con el rediseño de sus
+            // formularios.
+            'resources/js/components/products/document-upload-dialog.tsx',
+            'resources/js/components/products/variant-form-dialog.tsx',
             // Revisión de la solicitud de I+D: con su módulo.
             'resources/js/pages/PaintDevelopmentRequests/Show.tsx',
         ];

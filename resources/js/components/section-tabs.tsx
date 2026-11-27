@@ -18,11 +18,13 @@ export function SectionTabsList({
     ...props
 }: ComponentProps<typeof TabsPrimitive.List>) {
     return (
-        <TabsPrimitive.List
-            data-slot="tabs-list"
-            className={cn(tabBarClasses, 'flex items-center gap-1', className)}
-            {...props}
-        />
+        <div className={cn(tabBarClasses, className)}>
+            <TabsPrimitive.List
+                data-slot="tabs-list"
+                className="relative -mb-px flex [scrollbar-width:none] items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                {...props}
+            />
+        </div>
     );
 }
 
@@ -44,7 +46,7 @@ export function SectionTabsTrigger({
             className={cn(
                 tabItemClasses,
                 tabItemInactiveClasses,
-                '-mb-px cursor-pointer disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground data-[state=active]:after:bg-foreground [&[data-pointer-focus]:focus-visible]:ring-0',
+                'cursor-pointer disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground data-[state=active]:after:bg-foreground [&[data-pointer-focus]:focus-visible]:ring-0',
                 className,
             )}
             onPointerDown={(event) => {

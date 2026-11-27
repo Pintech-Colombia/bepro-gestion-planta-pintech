@@ -1,125 +1,56 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import {
-    BadgeDollarSign,
-    ExternalLink,
-    FileStack,
-    FileText,
-    Pencil,
-    Trash2,
-    Upload,
-} from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
 
 import { destroy as destroyProduct } from '@/actions/App/Http/Controllers/ProductController';
-import {
-    destroy as destroyProductDocument,
-    download as downloadProductDocument,
-    store as storeProductDocument,
-} from '@/actions/App/Http/Controllers/ProductDocumentController';
-import {
-    destroy,
-    store,
-    update,
-} from '@/actions/App/Http/Controllers/ProductVariantController';
 import { ActiveBadge } from '@/components/active-badge';
-import { DecimalInput } from '@/components/decimal-input';
 import { DetailItem, DetailList } from '@/components/detail-list';
-import { DetailTable } from '@/components/detail-table';
-import { FormattedDate } from '@/components/formatted-date';
 import { FormattedNumber } from '@/components/formatted-number';
-import InputError from '@/components/input-error';
 import { PageHeader } from '@/components/page-header';
-import { Badge } from '@/components/ui/badge';
+import type { ProductDocumentTypeOption } from '@/components/products/document-upload-dialog';
+import { ProductFormulasTab } from '@/components/products/product-formulas-tab';
+import type { ProductFormulaItem } from '@/components/products/product-formulas-tab';
+import { ProductPresentationsTab } from '@/components/products/product-presentations-tab';
+import { ProductQualityTab } from '@/components/products/product-quality-tab';
+import type {
+    CertificateRange,
+    ProductDocumentItem,
+} from '@/components/products/product-quality-tab';
+import type {
+    ProductVariantItem,
+    VariantLabelOption,
+    VariantPackageOption,
+    VariantUnitOption,
+} from '@/components/products/variant-form-dialog';
+import { SectionTabsList, SectionTabsTrigger } from '@/components/section-tabs';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useConfirm } from '@/hooks/use-confirm';
-import { formatNumber, formatQualityRange } from '@/lib/formatters';
-import { breadcrumbHref, withReturnTo } from '@/lib/navigation';
-import { PRESENTATION_VALUE_LIMITS } from '@/lib/number-types';
-import { toDecimalPayload } from '@/lib/numeric-input';
+import { useUrlTab } from '@/hooks/use-url-tab';
+import { formatKind, formatNumber, formatQualityRange } from '@/lib/formatters';
+import { breadcrumbHref } from '@/lib/navigation';
 import { index as finishedInventoryIndex } from '@/routes/finished-inventory';
-import {
-    create as formulasCreate,
-    show as formulasShow,
-} from '@/routes/formulas';
 import {
     edit as productsEdit,
     index as productsIndex,
     show as productsShow,
 } from '@/routes/products';
 
-type FinishedInventoryRow = {
-    id: number;
-    quantity: number;
-    warehouse: {
-        id: number;
-        name: string;
-        city: string;
-        type: string;
-    } | null;
-    variant: {
-        id: number;
-        code: string | null;
-        presentation_label: string;
-        presentation_value: number | null;
-        unit_symbol: string | null;
-    } | null;
-};
+const SECTION_TABS = ['presentations', 'formulas', 'quality'] as const;
+const SECTION_RELOAD_ONLY = ['section'];
 
-type FormulaItem = {
-    id: number;
-    version: number;
-    name: string | null;
-    is_active: boolean;
-    is_price_reference: boolean;
-    notes: string | null;
-    created_at: string;
-    created_by?: { name: string } | null;
-};
-
-type VariantItem = NonNullable<Props['product']['variants']>[number];
+type Section = (typeof SECTION_TABS)[number];
 
 type Props = {
     returnTo?: string | null;
-    finishedInventory: FinishedInventoryRow[];
+    section: Section;
+    hasPriceReferenceFormula: boolean;
     product: {
         id: number;
         name: string;
         is_active: boolean;
         category?: { name: string } | null;
         unit_of_measure?: { name: string; symbol: string } | null;
-        current_cost?: string | null;
         current_price?: string | null;
-        cif_percentage?: string | null;
         reference_density_kg_per_gallon: string | null;
         description?: string | null;
         quality_viscosity_lower?: number | string | null;
@@ -128,62 +59,31 @@ type Props = {
         quality_fineness_upper?: number | string | null;
         quality_solids_lower?: number | string | null;
         quality_solids_upper?: number | string | null;
-        variants?: Array<{
-            id: number;
-            code: string;
-            unit_of_measure_id: number;
-            presentation_value: number | null;
-            presentation_label: string;
-            current_cost?: number | null;
-            current_price?: string | null;
-            package_raw_material_id: number | null;
-            label_raw_material_id: number | null;
-            is_active: boolean;
-            unit_of_measure?: { name: string; symbol: string } | null;
-        }>;
-        formulas?: FormulaItem[];
-        product_documents?: Array<{
-            id: number;
-            document_type: 'technical_data_sheet' | 'safety_data_sheet';
-            file_name: string;
-            file_size: number;
-            version: number;
-            created_at: string;
-        }>;
+        variants?: ProductVariantItem[];
+        formulas?: ProductFormulaItem[];
+        product_documents?: ProductDocumentItem[];
     };
     can: {
         update: boolean;
         delete: boolean;
         manageVariants: boolean;
         manageDocuments: boolean;
+        downloadDocuments: boolean;
         viewCosts: boolean;
         viewFormulas: boolean;
+        createFormulas: boolean;
+        viewFinishedInventory: boolean;
     };
-    documentTypes: Array<{
-        value: 'technical_data_sheet' | 'safety_data_sheet';
-        label: string;
-    }>;
-    units: Array<{
-        id: number;
-        name: string;
-        symbol: string;
-        is_active: boolean;
-    }>;
-    rawMaterials?: Array<{
-        id: number;
-        code: string;
-        is_active: boolean;
-        category?: { id: number; name: string };
-    }>;
-    labelMaterials?: Array<{ id: number; code: string; is_active: boolean }>;
+    documentTypes: ProductDocumentTypeOption[];
+    units: VariantUnitOption[];
+    rawMaterials?: VariantPackageOption[];
+    labelMaterials?: VariantLabelOption[];
 };
-
-/** Valor del selector para «sin etiqueta»: un SelectItem no admite valor vacío. */
-const NO_LABEL = 'none';
 
 export default function ProductsShow({
     returnTo,
-    finishedInventory,
+    section,
+    hasPriceReferenceFormula,
     product,
     can,
     documentTypes,
@@ -192,18 +92,17 @@ export default function ProductsShow({
     labelMaterials,
 }: Props) {
     const confirm = useConfirm();
-    const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(
-        null,
-    );
-    const [editingVariantId, setEditingVariantId] = useState<number | null>(
-        null,
-    );
-    const editingVariant = product.variants?.find(
-        (v) => v.id === editingVariantId,
-    );
-    const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
 
-    const certificateRanges = [
+    // Los datos de las tres pestañas llegan en la carga: al cambiar solo se pide la pestaña validada por el servidor.
+    const { tab: activeSection, setTab: setActiveSection } = useUrlTab({
+        param: 'section',
+        tabs: SECTION_TABS,
+        defaultTab: 'presentations',
+        value: section,
+        reloadOnly: SECTION_RELOAD_ONLY,
+    });
+
+    const certificateRanges: CertificateRange[] = [
         {
             label: 'Viscosidad (KU)',
             range: formatQualityRange(
@@ -225,21 +124,7 @@ export default function ProductsShow({
                 product.quality_solids_upper,
             ),
         },
-    ].filter(({ range }) => range !== null);
-
-    const form = useForm({
-        code: '',
-        unit_of_measure_id: '',
-        presentation_value: '',
-        presentation_label: '',
-        package_raw_material_id: '',
-        label_raw_material_id: '',
-        is_active: true,
-    });
-    const documentForm = useForm({
-        document_type: documentTypes[0]?.value ?? 'technical_data_sheet',
-        document: null as File | null,
-    });
+    ].filter((item): item is CertificateRange => item.range !== null);
 
     const handleDelete = async () => {
         if (
@@ -255,141 +140,33 @@ export default function ProductsShow({
         router.delete(destroyProduct({ product: product.id }).url);
     };
 
-    const handleDeleteVariant = async (
-        variant: NonNullable<Props['product']['variants']>[number],
-    ) => {
-        if (
-            !(await confirm({
-                title: `¿Eliminar la presentación «${variant.presentation_label}»?`,
-                confirmLabel: 'Eliminar',
-                destructive: true,
-            }))
-        ) {
-            return;
-        }
-
-        router.delete(
-            destroy({ product: product.id, variant: variant.id }).url,
-            { preserveScroll: true },
-        );
-    };
-
-    // Un envase inactivo solo se ofrece a la presentación que ya lo usa.
-    const keptPackageId =
-        dialogMode === 'edit'
-            ? product.variants?.find((v) => v.id === editingVariantId)
-                  ?.package_raw_material_id
-            : null;
-    const packageOptions = (rawMaterials ?? []).filter(
-        (rm) => rm.is_active || rm.id === keptPackageId,
-    );
-
-    // Igual con la etiqueta habitual.
-    const keptLabelId =
-        dialogMode === 'edit'
-            ? product.variants?.find((v) => v.id === editingVariantId)
-                  ?.label_raw_material_id
-            : null;
-    const labelOptions = (labelMaterials ?? []).filter(
-        (rm) => rm.is_active || rm.id === keptLabelId,
-    );
-
-    // Igual con la unidad: una inactiva solo se ofrece a la presentación que ya la usa.
-    const keptUnitId =
-        dialogMode === 'edit'
-            ? product.variants?.find((v) => v.id === editingVariantId)
-                  ?.unit_of_measure_id
-            : null;
-    const unitOptions = units.filter((u) => u.is_active || u.id === keptUnitId);
-
-    const openCreate = () => {
-        form.reset();
-        setEditingVariantId(null);
-        setDialogMode('create');
-    };
-
-    const openEdit = (
-        variant: NonNullable<Props['product']['variants']>[number],
-    ) => {
-        form.setData({
-            code: variant.code,
-            unit_of_measure_id: String(variant.unit_of_measure_id),
-            presentation_value:
-                variant.presentation_value != null
-                    ? String(variant.presentation_value)
-                    : '',
-            presentation_label: variant.presentation_label,
-            package_raw_material_id:
-                variant.package_raw_material_id != null
-                    ? String(variant.package_raw_material_id)
-                    : '',
-            label_raw_material_id:
-                variant.label_raw_material_id != null
-                    ? String(variant.label_raw_material_id)
-                    : '',
-            is_active: variant.is_active,
-        });
-        setEditingVariantId(variant.id);
-        setDialogMode('edit');
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        form.transform((data) => ({
-            ...data,
-            presentation_value: toDecimalPayload(data.presentation_value),
-        }));
-
-        if (dialogMode === 'edit' && editingVariantId != null) {
-            form.patch(
-                update({ product: product.id, variant: editingVariantId }).url,
-                {
-                    onSuccess: () => {
-                        setDialogMode(null);
-                        setEditingVariantId(null);
-                        form.reset();
-                    },
-                },
-            );
-        } else {
-            form.post(store({ product: product.id }).url, {
-                onSuccess: () => {
-                    setDialogMode(null);
-                    form.reset();
-                },
-            });
-        }
-    };
-
-    const handleDocumentSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        documentForm.post(storeProductDocument({ product: product.id }).url, {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                setIsDocumentDialogOpen(false);
-                documentForm.reset();
-            },
-        });
-    };
-
-    // La fórmula con que se costea el producto (puede haber otras activas para producir).
-    const priceReferenceFormula = product.formulas?.find(
-        (f) => f.is_price_reference,
-    );
-    const documents = product.product_documents ?? [];
+    const variants = product.variants ?? [];
+    const formulas = product.formulas ?? [];
 
     return (
         <>
-            <Head title={`Producto ${product.name}`} />
+            <Head title={product.name} />
             <div className="space-y-6 p-6">
                 <PageHeader
                     title={product.name}
                     badge={<ActiveBadge isActive={product.is_active} />}
                     actions={
                         <>
+                            {can.viewFinishedInventory && (
+                                <Button variant="outline" asChild>
+                                    <Link
+                                        href={
+                                            finishedInventoryIndex({
+                                                query: {
+                                                    product_id: product.id,
+                                                },
+                                            }).url
+                                        }
+                                    >
+                                        Ver inventario
+                                    </Link>
+                                </Button>
+                            )}
                             {can.update && (
                                 <Button variant="outline" asChild>
                                     <Link
@@ -470,1029 +247,62 @@ export default function ProductsShow({
                     </Card>
                 )}
 
-                {certificateRanges.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Rangos certificado de calidad</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <DetailList columns={3}>
-                                {certificateRanges.map(({ label, range }) => (
-                                    <DetailItem
-                                        key={label}
-                                        label={label}
-                                        value={range}
-                                        valueClassName="font-mono"
-                                    />
-                                ))}
-                            </DetailList>
-                        </CardContent>
-                    </Card>
-                )}
-
-                <Card className="overflow-hidden border-border/80">
-                    <CardHeader className="border-b border-border bg-muted/30 px-6 py-4">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div className="space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <CardTitle>Documentación técnica</CardTitle>
-                                    <Badge
-                                        variant="secondary"
-                                        className="font-normal"
-                                    >
-                                        QR por lote
-                                    </Badge>
-                                </div>
-                                <CardDescription className="text-sm leading-relaxed">
-                                    PDFs reutilizables vinculados a este
-                                    producto. Aparecen automáticamente en la
-                                    landing pública de cada orden completada,
-                                    junto al certificado de calidad del lote.
-                                </CardDescription>
-                            </div>
-                            {can.manageDocuments && (
-                                <Dialog
-                                    open={isDocumentDialogOpen}
-                                    onOpenChange={setIsDocumentDialogOpen}
-                                >
-                                    <DialogTrigger asChild>
-                                        <Button size="sm" className="shrink-0">
-                                            <Upload className="mr-1.5 h-4 w-4" />
-                                            Subir PDF
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-md">
-                                        <DialogHeader>
-                                            <DialogTitle>
-                                                Subir documento técnico
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                Elige el tipo y adjunta un PDF.
-                                                Si ya existe un documento del
-                                                mismo tipo, se archiva la
-                                                versión anterior y queda vigente
-                                                la nueva.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <form
-                                            noValidate
-                                            onSubmit={handleDocumentSubmit}
-                                            className="space-y-4"
-                                        >
-                                            <div className="space-y-2">
-                                                <Label htmlFor="document_type">
-                                                    Tipo de documento
-                                                </Label>
-                                                <Select
-                                                    value={
-                                                        documentForm.data
-                                                            .document_type
-                                                    }
-                                                    onValueChange={(value) =>
-                                                        documentForm.setData(
-                                                            'document_type',
-                                                            value as
-                                                                | 'technical_data_sheet'
-                                                                | 'safety_data_sheet',
-                                                        )
-                                                    }
-                                                >
-                                                    <SelectTrigger id="document_type">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {documentTypes.map(
-                                                            (type) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        type.value
-                                                                    }
-                                                                    value={
-                                                                        type.value
-                                                                    }
-                                                                >
-                                                                    {type.label}
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                                {documentForm.errors
-                                                    .document_type && (
-                                                    <p className="text-xs text-destructive">
-                                                        {
-                                                            documentForm.errors
-                                                                .document_type
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="document">
-                                                    Archivo PDF
-                                                </Label>
-                                                <Input
-                                                    id="document"
-                                                    type="file"
-                                                    accept="application/pdf,.pdf"
-                                                    className="cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary"
-                                                    onChange={(event) =>
-                                                        documentForm.setData(
-                                                            'document',
-                                                            event.target
-                                                                .files?.[0] ??
-                                                                null,
-                                                        )
-                                                    }
-                                                />
-                                                <p className="text-xs text-muted-foreground">
-                                                    Tamaño máximo 10 MB. Solo se
-                                                    aceptan archivos PDF.
-                                                </p>
-                                                {documentForm.errors
-                                                    .document && (
-                                                    <p className="text-xs text-destructive">
-                                                        {
-                                                            documentForm.errors
-                                                                .document
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="flex justify-end gap-2 pt-2">
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                        setIsDocumentDialogOpen(
-                                                            false,
-                                                        )
-                                                    }
-                                                >
-                                                    Cancelar
-                                                </Button>
-                                                <Button
-                                                    type="submit"
-                                                    disabled={
-                                                        documentForm.processing
-                                                    }
-                                                >
-                                                    {documentForm.processing
-                                                        ? 'Subiendo...'
-                                                        : 'Guardar'}
-                                                </Button>
-                                            </div>
-                                        </form>
-                                    </DialogContent>
-                                </Dialog>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {documents.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
-                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                                    <FileStack className="h-7 w-7 text-muted-foreground" />
-                                </div>
-                                <div className="max-w-sm space-y-1">
-                                    <p className="text-sm font-medium text-foreground">
-                                        Sin documentos técnicos
-                                    </p>
-                                    <p className="text-xs leading-relaxed text-muted-foreground">
-                                        Carga la ficha técnica y la hoja de
-                                        seguridad para que los lotes completados
-                                        muestren enlaces de descarga públicos
-                                        coherentes con tu catálogo.
-                                    </p>
-                                </div>
-                                {can.manageDocuments && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                            setIsDocumentDialogOpen(true)
-                                        }
-                                    >
-                                        <Upload className="mr-1.5 h-4 w-4" />
-                                        Subir el primero
-                                    </Button>
-                                )}
-                            </div>
-                        ) : (
-                            <ul className="divide-y divide-border">
-                                {documents.map((document) => {
-                                    const typeLabel =
-                                        documentTypes.find(
-                                            (type) =>
-                                                type.value ===
-                                                document.document_type,
-                                        )?.label ?? document.document_type;
-
-                                    return (
-                                        <li
-                                            key={document.id}
-                                            className="flex flex-col gap-4 px-6 py-4 transition-colors hover:bg-muted/20 md:flex-row md:items-center md:justify-between"
-                                        >
-                                            <div className="flex min-w-0 flex-1 items-start gap-4">
-                                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                                    <FileText className="h-5 w-5" />
-                                                </div>
-                                                <div className="min-w-0 space-y-1">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <p className="truncate font-medium text-foreground">
-                                                            {document.file_name}
-                                                        </p>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="shrink-0 text-xs tracking-wide uppercase"
-                                                        >
-                                                            {typeLabel}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {formatBytes(
-                                                            document.file_size,
-                                                        )}
-                                                        <span className="mx-1.5 text-border">
-                                                            ·
-                                                        </span>
-                                                        Versión{' '}
-                                                        {document.version}
-                                                        <span className="mx-1.5 text-border">
-                                                            ·
-                                                        </span>
-                                                        <FormattedDate
-                                                            value={
-                                                                document.created_at
-                                                            }
-                                                            format="date"
-                                                        />
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex shrink-0 items-center justify-end gap-1 md:pl-4">
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-9 w-9"
-                                                            asChild
-                                                        >
-                                                            <a
-                                                                href={
-                                                                    downloadProductDocument(
-                                                                        {
-                                                                            document:
-                                                                                document.id,
-                                                                        },
-                                                                    ).url
-                                                                }
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                            >
-                                                                <ExternalLink className="size-4" />
-                                                                <span className="sr-only">
-                                                                    Ver PDF
-                                                                </span>
-                                                            </a>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        Ver PDF
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                {can.manageDocuments && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-9 w-9 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                                                onClick={async () => {
-                                                                    if (
-                                                                        await confirm(
-                                                                            {
-                                                                                title: '¿Eliminar este documento técnico?',
-                                                                                confirmLabel:
-                                                                                    'Eliminar',
-                                                                                destructive: true,
-                                                                            },
-                                                                        )
-                                                                    ) {
-                                                                        router.delete(
-                                                                            destroyProductDocument(
-                                                                                {
-                                                                                    document:
-                                                                                        document.id,
-                                                                                },
-                                                                            )
-                                                                                .url,
-                                                                            {
-                                                                                preserveScroll: true,
-                                                                            },
-                                                                        );
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                                <span className="sr-only">
-                                                                    Eliminar
-                                                                    documento
-                                                                </span>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            Eliminar
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                <Tabs
+                    value={activeSection}
+                    onValueChange={setActiveSection}
+                    className="space-y-4"
+                >
+                    <SectionTabsList>
+                        <SectionTabsTrigger value="presentations">
+                            Presentaciones (
+                            {formatKind(variants.length, 'units')})
+                        </SectionTabsTrigger>
+                        {can.viewFormulas && (
+                            <SectionTabsTrigger value="formulas">
+                                Fórmulas ({formatKind(formulas.length, 'units')}
+                                )
+                            </SectionTabsTrigger>
                         )}
-                    </CardContent>
-                </Card>
+                        <SectionTabsTrigger value="quality">
+                            Calidad y documentos
+                        </SectionTabsTrigger>
+                    </SectionTabsList>
 
-                <section className="space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <h2 className="text-lg font-semibold">
-                                Inventario terminado
-                            </h2>
-                            <p className="mt-0.5 text-sm text-muted-foreground">
-                                Stock disponible por variante y bodega (según
-                                tus bodegas asignadas).
-                            </p>
-                        </div>
-                        <Button variant="outline" size="sm" asChild>
-                            <Link
-                                href={`${finishedInventoryIndex().url}?product_id=${product.id}`}
-                            >
-                                Ver en Inventario PT
-                            </Link>
-                        </Button>
-                    </div>
-
-                    <DetailTable
-                        rows={finishedInventory}
-                        rowKey={(row) => row.id}
-                        caption="Inventario terminado"
-                        columns={[
-                            {
-                                key: 'variant',
-                                header: 'Presentación',
-                                cell: (row) =>
-                                    row.variant?.presentation_label ?? null,
-                            },
-                            {
-                                key: 'warehouse',
-                                header: 'Bodega',
-                                cell: (row) =>
-                                    row.warehouse ? (
-                                        <>
-                                            {row.warehouse.name}
-                                            {row.warehouse.city && (
-                                                <span className="ml-1 text-xs text-muted-foreground">
-                                                    ({row.warehouse.city})
-                                                </span>
-                                            )}
-                                        </>
-                                    ) : null,
-                            },
-                            {
-                                key: 'quantity',
-                                header: 'Cantidad',
-                                cell: (row) => (
-                                    <>
-                                        <FormattedNumber
-                                            value={row.quantity}
-                                            kind="units"
-                                        />
-                                        {row.variant?.unit_symbol &&
-                                            ` ${row.variant.unit_symbol}`}
-                                    </>
-                                ),
-                                align: 'right',
-                                className: 'font-medium',
-                            },
-                        ]}
-                        empty="No hay stock registrado para este producto en las bodegas consultables."
-                    />
-                </section>
-
-                {/* Variantes */}
-                <section className="space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <h2 className="text-lg font-semibold">Variantes</h2>
-                            <p className="mt-0.5 text-sm text-muted-foreground">
-                                Presentaciones de venta: galón, bidón, Cuñete,
-                                etc. El valor se define en galones.
-                            </p>
-                        </div>
-                        {can.manageVariants && (
-                            <Dialog
-                                open={dialogMode !== null}
-                                onOpenChange={(open) => {
-                                    if (!open) {
-                                        setDialogMode(null);
-                                        setEditingVariantId(null);
-                                        form.reset();
-                                    }
-                                }}
-                            >
-                                <Button size="sm" onClick={openCreate}>
-                                    Nueva Variante
-                                </Button>
-                                <DialogContent className="max-w-lg">
-                                    <DialogHeader>
-                                        <DialogTitle>
-                                            {dialogMode === 'edit'
-                                                ? 'Editar Variante'
-                                                : 'Nueva Variante'}
-                                        </DialogTitle>
-                                    </DialogHeader>
-                                    <form
-                                        noValidate
-                                        onSubmit={handleSubmit}
-                                        className="space-y-4"
-                                    >
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="presentation_label">
-                                                    Presentación
-                                                </Label>
-                                                <Input
-                                                    id="presentation_label"
-                                                    value={
-                                                        form.data
-                                                            .presentation_label
-                                                    }
-                                                    onChange={(e) =>
-                                                        form.setData(
-                                                            'presentation_label',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    maxLength={50}
-                                                    aria-required
-                                                    aria-invalid={
-                                                        !!form.errors
-                                                            .presentation_label
-                                                    }
-                                                    placeholder="Ej: Galón, Cuñete 5G"
-                                                />
-                                                <InputError
-                                                    message={
-                                                        form.errors
-                                                            .presentation_label
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="code">
-                                                    Código
-                                                </Label>
-                                                <Input
-                                                    id="code"
-                                                    value={form.data.code}
-                                                    onChange={(e) =>
-                                                        form.setData(
-                                                            'code',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    maxLength={80}
-                                                    className="uppercase placeholder:normal-case"
-                                                    placeholder="Ej: 77709808"
-                                                />
-                                                {form.errors.code && (
-                                                    <p className="text-xs text-destructive">
-                                                        {form.errors.code}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="unit_of_measure_id">
-                                                    Unidad de Medida
-                                                </Label>
-                                                <Select
-                                                    value={
-                                                        form.data
-                                                            .unit_of_measure_id
-                                                    }
-                                                    onValueChange={(v) =>
-                                                        form.setData(
-                                                            'unit_of_measure_id',
-                                                            v,
-                                                        )
-                                                    }
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Selecciona..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {unitOptions.map(
-                                                            (u) => (
-                                                                <SelectItem
-                                                                    key={u.id}
-                                                                    value={String(
-                                                                        u.id,
-                                                                    )}
-                                                                >
-                                                                    {u.name} (
-                                                                    {u.symbol})
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                                {form.errors
-                                                    .unit_of_measure_id && (
-                                                    <p className="text-xs text-destructive">
-                                                        {
-                                                            form.errors
-                                                                .unit_of_measure_id
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="presentation_value">
-                                                    Valor Presentación (en
-                                                    galones)
-                                                </Label>
-                                                <DecimalInput
-                                                    id="presentation_value"
-                                                    {...PRESENTATION_VALUE_LIMITS}
-                                                    value={
-                                                        form.data
-                                                            .presentation_value
-                                                    }
-                                                    onValueChange={(value) =>
-                                                        form.setData(
-                                                            'presentation_value',
-                                                            value,
-                                                        )
-                                                    }
-                                                    placeholder="Ej: 1, 3, 5 o 0,25"
-                                                />
-                                                <p className="text-xs text-muted-foreground">
-                                                    Ejemplos: 1 = Galón, 3 =
-                                                    Bidón 3gal, 5 = Cuñete 5gal,
-                                                    0,25 = 1/4 galón
-                                                </p>
-                                                <InputError
-                                                    message={
-                                                        form.errors
-                                                            .presentation_value
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {can.viewCosts && (
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="current_cost">
-                                                        Costo Actual
-                                                    </Label>
-                                                    <Input
-                                                        id="current_cost"
-                                                        value={
-                                                            editingVariant?.current_cost !=
-                                                            null
-                                                                ? String(
-                                                                      editingVariant.current_cost,
-                                                                  )
-                                                                : ''
-                                                        }
-                                                        readOnly
-                                                        className="cursor-not-allowed bg-muted/50"
-                                                        placeholder="0.00"
-                                                    />
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {priceReferenceFormula
-                                                            ? 'Calculado por la fórmula de referencia de precio, el envase y la etiqueta.'
-                                                            : 'Se calculará al registrar la fórmula de producción.'}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {can.viewCosts && (
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="current_price">
-                                                        Precio Interno
-                                                    </Label>
-                                                    <Input
-                                                        id="current_price"
-                                                        value={
-                                                            editingVariant?.current_price !=
-                                                            null
-                                                                ? String(
-                                                                      editingVariant.current_price,
-                                                                  )
-                                                                : ''
-                                                        }
-                                                        readOnly
-                                                        className="cursor-not-allowed bg-muted/50"
-                                                        placeholder="0.00"
-                                                    />
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {priceReferenceFormula
-                                                            ? 'Calculado con el factor CIF al guardar.'
-                                                            : 'Se calculará al registrar la fórmula de producción.'}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="package_raw_material_id">
-                                                Envase / Contenedor
-                                            </Label>
-                                            <Select
-                                                value={
-                                                    form.data
-                                                        .package_raw_material_id
-                                                }
-                                                onValueChange={(v) =>
-                                                    form.setData(
-                                                        'package_raw_material_id',
-                                                        v,
-                                                    )
-                                                }
-                                            >
-                                                <SelectTrigger id="package_raw_material_id">
-                                                    <SelectValue placeholder="Selecciona el envase (opcional)" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {packageOptions.map(
-                                                        (rm) => (
-                                                            <SelectItem
-                                                                key={rm.id}
-                                                                value={String(
-                                                                    rm.id,
-                                                                )}
-                                                            >
-                                                                {rm.is_active
-                                                                    ? rm.code
-                                                                    : `${rm.code} (inactivo)`}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-xs text-muted-foreground">
-                                                Se descontará del inventario al
-                                                completar la orden de producción
-                                            </p>
-                                            <InputError
-                                                message={
-                                                    form.errors
-                                                        .package_raw_material_id
-                                                }
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="label_raw_material_id">
-                                                Etiqueta habitual
-                                            </Label>
-                                            <Select
-                                                value={
-                                                    form.data
-                                                        .label_raw_material_id ||
-                                                    NO_LABEL
-                                                }
-                                                onValueChange={(v) =>
-                                                    form.setData(
-                                                        'label_raw_material_id',
-                                                        v === NO_LABEL ? '' : v,
-                                                    )
-                                                }
-                                            >
-                                                <SelectTrigger id="label_raw_material_id">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem
-                                                        value={NO_LABEL}
-                                                    >
-                                                        Sin etiqueta
-                                                    </SelectItem>
-                                                    {labelOptions.map((rm) => (
-                                                        <SelectItem
-                                                            key={rm.id}
-                                                            value={String(
-                                                                rm.id,
-                                                            )}
-                                                        >
-                                                            {rm.is_active
-                                                                ? rm.code
-                                                                : `${rm.code} (inactiva)`}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-xs text-muted-foreground">
-                                                La orden de producción la
-                                                propone al envasar; su precio
-                                                entra en el costo de la
-                                                presentación
-                                            </p>
-                                            <InputError
-                                                message={
-                                                    form.errors
-                                                        .label_raw_material_id
-                                                }
-                                            />
-                                        </div>
-
-                                        {dialogMode === 'edit' && (
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-3">
-                                                    <Checkbox
-                                                        id="variant_is_active"
-                                                        checked={
-                                                            form.data.is_active
-                                                        }
-                                                        onCheckedChange={(
-                                                            checked,
-                                                        ) =>
-                                                            form.setData(
-                                                                'is_active',
-                                                                checked ===
-                                                                    true,
-                                                            )
-                                                        }
-                                                    />
-                                                    <Label htmlFor="variant_is_active">
-                                                        Presentación activa
-                                                    </Label>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Una presentación inactiva no
-                                                    aparece en órdenes,
-                                                    cotizaciones ni pedidos
-                                                    nuevos; su historial se
-                                                    conserva.
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        <div className="flex justify-end gap-2 pt-4">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setDialogMode(null);
-                                                    setEditingVariantId(null);
-                                                    form.reset();
-                                                }}
-                                            >
-                                                Cancelar
-                                            </Button>
-                                            <Button
-                                                type="submit"
-                                                disabled={form.processing}
-                                            >
-                                                {form.processing
-                                                    ? 'Guardando...'
-                                                    : dialogMode === 'edit'
-                                                      ? 'Guardar Cambios'
-                                                      : 'Guardar Variante'}
-                                            </Button>
-                                        </div>
-                                    </form>
-                                </DialogContent>
-                            </Dialog>
-                        )}
-                    </div>
-
-                    <DetailTable
-                        rows={product.variants ?? []}
-                        rowKey={(variant) => variant.id}
-                        caption="Variantes"
-                        columns={[
-                            {
-                                key: 'presentation',
-                                header: 'Presentación',
-                                cell: (variant) => (
-                                    <>
-                                        {variant.presentation_label}
-                                        {variant.unit_of_measure && (
-                                            <span className="text-muted-foreground">
-                                                {` (${variant.unit_of_measure.symbol})`}
-                                            </span>
-                                        )}
-                                    </>
-                                ),
-                            },
-                            {
-                                key: 'code',
-                                header: 'Código',
-                                cell: (variant) => variant.code,
-                                className:
-                                    'font-mono whitespace-nowrap text-muted-foreground',
-                            },
-                            ...(can.viewCosts
-                                ? [
-                                      {
-                                          key: 'price',
-                                          header: 'Precio interno',
-                                          cell: (variant: VariantItem) =>
-                                              variant.current_price ? (
-                                                  <FormattedNumber
-                                                      value={
-                                                          variant.current_price
-                                                      }
-                                                      kind="cost"
-                                                  />
-                                              ) : null,
-                                          align: 'right' as const,
-                                      },
-                                  ]
-                                : []),
-                            {
-                                key: 'status',
-                                header: 'Estado',
-                                cell: (variant) => (
-                                    <ActiveBadge
-                                        isActive={variant.is_active}
-                                        feminine
-                                    />
-                                ),
-                                align: 'center',
-                            },
-                            ...(can.manageVariants
-                                ? [
-                                      {
-                                          key: 'actions',
-                                          header: 'Acciones',
-                                          cell: (variant: VariantItem) => (
-                                              <div className="flex items-center justify-end gap-1">
-                                                  <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      onClick={() =>
-                                                          openEdit(variant)
-                                                      }
-                                                      title="Editar variante"
-                                                  >
-                                                      <Pencil className="h-4 w-4" />
-                                                  </Button>
-                                                  <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      onClick={() =>
-                                                          handleDeleteVariant(
-                                                              variant,
-                                                          )
-                                                      }
-                                                      title="Eliminar variante"
-                                                  >
-                                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                                  </Button>
-                                              </div>
-                                          ),
-                                          align: 'right' as const,
-                                      },
-                                  ]
-                                : []),
-                        ]}
-                        empty="Este producto aún no tiene variantes registradas."
-                    />
-                </section>
-
-                {can.viewFormulas && (
-                    <section className="space-y-4">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h2 className="text-lg font-semibold">
-                                    Fórmulas
-                                </h2>
-                                <p className="mt-0.5 text-sm text-muted-foreground">
-                                    {priceReferenceFormula
-                                        ? `Referencia de precio: v${priceReferenceFormula.version}${priceReferenceFormula.name ? ` · ${priceReferenceFormula.name}` : ''}`
-                                        : 'Sin fórmula de referencia de precio'}
-                                </p>
-                            </div>
-                            <Button size="sm" asChild>
-                                <Link
-                                    href={
-                                        formulasCreate({
-                                            query: {
-                                                product_id: product.id,
-                                                return_to: withReturnTo(
-                                                    productsShow({
-                                                        product: product.id,
-                                                    }).url,
-                                                    returnTo,
-                                                ),
-                                            },
-                                        }).url
-                                    }
-                                >
-                                    Nueva Fórmula
-                                </Link>
-                            </Button>
-                        </div>
-
-                        <DetailTable
-                            rows={product.formulas ?? []}
-                            rowKey={(formula) => formula.id}
-                            caption="Fórmulas"
-                            columns={[
-                                {
-                                    key: 'version',
-                                    header: 'Versión',
-                                    cell: (formula) => (
-                                        <>
-                                            <div className="font-mono">
-                                                v{formula.version}
-                                            </div>
-                                            {formula.name && (
-                                                <div className="text-xs font-normal text-muted-foreground">
-                                                    {formula.name}
-                                                </div>
-                                            )}
-                                        </>
-                                    ),
-                                },
-                                {
-                                    key: 'status',
-                                    header: 'Estado',
-                                    cell: (formula) => (
-                                        <div className="flex flex-wrap gap-1.5">
-                                            <ActiveBadge
-                                                isActive={formula.is_active}
-                                                feminine
-                                            />
-                                            {formula.is_price_reference && (
-                                                <Badge variant="outline">
-                                                    <BadgeDollarSign aria-hidden="true" />
-                                                    Referencia de precio
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    ),
-                                },
-                                {
-                                    key: 'notes',
-                                    header: 'Notas',
-                                    cell: (formula) => formula.notes,
-                                    className: 'text-muted-foreground',
-                                },
-                                {
-                                    key: 'creator',
-                                    header: 'Creada por',
-                                    cell: (formula) =>
-                                        formula.created_by?.name ?? null,
-                                    className: 'text-muted-foreground',
-                                },
-                                {
-                                    key: 'date',
-                                    header: 'Fecha',
-                                    cell: (formula) => (
-                                        <FormattedDate
-                                            value={formula.created_at}
-                                            format="datetime"
-                                        />
-                                    ),
-                                    className:
-                                        'whitespace-nowrap text-muted-foreground',
-                                },
-                                {
-                                    key: 'actions',
-                                    header: 'Acciones',
-                                    cell: (formula) => (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            asChild
-                                        >
-                                            <Link
-                                                href={
-                                                    formulasShow({
-                                                        formula: formula.id,
-                                                    }).url
-                                                }
-                                            >
-                                                Ver
-                                            </Link>
-                                        </Button>
-                                    ),
-                                    align: 'right',
-                                },
-                            ]}
-                            empty="No hay fórmulas registradas. Crea la primera con «Nueva Fórmula»."
+                    <TabsContent value="presentations">
+                        <ProductPresentationsTab
+                            productId={product.id}
+                            variants={variants}
+                            canManageVariants={can.manageVariants}
+                            canViewCosts={can.viewCosts}
+                            hasPriceReferenceFormula={hasPriceReferenceFormula}
+                            units={units}
+                            rawMaterials={rawMaterials}
+                            labelMaterials={labelMaterials}
                         />
-                    </section>
-                )}
+                    </TabsContent>
+
+                    {can.viewFormulas && (
+                        <TabsContent value="formulas">
+                            <ProductFormulasTab
+                                productId={product.id}
+                                formulas={formulas}
+                                canCreateFormulas={can.createFormulas}
+                                returnTo={returnTo}
+                            />
+                        </TabsContent>
+                    )}
+
+                    <TabsContent value="quality">
+                        <ProductQualityTab
+                            productId={product.id}
+                            certificateRanges={certificateRanges}
+                            documents={product.product_documents ?? []}
+                            documentTypes={documentTypes}
+                            canManageDocuments={can.manageDocuments}
+                            canDownloadDocuments={can.downloadDocuments}
+                        />
+                    </TabsContent>
+                </Tabs>
             </div>
         </>
     );
@@ -1511,15 +321,3 @@ ProductsShow.layout = (props: Props) => ({
         },
     ],
 });
-
-function formatBytes(bytes: number) {
-    if (bytes < 1024) {
-        return `${bytes} B`;
-    }
-
-    if (bytes < 1024 * 1024) {
-        return `${Math.round(bytes / 1024)} KB`;
-    }
-
-    return `${formatNumber(bytes / (1024 * 1024), { maxDecimals: 1 })} MB`;
-}
