@@ -86,6 +86,7 @@ export function ShrinkWrapTypeFields({ form, rawMaterialOptions }: Props) {
             <FormField
                 id="name"
                 label="Nombre"
+                required
                 help="Lo que el operario elige al registrar un termoencogido."
                 error={form.errors.name}
             >
@@ -147,6 +148,7 @@ export function ShrinkWrapTypeFields({ form, rawMaterialOptions }: Props) {
                                 <FormField
                                     id={`items.${index}.raw_material_id`}
                                     label="Materia prima"
+                                    required
                                     help={
                                         option?.is_active === false && (
                                             <span className="text-warning-text">
@@ -178,6 +180,7 @@ export function ShrinkWrapTypeFields({ form, rawMaterialOptions }: Props) {
                                 <FormField
                                     id={`items.${index}.quantity`}
                                     label="Cantidad por aplicación"
+                                    required
                                     error={errors[`items.${index}.quantity`]}
                                     className="md:col-span-4"
                                 >
