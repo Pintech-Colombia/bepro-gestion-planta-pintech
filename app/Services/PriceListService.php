@@ -22,7 +22,8 @@ class PriceListService
      */
     public function buildList(User $user, IndexPriceListRequest $request): array
     {
-        $canViewCosts = $user?->can(Permission::CostsView->value) ?? false;
+        $canViewCosts = $user->can(Permission::CostsView->value);
+        $canUpdateMargin = $user->can(Permission::CostsUpdate->value);
 
         $baseQuery = Product::query()
             ->select([
@@ -66,7 +67,7 @@ class PriceListService
 
         $products->through(function (Product $product) use ($canViewCosts, $variantStockTotals) {
             $resolvedProductPrice = $this->salesPriceService->resolveForProduct($product);
-            $productSalesPrice = $resolvedProductPrice !== null ? (float) $resolvedProductPrice : null;
+            $productSalesPrice = $resolvedProductPrice !== null ? (int) $resolvedProductPrice : null;
 
             $productData = [
                 'id' => $product->id,
@@ -86,7 +87,7 @@ class PriceListService
 
             $variants = $product->variants->map(function ($variant) use ($canViewCosts, $variantStockTotals) {
                 $resolvedVariantPrice = $this->salesPriceService->resolveForVariant($variant);
-                $variantSalesPrice = $resolvedVariantPrice !== null ? (float) $resolvedVariantPrice : null;
+                $variantSalesPrice = $resolvedVariantPrice !== null ? (int) $resolvedVariantPrice : null;
                 $availableStock = $variantStockTotals->get($variant->id);
 
                 $variantData = [
@@ -117,8 +118,47 @@ class PriceListService
             'can' => [
                 'view_costs' => $canViewCosts,
                 'view_prices' => true,
+                'update_margin' => $canUpdateMargin,
             ],
             'filters' => $request->validated(),
+        ];
+    }
+
+    /**
+     * Vista previa de precios de lista en pesos enteros para un margen dado, sin guardar.
+     *
+     * @return array{
+     *     product_sales_price: int|null,
+     *     variants: array<int, array{id: int, sales_price: int|null}>
+     * }
+     */
+    public function previewMargin(Product $product, ?string $salesMargin): array
+    {
+        $productPrice = $product->current_price !== null
+            ? $this->salesPriceService->applySalesMargin($product->current_price, $salesMargin)
+            : null;
+
+        $variants = $product->variants()
+            ->select(['id', 'product_id', 'current_price'])
+            ->where('is_active', true)
+            ->orderedByPresentation()
+            ->get()
+            ->map(function ($variant) use ($salesMargin): array {
+                $price = $variant->current_price !== null
+                    ? $this->salesPriceService->applySalesMargin($variant->current_price, $salesMargin)
+                    : null;
+
+                return [
+                    'id' => (int) $variant->id,
+                    'sales_price' => $price !== null ? (int) $price : null,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'product_sales_price' => $productPrice !== null ? (int) $productPrice : null,
+            'variants' => $variants,
         ];
     }
 }

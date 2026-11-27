@@ -83,9 +83,9 @@ test('con precio manual se guarda el precio digitado (pesos enteros) y el ajuste
         ->assertSessionHasNoErrors();
 
     $item = QuotationItem::query()->sole();
-    // Lista = 1.000 / (1 − 25 %) = 1.333,3333; ajuste = (1 − 1.333,3333 / 1.235) × 100 = −7,96.
+    // Lista = 1.000 / (1 − 25 %) = 1.333 (pesos enteros); ajuste = (1 − 1.333 / 1.235) × 100 = −7,94.
     expect(bccomp((string) $item->unit_price, '1235', 4))->toBe(0)
-        ->and((string) $item->price_adjustment_pct)->toBe('-7.96');
+        ->and((string) $item->price_adjustment_pct)->toBe('-7.94');
 });
 
 test('la cantidad de un pedido es un número entero de unidades', function (): void {

@@ -441,8 +441,8 @@ it('compares each presentation with the price list of today and its real margin'
         ->and($gallon['unit_cost_with_cif'])->toBe('15.0000')
         ->and($gallon['list_price'])->toBe('20.0000')
         ->and($gallon['list_difference_percentage'])->toBe('-25.00')
-        // Precio de venta 20 ÷ 0,7 = 28,5714: vendiendo a ese precio queda un 47,5 % de margen.
-        ->and($gallon['real_margin_percentage'])->toBe('47.50')
+        // Precio de venta 20 ÷ 0,7 = 28,5714 → 29 (pesos enteros): vendiendo a ese precio queda un 48,28 % de margen.
+        ->and($gallon['real_margin_percentage'])->toBe('48.28')
         ->and($bucket['list_price'])->toBeNull()
         ->and($bucket['list_difference_percentage'])->toBeNull()
         ->and($bucket['real_margin_percentage'])->toBeNull();

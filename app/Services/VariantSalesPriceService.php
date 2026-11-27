@@ -9,6 +9,12 @@ use App\Models\ProductVariant;
 
 class VariantSalesPriceService
 {
+    /** Escala intermedia antes del único redondeo al peso. */
+    private const EXACT_SCALE = 10;
+
+    /** El precio de venta al cliente va en pesos enteros, sin centavos. */
+    private const PESOS_SCALE = 0;
+
     public function __construct(
         private readonly DecimalCalculator $calculator
     ) {}
@@ -50,7 +56,10 @@ class VariantSalesPriceService
             return null;
         }
 
-        return $this->calculator->div($base, $divisor, 4);
+        return $this->calculator->round(
+            $this->calculator->div($base, $divisor, self::EXACT_SCALE),
+            self::PESOS_SCALE,
+        );
     }
 
     public function resolveMarginFromSalesPrice(string|float $basePrice, string|float $salesPrice): string

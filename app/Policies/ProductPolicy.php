@@ -31,7 +31,7 @@ class ProductPolicy
     }
 
     /**
-     * Cambiar el margen de venta (página de costos).
+     * Cambiar el margen de venta (lista de precios).
      */
     public function updateCost(User $user, Product $product): bool
     {

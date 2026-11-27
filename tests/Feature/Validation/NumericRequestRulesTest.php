@@ -103,10 +103,8 @@ function numericRequestFields(): array
         'StoreProductVariantRequest|UpdateProductVariantRequest' => [
             'presentation_value' => 'product_variants.presentation_value',
         ],
-        'UpdateCostRequest' => [
+        'UpdateProductMarginRequest' => [
             'sales_margin' => 'products.sales_margin',
-            // No se guarda: se convierte en margen. Se valida como dinero.
-            'sales_price' => NumberType::Money,
         ],
         'StoreQuotationRequest|UpdateQuotationRequest|PreviewQuotationPricingRequest' => [
             'iva_percentage' => 'quotations.iva_percentage',

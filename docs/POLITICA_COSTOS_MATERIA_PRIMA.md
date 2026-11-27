@@ -101,6 +101,13 @@ cuesta lo de sus fuentes reales (ver «Producto terminado usado en otra OP»).
 Costo teórico de una presentación: `(granel × presentación + envase + etiqueta) × (1 + CIF)` (`VariantPricingService`).
 El precio solo cambia si el costo varía más que el umbral del producto.
 
+**Precio de lista y margen de venta.** El margen (`products.sales_margin`, uno por producto, 2 decimales, de 0 a 99,99 %)
+se edita únicamente en la Lista de Precios (`PATCH /prices/{product}/margin`, con permiso `costs.update`); la pantalla de
+Costos es de solo lectura. El precio de venta al cliente no se digita: se calcula en el servidor como
+`precio_interno ÷ (1 − margen / 100)` y se redondea a **pesos enteros** sin redondeo comercial
+(`VariantSalesPriceService::applySalesMargin`). Sube o baja automáticamente cuando cambia el costo de referencia; las
+cotizaciones ya creadas conservan su precio.
+
 Esto no altera el costo real FIFO del cierre de OP.
 
 ## Costo real del empaque al completar la OP
