@@ -61,9 +61,7 @@ class PriceListService
             ->flatMap(fn (Product $p) => $p->variants->pluck('id'))
             ->all();
 
-        $variantStockTotals = $user !== null
-            ? $this->finishedInventoryQueryService->sumQuantityByVariant($user, $variantIds)
-            : collect();
+        $variantStockTotals = $this->finishedInventoryQueryService->sumQuantityByVariant($user, $variantIds);
 
         $products->through(function (Product $product) use ($canViewCosts, $variantStockTotals) {
             $resolvedProductPrice = $this->salesPriceService->resolveForProduct($product);

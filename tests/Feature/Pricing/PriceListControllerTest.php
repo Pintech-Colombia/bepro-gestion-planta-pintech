@@ -250,6 +250,48 @@ describe('updateMargin', function () {
         'tres decimales' => ['12.345'],
     ]);
 
+    it('allows admin to set sales_margin to zero distinct from null', function () {
+        $this->actingAs($this->adminUser)
+            ->patch(route('prices.margin.update', $this->product), [
+                'sales_margin' => '0',
+            ])
+            ->assertRedirect()
+            ->assertInertiaFlash('success');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $this->product->id,
+            'sales_margin' => '0.00',
+        ]);
+    });
+
+    it('does not record a duplicate audit entry when saving the same margin', function () {
+        $initialCount = Activity::query()
+            ->where('subject_type', Product::class)
+            ->where('subject_id', $this->product->id)
+            ->where('event', 'updated')
+            ->count();
+
+        $this->actingAs($this->adminUser)
+            ->patch(route('prices.margin.update', $this->product), [
+                'sales_margin' => '25.00',
+            ])
+            ->assertRedirect();
+
+        $afterCount = Activity::query()
+            ->where('subject_type', Product::class)
+            ->where('subject_id', $this->product->id)
+            ->where('event', 'updated')
+            ->count();
+
+        expect($afterCount)->toBe($initialCount);
+    });
+
+    it('requires authentication to update sales_margin', function () {
+        $this->patch(route('prices.margin.update', $this->product), [
+            'sales_margin' => '30.00',
+        ])->assertRedirect(route('login'));
+    });
+
     it('forbids produccion and comercial from updating sales_margin', function (string $roleProp) {
         $this->actingAs($this->{$roleProp})
             ->patch(route('prices.margin.update', $this->product), [
@@ -286,6 +328,55 @@ describe('previewMargin', function () {
         ]);
     });
 
+    it('previews with null margin, null prices, and excludes inactive variants', function () {
+        $inactiveVariant = ProductVariant::create([
+            'product_id' => $this->product->id,
+            'code' => 'VAR-INACT',
+            'unit_of_measure_id' => $this->unit->id,
+            'presentation_value' => 1.00,
+            'presentation_label' => 'Galón',
+            'current_cost' => 80.0000,
+            'current_price' => 100.0000,
+            'package_raw_material_id' => $this->variant->package_raw_material_id,
+            'is_active' => false,
+        ]);
+
+        $noPriceVariant = ProductVariant::create([
+            'product_id' => $this->product->id,
+            'code' => 'VAR-NOPRICE',
+            'unit_of_measure_id' => $this->unit->id,
+            'presentation_value' => 10.00,
+            'presentation_label' => 'Tambor',
+            'current_cost' => null,
+            'current_price' => null,
+            'package_raw_material_id' => $this->variant->package_raw_material_id,
+            'is_active' => true,
+        ]);
+
+        $this->product->update(['current_price' => null]);
+
+        $this->actingAs($this->adminUser)
+            ->postJson(route('prices.margin.preview', $this->product), [
+                'sales_margin' => null,
+            ])
+            ->assertOk()
+            ->assertExactJson([
+                'product_sales_price' => null,
+                'variants' => [
+                    [
+                        'id' => $this->variant->id,
+                        'sales_price' => 460,
+                    ],
+                    [
+                        'id' => $noPriceVariant->id,
+                        'sales_price' => null,
+                    ],
+                ],
+            ]);
+
+        expect($inactiveVariant->is_active)->toBeFalse();
+    });
+
     it('validates sales_margin on preview', function () {
         $this->actingAs($this->adminUser)
             ->postJson(route('prices.margin.preview', $this->product), [
@@ -295,11 +386,20 @@ describe('previewMargin', function () {
             ->assertJsonValidationErrors('sales_margin');
     });
 
-    it('forbids comercial from previewing margin', function () {
-        $this->actingAs($this->comercialUser)
+    it('requires authentication to preview margin', function () {
+        $this->postJson(route('prices.margin.preview', $this->product), [
+            'sales_margin' => '20.00',
+        ])->assertUnauthorized();
+    });
+
+    it('forbids produccion and comercial from previewing margin', function (string $roleProp) {
+        $this->actingAs($this->{$roleProp})
             ->postJson(route('prices.margin.preview', $this->product), [
                 'sales_margin' => '20.00',
             ])
             ->assertForbidden();
-    });
+    })->with([
+        'producción' => ['productionUser'],
+        'comercial' => ['comercialUser'],
+    ]);
 });

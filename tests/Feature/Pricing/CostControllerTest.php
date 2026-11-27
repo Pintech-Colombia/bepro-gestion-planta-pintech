@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Permission;
 use App\Enums\SystemRole;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -74,6 +75,33 @@ describe('index', function () {
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('products.data.0.sales_margin', '25.00')
                 ->where('products.data.0.sales_price', 123)
+            );
+    });
+
+    it('returns null sales_price when product has no current_price', function () {
+        $this->product->update(['current_price' => null, 'sales_margin' => 25.00]);
+
+        $this->actingAs($this->adminUser)
+            ->get(route('admin.costs.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('products.data.0.sales_price', null)
+            );
+    });
+
+    it('sets can.view_prices to false when user has costs permissions without price_lists.view', function () {
+        $costOnlyUser = User::factory()->create(['email_verified_at' => now()]);
+        $costOnlyUser->givePermissionTo([
+            Permission::CostsView->value,
+            Permission::CostsUpdate->value,
+        ]);
+
+        $this->actingAs($costOnlyUser)
+            ->get(route('admin.costs.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('can.update_margin', true)
+                ->where('can.view_prices', false)
             );
     });
 

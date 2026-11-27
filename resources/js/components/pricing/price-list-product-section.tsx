@@ -10,6 +10,8 @@ import { FormattedNumber } from '@/components/formatted-number';
 import { useServerPreview } from '@/hooks/use-server-preview';
 import { NUMBER_TYPES } from '@/lib/number-types';
 import { toDecimalPayload } from '@/lib/numeric-input';
+import { resolveMarginPreviewState } from '@/lib/price-list-margin';
+import type { MarginPreviewResponse } from '@/lib/price-list-margin';
 import {
     preview as marginPreview,
     update as marginUpdate,
@@ -42,11 +44,6 @@ type PreviewRequestBody = {
     sales_margin: string | null;
 };
 
-type PreviewResponse = {
-    product_sales_price: number | null;
-    variants: Array<{ id: number; sales_price: number | null }>;
-};
-
 type Props = {
     product: PriceListProductRow;
     can: {
@@ -54,29 +51,6 @@ type Props = {
         update_margin: boolean;
     };
 };
-
-/**
- * Compara dos textos de margen sin usar floats («25,00» y «25» representan el mismo margen).
- */
-function normalizeMarginKey(value: string): string {
-    const payload = toDecimalPayload(value).trim();
-
-    if (payload === '') {
-        return '';
-    }
-
-    if (!/^\d+(?:\.\d+)?$/.test(payload)) {
-        return payload;
-    }
-
-    const [intPart, decPart = ''] = payload.split('.');
-    const normalizedInt = intPart.replace(/^0+(?=\d)/, '');
-    const normalizedDec = decPart.replace(/0+$/, '');
-
-    return normalizedDec === ''
-        ? normalizedInt
-        : `${normalizedInt}.${normalizedDec}`;
-}
 
 export function PriceListProductSection({ product, can }: Props) {
     const savedMargin =
@@ -91,12 +65,22 @@ export function PriceListProductSection({ product, can }: Props) {
     const cancelOnBlurRef = useRef(false);
 
     const displayedMargin = draft ?? savedMargin;
-    const isDirty =
-        draft !== null &&
-        normalizeMarginKey(draft) !== normalizeMarginKey(savedMargin);
+    const marginInputId = `price-list-margin-${product.id}`;
 
     const previewRequest = useMemo(() => {
-        if (!can.update_margin || !isDirty || draft === null) {
+        if (!can.update_margin || draft === null) {
+            return null;
+        }
+
+        const { isDirty } = resolveMarginPreviewState({
+            draft,
+            savedMargin,
+            previewResult: null,
+            previewErrors: null,
+            previewStale: null,
+        });
+
+        if (!isDirty) {
             return null;
         }
 
@@ -109,50 +93,47 @@ export function PriceListProductSection({ product, can }: Props) {
             },
             context: draft,
         };
-    }, [can.update_margin, isDirty, draft, product.id]);
+    }, [can.update_margin, draft, savedMargin, product.id]);
 
     const {
         result: previewResult,
         errors: previewErrors,
         loading: previewLoading,
-    } = useServerPreview<PreviewResponse, PreviewRequestBody, string>(
+        stale: previewStale,
+    } = useServerPreview<MarginPreviewResponse, PreviewRequestBody, string>(
         previewRequest,
         PREVIEW_DELAY_MS,
     );
 
-    const previewVariantPrices = useMemo(() => {
-        if (!isDirty || previewResult === null) {
-            return null;
-        }
+    const previewState = useMemo(
+        () =>
+            resolveMarginPreviewState({
+                draft,
+                savedMargin,
+                previewResult,
+                previewErrors,
+                previewStale,
+            }),
+        [draft, savedMargin, previewResult, previewErrors, previewStale],
+    );
 
-        return new Map(
-            previewResult.value.variants.map((variant) => [
-                variant.id,
-                variant.sales_price,
-            ]),
-        );
-    }, [isDirty, previewResult]);
-
-    const previewValidationError =
-        isDirty && previewErrors !== null
-            ? (previewErrors.value.sales_margin ?? null)
-            : null;
-    const activeError = saveError ?? previewValidationError;
+    const activeError = saveError ?? previewState.validationError;
 
     const displayedVariants = useMemo((): PriceListVariantRow[] => {
-        if (previewVariantPrices === null) {
+        if (previewState.variantPrices === null) {
             return product.variants;
         }
 
         return product.variants.map((variant) =>
-            previewVariantPrices.has(variant.id)
+            previewState.variantPrices?.has(variant.id)
                 ? {
                       ...variant,
-                      sales_price: previewVariantPrices.get(variant.id) ?? null,
+                      sales_price:
+                          previewState.variantPrices.get(variant.id) ?? null,
                   }
                 : variant,
         );
-    }, [product.variants, previewVariantPrices]);
+    }, [product.variants, previewState.variantPrices]);
 
     const handleChange = useCallback((value: string) => {
         setDraft(value);
@@ -170,10 +151,15 @@ export function PriceListProductSection({ product, can }: Props) {
             return;
         }
 
-        if (!isDirty) {
+        if (!previewState.isDirty) {
             setDraft(null);
             setSaveError(null);
 
+            return;
+        }
+
+        // Si la vista previa ya devolvió un 422 para este mismo valor, evita un PATCH redundante.
+        if (previewState.validationError !== null) {
             return;
         }
 
@@ -189,13 +175,10 @@ export function PriceListProductSection({ product, can }: Props) {
                 preserveState: true,
                 preserveScroll: true,
                 onSuccess: () => {
-                    setSaving(false);
                     setDraft(null);
                     setSaveError(null);
                 },
                 onError: (errorBag) => {
-                    setSaving(false);
-
                     const serverError =
                         errorBag?.sales_margin ??
                         'Error al guardar. Intente nuevamente.';
@@ -206,9 +189,23 @@ export function PriceListProductSection({ product, can }: Props) {
                             : serverError,
                     );
                 },
+                onCancel: () => {
+                    setSaveError(
+                        'El guardado se canceló. Vuelve a intentarlo.',
+                    );
+                },
+                onFinish: () => {
+                    setSaving(false);
+                },
             },
         );
-    }, [can.update_margin, draft, isDirty, product.id]);
+    }, [
+        can.update_margin,
+        draft,
+        previewState.isDirty,
+        previewState.validationError,
+        product.id,
+    ]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
@@ -222,6 +219,10 @@ export function PriceListProductSection({ product, can }: Props) {
             e.currentTarget.blur();
         }
     }, []);
+
+    const pricesAreOutdated =
+        previewState.isDirty &&
+        (previewLoading || !previewState.isCurrent || previewState.failed);
 
     const variantColumns: DataListingColumn<PriceListVariantRow>[] = useMemo(
         () => [
@@ -268,9 +269,7 @@ export function PriceListProductSection({ product, can }: Props) {
                         value={variant.sales_price}
                         kind="clientPrice"
                         emptyValue="Sin precio"
-                        className={
-                            previewLoading && isDirty ? 'opacity-60' : undefined
-                        }
+                        className={pricesAreOutdated ? 'opacity-60' : undefined}
                     />
                 ),
                 mobile: 'primary',
@@ -290,7 +289,7 @@ export function PriceListProductSection({ product, can }: Props) {
                 align: 'right',
             },
         ],
-        [can.view_costs, previewLoading, isDirty],
+        [can.view_costs, pricesAreOutdated],
     );
 
     return (
@@ -330,11 +329,15 @@ export function PriceListProductSection({ product, can }: Props) {
 
                             {can.update_margin ? (
                                 <div className="inline-flex flex-wrap items-center gap-1.5">
-                                    <span className="whitespace-nowrap">
+                                    <label
+                                        htmlFor={marginInputId}
+                                        className="whitespace-nowrap"
+                                    >
                                         Margen de venta:
-                                    </span>
+                                    </label>
                                     <DecimalInput
                                         {...NUMBER_TYPES.percentage}
+                                        id={marginInputId}
                                         value={displayedMargin}
                                         onValueChange={handleChange}
                                         onBlur={handleBlur}
@@ -346,15 +349,46 @@ export function PriceListProductSection({ product, can }: Props) {
                                     />
                                     <span className="whitespace-nowrap">%</span>
                                     {saving && (
-                                        <span className="animate-pulse text-xs text-muted-foreground">
+                                        <span
+                                            role="status"
+                                            className="animate-pulse text-xs text-muted-foreground"
+                                        >
                                             Guardando...
                                         </span>
                                     )}
-                                    {!saving && previewLoading && isDirty && (
-                                        <span className="animate-pulse text-xs text-muted-foreground">
-                                            Calculando...
-                                        </span>
-                                    )}
+                                    {!saving &&
+                                        previewLoading &&
+                                        previewState.isDirty && (
+                                            <span
+                                                role="status"
+                                                className="animate-pulse text-xs text-muted-foreground"
+                                            >
+                                                Calculando...
+                                            </span>
+                                        )}
+                                    {!saving &&
+                                        !previewLoading &&
+                                        previewState.isCurrent &&
+                                        activeError === null && (
+                                            <span
+                                                role="status"
+                                                className="text-xs text-muted-foreground"
+                                            >
+                                                Vista previa
+                                            </span>
+                                        )}
+                                    {!saving &&
+                                        !previewLoading &&
+                                        previewState.failed &&
+                                        activeError === null && (
+                                            <span
+                                                role="status"
+                                                className="text-xs text-warning-text"
+                                            >
+                                                No se pudo calcular la vista
+                                                previa.
+                                            </span>
+                                        )}
                                 </div>
                             ) : (
                                 <span className="whitespace-nowrap">

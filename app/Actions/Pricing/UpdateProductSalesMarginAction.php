@@ -19,7 +19,7 @@ class UpdateProductSalesMarginAction
                 'sales_margin' => $salesMargin,
             ]);
 
-            return $product->refresh();
+            return $product;
         });
     }
 }

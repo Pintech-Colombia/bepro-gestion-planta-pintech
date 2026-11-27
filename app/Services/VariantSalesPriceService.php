@@ -48,7 +48,7 @@ class VariantSalesPriceService
     public function applySalesMargin(string|float $basePrice, float|string|null $salesMargin): ?string
     {
         $base = $this->toDecimalString($basePrice, 4);
-        $margin = $salesMargin !== null ? (string) $salesMargin : '0';
+        $margin = $salesMargin !== null && $salesMargin !== '' ? (string) $salesMargin : '0';
         $marginDecimal = $this->calculator->div($margin, '100', 4);
         $divisor = $this->calculator->sub('1', $marginDecimal, 4);
 

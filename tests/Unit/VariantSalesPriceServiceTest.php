@@ -21,11 +21,18 @@ test('it normalizes floats without scientific notation', function () {
     expect($this->service->resolveMarginFromSalesPrice(0.0001, 0.0002))->toBe('50.00');
 });
 
-test('applySalesMargin and resolveMarginFromSalesPrice are inverses', function () {
+test('applySalesMargin and resolveMarginFromSalesPrice match on exact whole-peso prices', function () {
+    // 92 / 0.8 = 115 exacto (sin redondeo al peso): la inversa recupera exactamente el 20 %.
     $price = $this->service->applySalesMargin('92', 20.0);
     $margin = $this->service->resolveMarginFromSalesPrice('92', $price);
 
-    expect((float) $margin)->toBe(20.0);
+    expect($price)->toBe('115')
+        ->and((float) $margin)->toBe(20.0);
+});
+
+test('applySalesMargin treats null and empty string as zero margin', function () {
+    expect($this->service->applySalesMargin('100.4000', null))->toBe('100')
+        ->and($this->service->applySalesMargin('100.6000', ''))->toBe('101');
 });
 
 test('resolveForProduct normalizes float current_price safely', function () {

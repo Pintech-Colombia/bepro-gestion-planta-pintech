@@ -90,7 +90,7 @@ combinación, se crea un rol nuevo.
 | | `products.manage_documents` | [x] | [x] | [ ] | [ ] | [ ] | [x] | Subir y eliminar fichas técnicas y hojas de seguridad. |
 | | `products.download_documents` | [x] | [x] | [x] | [ ] | [x] | [x] | 🆕 Hoy lo hace cualquiera que vea el producto; se separa de `manage_documents`. |
 | **Costos** | `costs.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | 🆕 alcance global (principio 1): sustituye a `products.view_costs`, `raw_materials.view_costs` y `production_orders.preview_costs`, y oculta el costo de remanentes. |
-| | `costs.update` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Márgenes, CIF % y umbral de precio (en la página de costos y en el formulario de producto). También el precio manual de las materias primas sin control de inventario y el interruptor «Controla inventario» (ver `raw_materials.edit`). |
+| | `costs.update` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | Márgenes, CIF % y umbral de precio (en la lista de precios y en el formulario de producto). También el precio manual de las materias primas sin control de inventario y el interruptor «Controla inventario» (ver `raw_materials.edit`). |
 | **Fórmulas** | `formulas.view` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ hoy Producción ve, crea y edita fórmulas. Cambio intencional (§0). |
 | | `formulas.create` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ |
 | | `formulas.edit` | [x] | [x] | [ ] | [ ] | [ ] | [ ] | ⚠️ |
