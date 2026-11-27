@@ -525,3 +525,13 @@ export type PreviewCostData = {
     }>;
     summary: ProductionOrderCostSummary | null;
 };
+
+/** El renglón de un producto terminado que la orden lleva como ingrediente: se gasta en kilos, como una MP. */
+export type ProductTableRow = {
+    line: ProductionOrderProductLine;
+    /** Su posición en `product_lines` del formulario (la de sus llaves de error); -1 mientras se sincroniza. */
+    index: number;
+    actualKg: string | number | null;
+    unitCost: string | null | undefined;
+    totalCost: string | null | undefined;
+};

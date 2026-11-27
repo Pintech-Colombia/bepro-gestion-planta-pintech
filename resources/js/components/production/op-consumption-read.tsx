@@ -2,7 +2,6 @@ import { DetailTable } from '@/components/detail-table';
 import type { DetailTableColumn } from '@/components/detail-table';
 import { FormattedNumber } from '@/components/formatted-number';
 import Heading from '@/components/heading';
-import type { ProductTableRow } from '@/components/production/ingredients-table';
 import { LineAdjustmentsPanel } from '@/components/production/line-adjustments-panel';
 import {
     excessLabel,
@@ -25,6 +24,7 @@ import type {
     ProductionOrderProductConsumptionReason,
     ProductionOrderProductOverconsumption,
     ProductionOrderSetData,
+    ProductTableRow,
 } from '@/types/production-orders';
 
 /** Un renglón de la tabla: una materia prima o un producto terminado, en su paso. */

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { IngredientsTable } from '@/components/production/ingredients-table';
-import type { ProductTableRow } from '@/components/production/ingredients-table';
 import { LineAdjustmentsPanel } from '@/components/production/line-adjustments-panel';
 import { OverconsumptionReasons } from '@/components/production/overconsumption-reasons';
 import { ProductSourcePicker } from '@/components/production/product-source-picker';
@@ -34,6 +33,7 @@ import type {
     ProductionOrderProductOverconsumption,
     ProductionOrderSetData,
     RawMaterialOption,
+    ProductTableRow,
 } from '@/types/production-orders';
 
 type OpConsumptionSectionProps = {
