@@ -243,7 +243,12 @@ export function FinishedMovementFormFields({
     return (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {reasons && (
-                <FormField id="reason" label="Razón" error={form.errors.reason}>
+                <FormField
+                    id="reason"
+                    label="Razón"
+                    required
+                    error={form.errors.reason}
+                >
                     {(control) => (
                         <Select
                             value={form.data.reason}
@@ -275,6 +280,7 @@ export function FinishedMovementFormFields({
             <FormField
                 id="warehouse_id"
                 label={showDestinationWarehouse ? 'Bodega origen' : 'Bodega'}
+                required
                 error={form.errors.warehouse_id}
             >
                 {(control) => (
@@ -305,6 +311,7 @@ export function FinishedMovementFormFields({
                 <FormField
                     id="destination_warehouse_id"
                     label="Bodega destino"
+                    required
                     error={form.errors.destination_warehouse_id}
                 >
                     {(control) => (
@@ -325,7 +332,7 @@ export function FinishedMovementFormFields({
                 </FormField>
             )}
 
-            <FormField id="finished_product_key" label="Producto">
+            <FormField id="finished_product_key" label="Producto" required>
                 <Combobox
                     options={productOptions}
                     value={activeProductKey}
@@ -352,7 +359,7 @@ export function FinishedMovementFormFields({
                 />
             </FormField>
 
-            <FormField id="finished_variant_key" label="Presentación">
+            <FormField id="finished_variant_key" label="Presentación" required>
                 {(control) => (
                     // Aquí la que se elige sola es la única con stock en la bodega (`activeVariantKey`), no la única
                     // del producto: una salida solo puede sacar lo que hay.
@@ -372,6 +379,7 @@ export function FinishedMovementFormFields({
             <FormField
                 id="finished_product_batch_id"
                 label="Lote PT"
+                required
                 error={form.errors.finished_product_batch_id}
                 className="md:col-span-2"
             >
@@ -401,6 +409,7 @@ export function FinishedMovementFormFields({
             <FormField
                 id="quantity"
                 label="Cantidad"
+                required
                 error={form.errors.quantity}
             >
                 <IntegerInput
@@ -414,6 +423,7 @@ export function FinishedMovementFormFields({
             <FormField
                 id="movement_date"
                 label="Fecha"
+                required
                 error={form.errors.movement_date}
             >
                 <PlantDateInput
