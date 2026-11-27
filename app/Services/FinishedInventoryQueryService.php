@@ -242,41 +242,4 @@ class FinishedInventoryQueryService
     {
         return $variantId.':'.$warehouseId;
     }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function inventoryRowsForProduct(User $user, Product $product): array
-    {
-        return $this->scopedQuery($user)
-            ->where('product_id', $product->id)
-            ->where('quantity', '>', 0)
-            ->with([
-                'warehouse:id,name,city,type',
-                'productVariant:id,code,presentation_label,presentation_value',
-                'productVariant.unitOfMeasure:id,symbol',
-            ])
-            ->orderBy('warehouse_id')
-            ->orderBy('product_variant_id')
-            ->get()
-            ->map(fn (FinishedInventory $row): array => [
-                'id' => $row->id,
-                'quantity' => $row->quantity,
-                'warehouse' => $row->warehouse ? [
-                    'id' => $row->warehouse->id,
-                    'name' => $row->warehouse->name,
-                    'city' => $row->warehouse->city,
-                    'type' => $row->warehouse->type->value,
-                ] : null,
-                'variant' => $row->productVariant ? [
-                    'id' => $row->productVariant->id,
-                    'code' => $row->productVariant->code,
-                    'presentation_label' => $row->productVariant->presentation_label,
-                    'presentation_value' => $row->productVariant->presentation_value,
-                    'unit_symbol' => $row->productVariant->unitOfMeasure?->symbol,
-                ] : null,
-            ])
-            ->values()
-            ->all();
-    }
 }

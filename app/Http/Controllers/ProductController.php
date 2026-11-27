@@ -10,6 +10,7 @@ use App\Enums\QrDocumentType;
 use App\Enums\RawMaterialType;
 use App\Filters\ProductFilter;
 use App\Http\Requests\Products\IndexProductRequest;
+use App\Http\Requests\Products\ShowProductRequest;
 use App\Http\Requests\Products\StoreProductRequest;
 use App\Http\Requests\Products\UpdateProductRequest;
 use App\Models\Formula;
@@ -21,7 +22,6 @@ use App\Models\RawMaterial;
 use App\Models\UnitOfMeasure;
 use App\Services\DeactivationGuardService;
 use App\Services\DecimalCalculator;
-use App\Services\FinishedInventoryQueryService;
 use App\Services\ProductionCostRecalculationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +35,6 @@ class ProductController extends Controller
     public function __construct(
         private readonly ProductionCostRecalculationService $productionCostRecalculationService,
         private readonly DecimalCalculator $calculator,
-        private readonly FinishedInventoryQueryService $finishedInventoryQueryService,
         private readonly DeactivationGuardService $deactivationGuard,
         private readonly DeleteUnusedRecordAction $deleteUnused,
     ) {}
@@ -113,29 +112,31 @@ class ProductController extends Controller
         return redirect()->route('products.index');
     }
 
-    public function show(Request $request, Product $product): Response
+    public function show(ShowProductRequest $request, Product $product): Response
     {
-        $this->authorize('view', $product);
-
         $user = $request->user();
         $canViewCosts = $user?->can(Permission::CostsView->value) ?? false;
         $canViewFormulas = $user?->can(Permission::FormulasView->value) ?? false;
+        $canManageVariants = Gate::allows('manageVariants', $product);
 
+        // Las props pesadas van en closures: al cambiar de pestaña (`only: ['section']`), Inertia no ejecuta sus queries.
         return Inertia::render('Products/Show', [
-            'returnTo' => $this->resolveReturnTo($request),
-            'finishedInventory' => $user !== null
-                ? $this->finishedInventoryQueryService->inventoryRowsForProduct($user, $product)
-                : [],
-            'product' => $this->productForShow($product, $canViewCosts, $canViewFormulas),
-            'can' => [
+            'returnTo' => fn (): ?string => $this->resolveReturnTo($request),
+            'section' => $request->section($canViewFormulas),
+            'hasPriceReferenceFormula' => fn (): bool => $product->priceReferenceFormula()->exists(),
+            'product' => fn (): array => $this->productForShow($product, $canViewCosts, $canViewFormulas),
+            'can' => fn (): array => [
                 'update' => Gate::allows('update', $product),
                 'delete' => Gate::allows('delete', $product),
-                'manageVariants' => Gate::allows('manageVariants', $product),
+                'manageVariants' => $canManageVariants,
                 'manageDocuments' => Gate::allows('manageDocuments', $product),
+                'downloadDocuments' => Gate::allows('downloadDocuments', $product),
                 'viewCosts' => $canViewCosts,
                 'viewFormulas' => $canViewFormulas,
+                'createFormulas' => Gate::allows('create', Formula::class),
+                'viewFinishedInventory' => $user?->can(Permission::FinishedInventoryView->value) ?? false,
             ],
-            'documentTypes' => [
+            'documentTypes' => fn (): array => [
                 [
                     'value' => QrDocumentType::TechnicalDataSheet->value,
                     'label' => QrDocumentType::TechnicalDataSheet->label(),
@@ -146,32 +147,38 @@ class ProductController extends Controller
                 ],
             ],
             // Unidades activas, más las inactivas que ya usa alguna presentación: al editarla se muestra la que tiene.
-            'units' => UnitOfMeasure::query()
-                ->selectable($product->variants()->pluck('unit_of_measure_id')->all())
-                ->select('id', 'name', 'symbol', 'is_active')
-                ->orderBy('name')
-                ->get(),
+            'units' => fn () => $canManageVariants
+                ? UnitOfMeasure::query()
+                    ->selectable($product->variants()->pluck('unit_of_measure_id')->all())
+                    ->select('id', 'name', 'symbol', 'is_active')
+                    ->orderBy('name')
+                    ->get()
+                : [],
             // Envases activos, más los inactivos que ya usa alguna presentación: al editarla se muestra el que tiene.
-            'rawMaterials' => RawMaterial::query()
-                ->with('category:id,name')
-                // Envases = materias primas cuya categoría es de tipo Envase (antes se deducía del nombre de la categoría).
-                // Todo en un grupo: una condición que se añada después no debe quedar fuera del OR.
-                ->where(fn ($q) => $q
-                    ->where(fn ($active) => $active
-                        ->where('is_active', true)
-                        ->ofType(RawMaterialType::Container))
-                    ->orWhereIn('id', $product->variants()->whereNotNull('package_raw_material_id')->select('package_raw_material_id')))
-                ->select('id', 'code', 'category_id', 'is_active')
-                ->get(),
+            'rawMaterials' => fn () => $canManageVariants
+                ? RawMaterial::query()
+                    ->with('category:id,name')
+                    // Envases = materias primas cuya categoría es de tipo Envase (antes se deducía del nombre de la categoría).
+                    // Todo en un grupo: una condición que se añada después no debe quedar fuera del OR.
+                    ->where(fn ($q) => $q
+                        ->where(fn ($active) => $active
+                            ->where('is_active', true)
+                            ->ofType(RawMaterialType::Container))
+                        ->orWhereIn('id', $product->variants()->whereNotNull('package_raw_material_id')->select('package_raw_material_id')))
+                    ->select('id', 'code', 'category_id', 'is_active')
+                    ->get()
+                : [],
             // Etiquetas (3.7): las activas de tipo Etiqueta, más las inactivas que ya usa alguna presentación.
-            'labelMaterials' => RawMaterial::query()
-                ->where(fn ($q) => $q
-                    ->where(fn ($active) => $active
-                        ->where('is_active', true)
-                        ->ofType(RawMaterialType::Label))
-                    ->orWhereIn('id', $product->variants()->whereNotNull('label_raw_material_id')->select('label_raw_material_id')))
-                ->orderBy('code')
-                ->get(['id', 'code', 'is_active']),
+            'labelMaterials' => fn () => $canManageVariants
+                ? RawMaterial::query()
+                    ->where(fn ($q) => $q
+                        ->where(fn ($active) => $active
+                            ->where('is_active', true)
+                            ->ofType(RawMaterialType::Label))
+                        ->orWhereIn('id', $product->variants()->whereNotNull('label_raw_material_id')->select('label_raw_material_id')))
+                    ->orderBy('code')
+                    ->get(['id', 'code', 'is_active'])
+                : [],
         ]);
     }
 
