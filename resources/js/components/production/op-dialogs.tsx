@@ -164,6 +164,7 @@ export function OpRejectDialog({
                         <FormField
                             id="reason"
                             label="Motivo del rechazo"
+                            required
                             error={errors.reason}
                         >
                             <Textarea

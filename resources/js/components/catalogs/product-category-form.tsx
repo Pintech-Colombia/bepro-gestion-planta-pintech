@@ -11,7 +11,12 @@ type Props = {
 export function ProductCategoryFields({ form }: Props) {
     return (
         <div className="grid gap-5">
-            <FormField id="name" label="Nombre" error={form.errors.name}>
+            <FormField
+                id="name"
+                label="Nombre"
+                required
+                error={form.errors.name}
+            >
                 <Input
                     value={form.data.name}
                     onChange={(event) =>

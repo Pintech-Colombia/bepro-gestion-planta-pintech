@@ -141,6 +141,7 @@ export function UnitOfMeasureFields({ form, usageSummary = null }: Props) {
                 <FormField
                     id="code"
                     label="Código"
+                    required
                     help="Identificador corto; se guarda en minúsculas."
                     error={form.errors.code}
                 >
@@ -158,6 +159,7 @@ export function UnitOfMeasureFields({ form, usageSummary = null }: Props) {
                 <FormField
                     id="symbol"
                     label="Símbolo"
+                    required
                     help="Lo que se muestra junto a las cantidades."
                     error={form.errors.symbol}
                 >
@@ -173,7 +175,12 @@ export function UnitOfMeasureFields({ form, usageSummary = null }: Props) {
                 </FormField>
             </div>
 
-            <FormField id="name" label="Nombre" error={form.errors.name}>
+            <FormField
+                id="name"
+                label="Nombre"
+                required
+                error={form.errors.name}
+            >
                 <Input
                     value={form.data.name}
                     onChange={(event) =>

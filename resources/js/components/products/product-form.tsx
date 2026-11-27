@@ -339,6 +339,7 @@ export function ProductForm({
                         <FormField
                             id="price_threshold"
                             label="Umbral mínimo de precio (%)"
+                            required
                             error={errors.price_threshold}
                         >
                             <DecimalInput

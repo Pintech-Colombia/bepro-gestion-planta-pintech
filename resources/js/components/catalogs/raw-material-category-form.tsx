@@ -34,6 +34,7 @@ export function RawMaterialCategoryFields({
             <FormField
                 id="name"
                 label="Nombre"
+                required
                 help="Único dentro de su familia: «BASE AGUA» puede estar en Resina y en Solvente."
                 error={form.errors.name}
             >
@@ -81,6 +82,7 @@ export function RawMaterialCategoryFields({
             <FormField
                 id="type"
                 label="Tipo de insumo"
+                required
                 help={
                     typeLocked
                         ? rawMaterialsCount === 1

@@ -65,6 +65,7 @@ export function BatchUnitsEditor({
             <FormField
                 id={`batch-source-${source.id}-units`}
                 label="Unidades"
+                required
                 help={
                     source.kg_per_unit !== null ? (
                         <>

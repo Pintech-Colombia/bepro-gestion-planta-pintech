@@ -94,6 +94,7 @@ export default function ShrinkWrapsCreate({
                     <FormField
                         id="production_order_id"
                         label="Orden de producción"
+                        required
                         error={form.errors.production_order_id}
                         help={
                             <>
@@ -121,6 +122,7 @@ export default function ShrinkWrapsCreate({
                     <FormField
                         id="shrink_wrap_type_id"
                         label="Tipo"
+                        required
                         error={form.errors.shrink_wrap_type_id}
                         help={
                             typeOptions.length === 0
@@ -157,6 +159,7 @@ export default function ShrinkWrapsCreate({
                         <FormField
                             id="applications"
                             label="Aplicaciones"
+                            required
                             error={form.errors.applications}
                         >
                             <IntegerInput
@@ -171,6 +174,7 @@ export default function ShrinkWrapsCreate({
                         <FormField
                             id="wrapped_at"
                             label="Fecha"
+                            required
                             error={form.errors.wrapped_at}
                         >
                             <PlantDateInput

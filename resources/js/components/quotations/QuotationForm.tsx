@@ -1040,6 +1040,7 @@ export default function QuotationForm({
                             <FormField
                                 id="iva_percentage"
                                 label="IVA (%)"
+                                required
                                 error={
                                     errors.iva_percentage ??
                                     previewErrors.general.iva_percentage

@@ -200,6 +200,7 @@ export function ProductSourcePicker({
             <FormField
                 id={`${idPrefix}-source`}
                 label={label}
+                required
                 error={sourceError}
             >
                 {(control) => (
@@ -255,6 +256,7 @@ export function ProductSourcePicker({
                     <FormField
                         id={`${idPrefix}-quantity`}
                         label="Kilos a usar"
+                        required
                         help={`Libres: ${formatKind(remnant.available_quantity_kg, 'quantity')} kg`}
                         error={quantityError}
                     >
@@ -284,6 +286,7 @@ export function ProductSourcePicker({
                 <FormField
                     id={`${idPrefix}-quantity`}
                     label="Unidades a sacar de bodega"
+                    required
                     help={`Libres: ${formatKind(batch.free_units, 'units')}`}
                     error={quantityError}
                 >
