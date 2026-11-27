@@ -86,8 +86,8 @@ class Product extends Model
         return LogOptions::defaults()
             ->useLogName('productos')
             ->setDescriptionForEvent(fn (string $eventName) => $this->getAuditDescription($eventName))
-            // El peso de referencia mueve el precio cuando el producto va dentro de la fórmula de otro.
-            ->logOnly(['name', 'category_id', 'reference_density_kg_per_gallon', 'is_active'])
+            // El peso de referencia mueve el costo cuando el producto va dentro de la fórmula de otro; el margen mueve la lista de precios.
+            ->logOnly(['name', 'category_id', 'reference_density_kg_per_gallon', 'sales_margin', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

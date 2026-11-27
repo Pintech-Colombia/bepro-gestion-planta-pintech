@@ -601,7 +601,8 @@ it('prints item quantities with the thousands separator', function (string $quan
 it('uses shared sales price service for list prices', function () {
     $service = app(VariantSalesPriceService::class);
 
-    expect((float) $service->resolveForVariant($this->variant))->toEqual(89589.3333);
+    // 67192 / 0.75 = 89589.3333... → redondeado a pesos enteros.
+    expect((int) $service->resolveForVariant($this->variant))->toBe(89589);
 });
 
 it('validates quotation update requires draft status', function () {

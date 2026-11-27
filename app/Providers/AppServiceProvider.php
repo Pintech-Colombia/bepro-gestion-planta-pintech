@@ -150,6 +150,9 @@ class AppServiceProvider extends ServiceProvider
         // La vista previa de la cotización se pide al dejar de escribir; una por línea editada cabe con holgura.
         RateLimiter::for('quotation-preview-pricing', fn (Request $request): Limit => $this->perUserOrIp($request, 120));
 
+        // La vista previa del margen en la lista de precios se pide al dejar de escribir.
+        RateLimiter::for('price-list-preview-margin', fn (Request $request): Limit => $this->perUserOrIp($request, 120));
+
         RateLimiter::for('production-preview-costs', fn (Request $request): Limit => $this->perUserOrIp($request, 30));
 
         // La página pública del QR y sus descargas, por IP (ahí nadie tiene sesión; la IP real la entrega Nginx desde

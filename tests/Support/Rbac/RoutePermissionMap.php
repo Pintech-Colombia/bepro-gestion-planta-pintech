@@ -97,8 +97,9 @@ final class RoutePermissionMap
 
             // Costos y precios
             'admin.costs.index' => Permission::CostsView,
-            'admin.costs.update' => Permission::CostsUpdate,
             'prices.index' => Permission::PriceListsView,
+            'prices.margin.update' => Permission::CostsUpdate,
+            'prices.margin.preview' => Permission::CostsUpdate,
 
             // Fórmulas
             'formulas.index' => Permission::FormulasView,

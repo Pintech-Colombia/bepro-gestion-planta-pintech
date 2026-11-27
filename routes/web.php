@@ -194,18 +194,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middlewareFor(['index', 'show'], 'can:'.Permission::InventoryMovementsView->value)
         ->middlewareFor('store', 'can:'.Permission::InventoryMovementsCreate->value);
 
-    // Costos
+    // Costos (solo lectura; el margen se edita en la lista de precios)
     Route::get('/admin/costs', [CostController::class, 'index'])
         ->middleware('can:'.Permission::CostsView->value)
         ->name('admin.costs.index');
-    Route::patch('/admin/costs/{product}', [CostController::class, 'update'])
-        ->middleware('can:'.Permission::CostsUpdate->value)
-        ->name('admin.costs.update');
 
     // Listas de precios
     Route::get('/prices', [PriceListController::class, 'index'])
         ->middleware('can:'.Permission::PriceListsView->value)
         ->name('prices.index');
+    Route::patch('/prices/{product}/margin', [PriceListController::class, 'updateMargin'])
+        ->middleware('can:'.Permission::CostsUpdate->value)
+        ->name('prices.margin.update');
+    Route::post('/prices/{product}/preview-margin', [PriceListController::class, 'previewMargin'])
+        ->middleware(['throttle:price-list-preview-margin', 'can:'.Permission::CostsUpdate->value])
+        ->name('prices.margin.preview');
 
     // Usuarios
     Route::get('users/{user}/signature', UserSignatureController::class)
