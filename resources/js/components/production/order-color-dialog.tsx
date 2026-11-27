@@ -62,7 +62,7 @@ export function OrderColorDialog({ orderId, color }: OrderColorDialogProps) {
                         className="size-7"
                         onClick={openDialog}
                     >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="size-4" />
                         <span className="sr-only">Corregir color</span>
                     </Button>
                 </TooltipTrigger>

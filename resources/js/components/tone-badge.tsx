@@ -8,6 +8,8 @@ type ToneBadgeProps = {
     tone?: Tone;
     children: ReactNode;
     className?: string;
+    /** Explicación al pasar el mouse. */
+    title?: string;
 };
 
 /**
@@ -19,9 +21,13 @@ export function ToneBadge({
     tone = 'neutral',
     children,
     className,
+    title,
 }: ToneBadgeProps) {
     return (
-        <span className={cn(pillClasses, toneClasses[tone], className)}>
+        <span
+            className={cn(pillClasses, toneClasses[tone], className)}
+            title={title}
+        >
             {children}
         </span>
     );

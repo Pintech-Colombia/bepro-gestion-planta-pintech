@@ -4,6 +4,7 @@ import { DecimalInput } from '@/components/decimal-input';
 import { FormError } from '@/components/form-field';
 import { FormattedNumber } from '@/components/formatted-number';
 import { excessLabel } from '@/components/production/overconsumption-reasons';
+import { orderByStep } from '@/lib/production-consumption';
 import { pillClasses, toneClasses } from '@/lib/tones';
 import type {
     ProductionOrderFormData,
@@ -67,29 +68,23 @@ export function IngredientsTable({
     const exceedingProducts = new Map(
         productOverconsumption.map((row) => [row.product_id, row]),
     );
-    // Por paso, como se agregan en planta; dentro del mismo paso, la materia prima primero. Sin paso (un producto
-    // agregado en la orden), al final.
-    const tableRows: TableRow[] = [
-        ...rows.map((ingredient, index): TableRow => ({
-            kind: 'material',
-            step: ingredient.step_order ?? null,
-            ingredient,
-            index,
-        })),
-        ...productRows.map((product): TableRow => ({
-            kind: 'product',
-            step: product.line.step_order,
-            product,
-        })),
-    ]
-        .map((row, position) => ({ row, position }))
-        .sort(
-            (a, b) =>
-                (a.row.step ?? Number.POSITIVE_INFINITY) -
-                    (b.row.step ?? Number.POSITIVE_INFINITY) ||
-                a.position - b.position,
-        )
-        .map(({ row }) => row);
+    // Por paso y, dentro del paso, la materia prima primero (el mismo orden de la ficha de lectura).
+    const tableRows: TableRow[] = orderByStep(
+        [
+            ...rows.map((ingredient, index): TableRow => ({
+                kind: 'material',
+                step: ingredient.step_order ?? null,
+                ingredient,
+                index,
+            })),
+            ...productRows.map((product): TableRow => ({
+                kind: 'product',
+                step: product.line.step_order,
+                product,
+            })),
+        ],
+        (row) => row.step,
+    );
 
     return (
         <div className="overflow-hidden rounded-md border">
@@ -218,8 +213,7 @@ export function IngredientsTable({
                                             <td className="p-3 text-right text-muted-foreground">
                                                 <FormattedNumber
                                                     value={ingredient.unit_cost}
-                                                    currency
-                                                    maxDecimals={2}
+                                                    kind="unitCost"
                                                 />
                                             </td>
                                             <td className="p-3 text-right font-medium">
@@ -227,8 +221,7 @@ export function IngredientsTable({
                                                     value={
                                                         ingredient.total_cost
                                                     }
-                                                    currency
-                                                    maxDecimals={2}
+                                                    kind="cost"
                                                 />
                                             </td>
                                         </>
@@ -343,15 +336,13 @@ function ProductRow({
                         <td className="p-3 text-right align-top text-muted-foreground">
                             <FormattedNumber
                                 value={product.unitCost}
-                                currency
-                                maxDecimals={2}
+                                kind="unitCost"
                             />
                         </td>
                         <td className="p-3 text-right align-top font-medium">
                             <FormattedNumber
                                 value={product.totalCost}
-                                currency
-                                maxDecimals={2}
+                                kind="cost"
                             />
                         </td>
                     </>

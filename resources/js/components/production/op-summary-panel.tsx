@@ -104,9 +104,8 @@ export function OpSummaryPanel({
     // stock de un ajuste, una fila, o que la orden cambió mientras estaba abierta.
     const serverErrors = formErrorMessages(errors);
     const hasRemnant = remnantGallons > 0;
+    // En la ficha de lectura la firma va en el Cierre, con quién envió y quién aprobó.
     const showSignerPicker = showQualitySigner && !isReadOnly;
-    const showSignerReadOnly =
-        isReadOnly && data.quality_responsible_user_id !== null;
 
     return (
         <div className="space-y-6">
@@ -211,7 +210,7 @@ export function OpSummaryPanel({
                 </CardContent>
             </Card>
 
-            {(showSubmit || showReject || showSignerReadOnly) && (
+            {(showSubmit || showReject) && (
                 <Card>
                     <CardContent className="space-y-4">
                         {showSignerPicker && (
@@ -256,16 +255,9 @@ export function OpSummaryPanel({
                             </FormField>
                         )}
 
-                        {(showSignerPicker || showSignerReadOnly) &&
-                            (selectedSigner ? (
-                                <SignerPreview signer={selectedSigner} />
-                            ) : (
-                                showSignerReadOnly && (
-                                    <p className="text-sm text-muted-foreground">
-                                        Firma del certificado: no asignada
-                                    </p>
-                                )
-                            ))}
+                        {showSignerPicker && selectedSigner && (
+                            <SignerPreview signer={selectedSigner} />
+                        )}
 
                         {!isReadOnly && serverErrors.length > 0 && (
                             <AlertError
@@ -310,14 +302,15 @@ export function OpSummaryPanel({
     );
 }
 
-function SignerPreview({ signer }: { signer: QualitySignerOption }) {
+/** La firma elegida: imagen, nombre y cargo. También la usa el Cierre de la ficha de lectura. */
+export function SignerPreview({ signer }: { signer: QualitySignerOption }) {
     return (
         <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-2">
             {signer.signature_url && (
                 <img
                     src={signer.signature_url}
                     alt="Firma"
-                    className="h-8 max-w-[120px] object-contain"
+                    className="h-8 max-w-30 object-contain"
                 />
             )}
             <div className="text-xs">

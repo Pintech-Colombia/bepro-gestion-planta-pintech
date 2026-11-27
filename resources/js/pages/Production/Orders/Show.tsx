@@ -10,14 +10,19 @@ import {
     submitForReview as productionOrderSubmitForReview,
 } from '@/actions/App/Http/Controllers/ProductionOrderController';
 import type { ProductTableRow } from '@/components/production/ingredients-table';
+import { OpClosingRead } from '@/components/production/op-closing-read';
 import { OpClosingSection } from '@/components/production/op-closing-section';
+import { OpConsumptionRead } from '@/components/production/op-consumption-read';
 import { OpConsumptionSection } from '@/components/production/op-consumption-section';
+import { OpKeyFigures } from '@/components/production/op-key-figures';
+import { OpPackagingRead } from '@/components/production/op-packaging-read';
 import { OpPackagingSection } from '@/components/production/op-packaging-section';
+import { OpQualityRead } from '@/components/production/op-quality-read';
 import { OpQualitySection } from '@/components/production/op-quality-section';
 import { OpSummaryPanel } from '@/components/production/op-summary-panel';
 import { OrderHeader } from '@/components/production/order-header';
 import { ProductsToUseCard } from '@/components/production/products-to-use-card';
-import { QrCard } from '@/components/production/qr-card';
+import { QrLine } from '@/components/production/qr-line';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -99,8 +104,15 @@ export default function ProductionOrderShow({
     const isCancelled = order.status === 'cancelled';
     const isPending = order.status === 'pending';
     const isPendingReview = order.status === 'pending_review';
+    // Cancelada: cerrada, nada se edita (antes mostraba los campos sin botón para guardar).
     const isFormReadOnly =
-        isPending || isCompleted || (isPendingReview && !can.complete);
+        isPending ||
+        isCompleted ||
+        isCancelled ||
+        (isPendingReview && !can.complete);
+    // Completada, cancelada, o en revisión para quien no aprueba: ficha de lectura (sin campos apagados). Pendiente
+    // sigue con el plan y «Iniciar producción».
+    const isReadSheet = isFormReadOnly && !isPending;
     const hasOrderData =
         orderDetails.length > 0 || orderPackagingPlans.length > 0;
 
@@ -490,6 +502,23 @@ export default function ProductionOrderShow({
                     canCancel={can.cancel}
                 />
 
+                {/* En una cancelada no se produjo nada: sin cifras de rendimiento. */}
+                {isReadSheet && !isCancelled && (
+                    <OpKeyFigures
+                        realYield={realYield}
+                        yieldPercentage={yieldPercentage}
+                        packagedEquivalent={packagedEquivalent}
+                        remnant={order.remnant ?? null}
+                        remnantKg={order.remnant_quantity_kg}
+                        remnantGallons={remnantGallons}
+                        costPerGallonWithCif={
+                            can.previewCosts && costSummary
+                                ? costSummary.cost_per_gallon_with_cif
+                                : null
+                        }
+                    />
+                )}
+
                 {/* PC primero: las secciones en el orden del proceso y, a la derecha, el resumen y los botones. En una
                     pantalla angosta se apilan y el resumen queda al final. */}
                 <form
@@ -498,79 +527,137 @@ export default function ProductionOrderShow({
                     className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3"
                 >
                     <div className="min-w-0 space-y-6 lg:col-span-2">
-                        {hasProductsToUse && (
-                            <ProductsToUseCard
-                                order={order}
-                                showCosts={can.previewCosts}
-                                canPlan={can.planRemnant}
-                                // Lo que quedó se escribe al entregar la orden (enviar o completar).
-                                canRecordUsage={!isFormReadOnly && showSubmit}
-                                usageRows={data.batch_consumptions}
-                                lineUsageRows={data.product_lines}
-                                onUsageChange={updateBatchUsage}
-                                // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya
-                                // no alcanza. Varias llaves no son campos del formulario.
-                                errors={
-                                    errors as Record<string, string | undefined>
-                                }
-                                previewProductCosts={previewProductCosts}
-                            />
+                        {isReadSheet ? (
+                            <>
+                                <OpConsumptionRead
+                                    orderId={order.id}
+                                    data={data}
+                                    setData={setData}
+                                    ingredientRows={ingredientRows}
+                                    productRows={productRows}
+                                    lineAdjustments={lineAdjustments}
+                                    isCompleted={isCompleted}
+                                    showCosts={can.previewCosts}
+                                    overconsumption={
+                                        order.overconsumption ?? []
+                                    }
+                                    consumptionReasons={
+                                        order.consumption_reasons ?? []
+                                    }
+                                    productOverconsumption={
+                                        order.product_overconsumption ?? []
+                                    }
+                                    productConsumptionReasons={
+                                        order.product_consumption_reasons ?? []
+                                    }
+                                />
+                                <OpQualityRead
+                                    viscosity={order.viscosity_ku}
+                                    grinding={order.grinding_hg}
+                                    solids={order.quality_solids}
+                                    qualityRanges={qualityRanges}
+                                />
+                                <OpPackagingRead
+                                    order={order}
+                                    rows={packagingRows}
+                                    costs={packagingCosts}
+                                    labelMaterials={labelMaterials}
+                                    showCosts={can.previewCosts}
+                                    canPrintLabels={can.printLabels}
+                                />
+                                <OpClosingRead
+                                    order={order}
+                                    qualitySigners={qualitySigners}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                {hasProductsToUse && (
+                                    <ProductsToUseCard
+                                        order={order}
+                                        showCosts={can.previewCosts}
+                                        canPlan={can.planRemnant}
+                                        // Lo que quedó se escribe al entregar la orden (enviar o completar).
+                                        canRecordUsage={
+                                            !isFormReadOnly && showSubmit
+                                        }
+                                        usageRows={data.batch_consumptions}
+                                        lineUsageRows={data.product_lines}
+                                        onUsageChange={updateBatchUsage}
+                                        // Al enviar o completar: los de cada lote, el de una línea sin fuentes o un saldo que ya
+                                        // no alcanza. Varias llaves no son campos del formulario.
+                                        errors={
+                                            errors as Record<
+                                                string,
+                                                string | undefined
+                                            >
+                                        }
+                                        previewProductCosts={
+                                            previewProductCosts
+                                        }
+                                    />
+                                )}
+
+                                <OpConsumptionSection
+                                    orderId={order.id}
+                                    data={data}
+                                    setData={setData}
+                                    errors={errors}
+                                    ingredientRows={ingredientRows}
+                                    lineAdjustments={lineAdjustments}
+                                    rawMaterials={rawMaterials}
+                                    isCompleted={isCompleted}
+                                    isReadOnly={isFormReadOnly}
+                                    showCosts={can.previewCosts}
+                                    previewLoading={previewLoading}
+                                    previewStale={previewStale}
+                                    overconsumption={
+                                        order.overconsumption ?? []
+                                    }
+                                    consumptionReasons={
+                                        order.consumption_reasons ?? []
+                                    }
+                                    productOverconsumption={
+                                        order.product_overconsumption ?? []
+                                    }
+                                    productConsumptionReasons={
+                                        order.product_consumption_reasons ?? []
+                                    }
+                                    productRows={productRows}
+                                    onProductActualChange={updateProductActual}
+                                    addProductSources={addProductSources}
+                                />
+
+                                <OpQualitySection
+                                    data={data}
+                                    setData={setData}
+                                    errors={errors}
+                                    isReadOnly={isFormReadOnly}
+                                    qualityRanges={qualityRanges}
+                                />
+
+                                <OpPackagingSection
+                                    orderId={order.id}
+                                    data={data}
+                                    setData={setData}
+                                    errors={errors}
+                                    packagingRows={packagingRows}
+                                    packagingCosts={packagingCosts}
+                                    labelMaterials={labelMaterials}
+                                    availableVariants={availableVariants}
+                                    isReadOnly={isFormReadOnly}
+                                    showCosts={can.previewCosts}
+                                    canPrintLabels={can.printLabels}
+                                />
+
+                                <OpClosingSection
+                                    data={data}
+                                    setData={setData}
+                                    errors={errors}
+                                    isReadOnly={isFormReadOnly}
+                                />
+                            </>
                         )}
-
-                        <OpConsumptionSection
-                            orderId={order.id}
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            ingredientRows={ingredientRows}
-                            lineAdjustments={lineAdjustments}
-                            rawMaterials={rawMaterials}
-                            isCompleted={isCompleted}
-                            isReadOnly={isFormReadOnly}
-                            showCosts={can.previewCosts}
-                            previewLoading={previewLoading}
-                            previewStale={previewStale}
-                            overconsumption={order.overconsumption ?? []}
-                            consumptionReasons={order.consumption_reasons ?? []}
-                            productOverconsumption={
-                                order.product_overconsumption ?? []
-                            }
-                            productConsumptionReasons={
-                                order.product_consumption_reasons ?? []
-                            }
-                            productRows={productRows}
-                            onProductActualChange={updateProductActual}
-                            addProductSources={addProductSources}
-                        />
-
-                        <OpQualitySection
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            isReadOnly={isFormReadOnly}
-                            qualityRanges={qualityRanges}
-                        />
-
-                        <OpPackagingSection
-                            orderId={order.id}
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            packagingRows={packagingRows}
-                            packagingCosts={packagingCosts}
-                            labelMaterials={labelMaterials}
-                            availableVariants={availableVariants}
-                            isReadOnly={isFormReadOnly}
-                            showCosts={can.previewCosts}
-                            canPrintLabels={can.printLabels}
-                        />
-
-                        <OpClosingSection
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            isReadOnly={isFormReadOnly}
-                        />
                     </div>
 
                     <aside className="min-w-0 lg:sticky lg:top-6">
@@ -605,9 +692,8 @@ export default function ProductionOrderShow({
                             showQualitySigner={submitMode === 'complete'}
                         >
                             {isCompleted && order.qr_landing_url && (
-                                <QrCard
+                                <QrLine
                                     order={order}
-                                    landingFullUrl={landingFullUrl}
                                     landingLinkCopied={landingLinkCopied}
                                     onCopyLandingLink={handleCopyLandingLink}
                                 />

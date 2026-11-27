@@ -14,6 +14,12 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import type { PreviewStaleReason } from '@/hooks/use-server-preview';
+import {
+    materialCodesOf,
+    materialReasonRows,
+    productNamesOf,
+    productReasonRows,
+} from '@/lib/production-consumption';
 import { cn } from '@/lib/utils';
 import type {
     ProductionOrderAvailableBatch,
@@ -87,28 +93,8 @@ export function OpConsumptionSection({
     const [showAddProduct, setShowAddProduct] = useState(false);
     const fieldErrors = errors as Record<string, string | undefined>;
 
-    const materialCodes = new Map<number, string>();
-
-    for (const row of ingredientRows) {
-        if (!materialCodes.has(row.raw_material_id)) {
-            materialCodes.set(
-                row.raw_material_id,
-                row.raw_material_name ?? `MP #${row.raw_material_id}`,
-            );
-        }
-    }
-
-    // El nombre de cada producto de la orden por id, en el orden de la tabla (agregados al final).
-    const productNames = new Map<number, string>();
-
-    for (const row of productRows) {
-        if (!productNames.has(row.line.product_id)) {
-            productNames.set(
-                row.line.product_id,
-                row.line.product_name ?? `PT #${row.line.product_id}`,
-            );
-        }
-    }
+    const materialCodes = materialCodesOf(ingredientRows);
+    const productNames = productNamesOf(productRows.map((row) => row.line));
 
     const showPreviewStatus = !isCompleted && showCosts;
     const previewMessage = previewLoading
@@ -218,11 +204,7 @@ export function OpConsumptionSection({
                     field="overconsumption_reasons"
                     title="Consumo por encima de lo planeado"
                     description="Por materia prima, sumando todos sus pasos y ajustes de línea."
-                    rows={overconsumption.map((row) => ({
-                        ...row,
-                        id: row.raw_material_id,
-                        label: row.code,
-                    }))}
+                    rows={materialReasonRows(overconsumption)}
                     storedIds={consumptionReasons.map(
                         (reason) => reason.raw_material_id,
                     )}
@@ -238,11 +220,7 @@ export function OpConsumptionSection({
                     field="product_overconsumption_reasons"
                     title="Producto terminado por encima de lo planeado"
                     description="Por producto, sumando todas sus líneas, en kilos."
-                    rows={productOverconsumption.map((row) => ({
-                        ...row,
-                        id: row.product_id,
-                        label: row.name,
-                    }))}
+                    rows={productReasonRows(productOverconsumption)}
                     storedIds={productConsumptionReasons.map(
                         (reason) => reason.product_id,
                     )}
